@@ -459,9 +459,9 @@ async function sendMessage() {
 ================================================================ */
 function renderUsers() {
   dom.usersList.innerHTML = '';
-  /* Show only online users (+ ourselves, always online) */
-  const all = [state.currentUser, ...state.users.filter(u => u?.online)];
-  const online = all.filter(u => u?.online).length;
+  /* Show ONLY users with online === true (strict — rules out undefined/false) */
+  const all = [state.currentUser, ...state.users.filter(u => u?.online === true)];
+  const online = all.length;
   dom.onlineCountLabel.textContent = online;
   dom.onlineBadge.textContent = online;
 
@@ -783,23 +783,28 @@ function updateMinBadge(uid) {
 }
 /** Handle incoming private message from Broadcast — auto-opens the chat window */
 function handleIncomingPM(payload) {
-  if (payload.to !== state.currentUser?.id) return;
-  ensureUser(payload.from, payload.fromName);
-  const chat = initOrGetPChat(payload.from);
-  const msg  = { from: payload.from, text: payload.text, ts: payload.ts || Date.now() };
+  /* String comparison — avoids strict-equality mismatch between number/string IDs */
+  if (String(payload.to) !== String(state.currentUser?.id)) return;
+  const fromId   = String(payload.from);
+  const fromName = payload.fromName || 'User';
+
+  /* Ensure sender exists in state — mark online so context menu works */
+  ensureUser(fromId, fromName, { online: true });
+
+  const chat = initOrGetPChat(fromId);
+  const msg  = { from: fromId, text: payload.text, ts: payload.ts || Date.now() };
   chat.msgs.push(msg);
   playNotificationSound();
 
   if (!chat.popup) {
-    /* First message from this user → auto-open the chat window.
-       openPrivateChat renders all msgs from chat.msgs (including this one). */
-    openPrivateChat(payload.from);
+    /* First message → auto-open window (renders all msgs including this one) */
+    openPrivateChat(fromId);
   } else if (chat.minimised) {
-    /* Window exists but is minimised → restore it */
-    restorePChat(payload.from);
+    /* Minimised → restore */
+    restorePChat(fromId);
   } else {
-    /* Window already open → append message */
-    renderPMsg(payload.from, msg);
+    /* Already open → append */
+    renderPMsg(fromId, msg);
   }
 }
 
@@ -1011,7 +1016,8 @@ function broadcast(event, toUid, extra = {}) {
   if (!state.signalCh) { console.warn('Signal channel not ready'); return; }
   state.signalCh.send({
     type: 'broadcast', event,
-    payload: { from: state.currentUser.id, fromName: state.currentUser.name, to: toUid, ...extra },
+    /* Store IDs as strings for consistent comparison on both sides */
+    payload: { from: String(state.currentUser.id), fromName: state.currentUser.name, to: String(toUid), ...extra },
   });
 }
 /** Broadcast to ALL connected users (no .to filter used by receivers) */
@@ -1275,6 +1281,8 @@ function makeDraggable(el, handle) {
   if (!handle) return;
   let dragging=false, ox=0, oy=0, sl=0, st=0;
   function onStart(e) {
+    /* Never steal events from interactive elements — fixes iOS button tap */
+    if (e.target?.closest('button, a, input, select, textarea, [data-no-drag]')) return;
     if (e.target?.classList?.contains('cam-resize-handle')) return;
     const {clientX:x,clientY:y} = e.touches ? e.touches[0] : e;
     dragging=true; ox=x; oy=y;
@@ -1336,15 +1344,17 @@ async function updateOwnPresence() {
 
 /** Sync state.users from Supabase Presence state */
 function syncPresence(presenceState) {
-  const onlineIds = new Set(Object.keys(presenceState));
-  onlineIds.delete(state.currentUser.id);
+  const myId     = String(state.currentUser.id);
+  const onlineIds = new Set(Object.keys(presenceState).map(String));
+  onlineIds.delete(myId);
 
   Object.entries(presenceState).forEach(([uid, presences]) => {
-    if (uid === state.currentUser.id) return;
+    if (String(uid) === myId) return;
     const info = presences[0];
-    ensureUser(uid, info.name, { isGuest: info.isGuest, online: true, hasCamera: info.hasCamera });
+    ensureUser(String(uid), info.name, { isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera });
   });
-  state.users.forEach(u => { u.online = onlineIds.has(u.id); });
+  /* Mark everyone NOT in the current presence state as offline */
+  state.users.forEach(u => { u.online = onlineIds.has(String(u.id)); });
   renderUsers();
 }
 
@@ -1414,8 +1424,10 @@ async function connectSupabase() {
       .on('presence', { event:'join' }, ({ key, newPresences }) => {
         if (key !== state.currentUser.id) showToast(`👤 ${newPresences[0].name} joined the chat`);
       })
-      .on('presence', { event:'leave' }, ({ leftPresences }) => {
-        const u = state.users.find(u => u.id === leftPresences[0]?.id);
+      .on('presence', { event:'leave' }, ({ key, leftPresences }) => {
+        /* Use `key` (= the user's own ID used when calling .track()) — more reliable */
+        const u = state.users.find(u => String(u.id) === String(key))
+                ?? state.users.find(u => String(u.id) === String(leftPresences?.[0]?.id));
         if (u) { u.online = false; renderUsers(); showToast(`👋 ${u.name} left`); }
       })
       .subscribe(async status => {
