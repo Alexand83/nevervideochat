@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="NeverVideoChat – Modern Real-Time Video Chat">
+  <meta name="theme-color" content="#0d1117">
+  <title>NeverVideoChat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ================================================================
+     APP HEADER
+================================================================ -->
+<header class="app-header" role="banner">
+  <div class="header-inner">
+
+    <!-- Empty spacer so logo is truly centered with CSS grid -->
+    <div class="header-spacer" aria-hidden="true"></div>
+
+    <!-- Logo with SVG fallback -->
+    <div class="logo-wrap" id="logoWrap">
+      <img id="headerLogo"
+           src="https://rask-arch.github.io/raskvideochat/logo.png"
+           alt="NeverVideoChat logo"
+           class="logo-img">
+      <div id="logoFallback" class="logo-fallback" hidden>
+        <svg class="logo-icon-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="44" height="44" rx="10" fill="#1f6feb"/>
+          <path d="M8 15a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H10a2 2 0 01-2-2V15z" fill="white"/>
+          <path d="M28 18.5l7-4.5v14l-7-4.5V18.5z" fill="white"/>
+        </svg>
+        <span class="logo-text">NeverVideoChat</span>
+      </div>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <button class="hdr-btn camera-btn" id="cameraBtnHeader"
+              title="Enable Camera" aria-label="Toggle camera">
+        <svg class="hdr-icon" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 10l4.553-2.277A1 1 0 0121 8.72v6.56a1 1 0 01-1.447.899L15 14"/>
+          <rect x="1" y="6" width="14" height="12" rx="2"/>
+        </svg>
+        <span class="hdr-btn-label" id="cameraBtnLabel">Camera Off</span>
+      </button>
+
+      <button class="hdr-btn users-toggle-btn" id="mobileUsersToggle"
+              title="Online Users" aria-label="Toggle users panel" aria-expanded="false">
+        <svg class="hdr-icon" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+        </svg>
+        <span class="hdr-btn-label">Users</span>
+        <span class="online-badge" id="onlineBadge">1</span>
+      </button>
+    </div>
+
+  </div>
+</header>
+
+
+<!-- ================================================================
+     MAIN LAYOUT
+================================================================ -->
+<main class="app-main" role="main">
+
+  <!-- LEFT — CHAT SECTION -->
+  <section class="chat-section" aria-label="Public chat">
+
+    <div class="msgs-container" id="msgsContainer"
+         role="log" aria-live="polite" aria-label="Chat messages">
+      <div class="welcome-banner" id="welcomeBanner">
+        <div class="welcome-icon">💬</div>
+        <h3>Welcome to NeverVideoChat</h3>
+        <p>Start chatting below. Enable your camera with the button above, or use the toolbar to format messages, attach images and record voice notes.</p>
+      </div>
+    </div>
+
+    <!-- Typing indicator (stays hidden until real websocket signals) -->
+    <div class="typing-row" id="typingRow" aria-live="polite">
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+      <span class="typing-txt" id="typingTxt"></span>
+    </div>
+
+    <!-- CHAT INPUT AREA -->
+    <div class="chat-input-area" id="chatInputArea">
+
+      <!-- Formatting toolbar -->
+      <div class="fmt-toolbar" id="fmtToolbar" role="toolbar" aria-label="Formatting toolbar">
+        <div class="fmt-left">
+          <button class="tbr-btn" id="boldBtn" title="Bold (Ctrl+B)"
+                  aria-label="Toggle bold" aria-pressed="false"><b>B</b></button>
+
+          <span class="tbr-sep" aria-hidden="true"></span>
+
+          <label class="tbr-color-wrap" title="Text Colour" aria-label="Text colour picker">
+            <input type="color" id="colorPicker" value="#e6edf3" aria-label="Choose text colour">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M11.0456 1.13896C11.4406 0.287013 12.5594 0.287013 12.9544 1.13896L15.4286 6.41837L21.2061 7.28985C22.1373 7.42823 22.5072 8.5733 21.8354 9.22953L17.673 13.2897L18.6827 19.0431C18.844 19.9706 17.8658 20.6783 17.0364 20.2421L12 17.5968L6.96357 20.2421C6.13417 20.6783 5.15603 19.9706 5.31733 19.0431L6.327 13.2897L2.16457 9.22953C1.49278 8.5733 1.86275 7.42823 2.79395 7.28985L8.57143 6.41837L11.0456 1.13896Z"/>
+            </svg>
+          </label>
+
+          <span class="tbr-sep" aria-hidden="true"></span>
+
+          <select class="tbr-select" id="fontSizeSelect" title="Font size" aria-label="Font size">
+            <option value="1">Tiny</option>
+            <option value="2">Small</option>
+            <option value="3" selected>Normal</option>
+            <option value="4">Large</option>
+            <option value="5">X-Large</option>
+          </select>
+        </div>
+
+        <div class="fmt-right">
+          <button class="tbr-btn" id="emojiPickerBtn"
+                  title="Emoji" aria-label="Open emoji picker" aria-expanded="false">😊</button>
+          <button class="tbr-btn" id="imageAttachBtn"
+                  title="Attach Image" aria-label="Attach image">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </button>
+          <input type="file" id="imageFileInput" accept="image/*"
+                 style="display:none" aria-label="Upload image file">
+
+          <button class="tbr-btn voice-btn" id="voiceMsgBtn"
+                  title="Record Voice Message" aria-label="Record voice message">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+              <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Image preview strip -->
+      <div class="img-preview-strip" id="imgPreviewStrip" hidden>
+        <div class="preview-thumb-wrap">
+          <img class="preview-thumb" id="previewThumb" src="" alt="Image preview">
+          <button class="preview-remove-btn" id="previewRemoveBtn"
+                  aria-label="Remove attached image">×</button>
+        </div>
+      </div>
+
+      <!-- Voice recording strip -->
+      <div class="voice-rec-strip" id="voiceRecStrip" hidden>
+        <span class="rec-dot" aria-hidden="true"></span>
+        <span class="rec-badge">REC</span>
+        <span class="rec-timer" id="recTimer">0:00</span>
+        <button class="rec-stop-btn" id="recStopBtn" aria-label="Stop recording">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="5" y="5" width="14" height="14" rx="2"/>
+          </svg>
+          Stop
+        </button>
+        <button class="rec-cancel-btn" id="recCancelBtn" aria-label="Cancel recording">Cancel</button>
+      </div>
+
+      <!-- Main input row -->
+      <div class="input-row">
+        <div class="msg-input" id="msgInput"
+             contenteditable="true"
+             data-placeholder="Message the chat…"
+             role="textbox" aria-multiline="true"
+             aria-label="Type your message" spellcheck="true"></div>
+        <button class="send-btn" id="sendBtn" aria-label="Send message">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Emoji picker panel -->
+      <div class="emoji-panel" id="emojiPanel" hidden
+           role="dialog" aria-label="Emoji picker">
+        <div class="emoji-tabs-row" id="emojiTabsRow" role="tablist"></div>
+        <div class="emoji-scroll-area">
+          <div class="emoji-grid" id="emojiGrid" role="grid"></div>
+        </div>
+      </div>
+
+    </div><!-- /chat-input-area -->
+  </section>
+
+
+  <!-- RIGHT — USERS PANEL -->
+  <aside class="users-panel" id="usersPanel" aria-label="Online users">
+    <div class="panel-hdr">
+      <h2 class="panel-title">Online · <span id="onlineCountLabel">1</span></h2>
+      <button class="close-panel-btn" id="closePanelBtn" aria-label="Close users panel">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="users-list-wrap">
+      <div class="users-list" id="usersList" role="list"></div>
+    </div>
+  </aside>
+
+  <div class="panel-overlay" id="panelOverlay" aria-hidden="true"></div>
+
+</main>
+
+
+<!-- ================================================================
+     CAMERA WINDOWS — created dynamically by script.js
+     Each user's camera stream (own + remote) gets its own
+     independent draggable + resizable floating window.
+     Private video calls use #vcallWin (PiP design).
+================================================================ -->
+
+
+<!-- ================================================================
+     PRIVATE CHAT POPUPS CONTAINER
+================================================================ -->
+<div id="privateChatCont" class="private-chat-cont" aria-label="Private chat windows"></div>
+
+<!-- MINIMISED CHATS BAR -->
+<div id="minimisedBar" class="minimised-bar" role="toolbar" aria-label="Minimised chats"></div>
+
+<!-- TOAST CONTAINER -->
+<div id="toastCont" class="toast-cont" aria-live="assertive"></div>
+
+
+<!-- ================================================================
+     CAMERA REQUEST OVERLAY (for future multi-user connections)
+================================================================ -->
+<div class="cam-req-overlay" id="camReqOverlay" hidden>
+  <div class="cam-req-card"
+       role="alertdialog" aria-modal="true" aria-labelledby="camReqTitle">
+    <div class="cam-req-emoji" aria-hidden="true">📹</div>
+    <h3 class="cam-req-title" id="camReqTitle">Camera Request</h3>
+    <p class="cam-req-body" id="camReqBody"></p>
+    <div class="cam-req-btns">
+      <button class="cam-action-btn accept-cam-btn" id="camAcceptBtn">✓ Accept</button>
+      <button class="cam-action-btn reject-cam-btn" id="camRejectBtn">✕ Decline</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================================================================
+     VIDEO CALL WINDOW
+================================================================ -->
+<div class="vcall-win" id="vcallWin" hidden
+     role="dialog" aria-modal="true" aria-label="Video call">
+
+  <div class="vcall-hdr" id="vcallDragHandle">
+    <div class="vcall-hdr-info">
+      <div class="vcall-avatar" id="vcallAvatar"></div>
+      <div class="vcall-meta">
+        <div class="vcall-name" id="vcallName">Video Call</div>
+        <div class="vcall-status" id="vcallStatus">Connecting…</div>
+      </div>
+    </div>
+    <button class="vcall-hdr-close" id="vcallHdrClose" aria-label="End call">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="vcall-videos">
+    <div class="remote-video-area">
+      <video id="remoteVideoEl" autoplay playsinline></video>
+      <div class="remote-placeholder" id="remotePlaceholder">
+        <div class="remote-ph-avatar" id="remotePHAvatar"></div>
+        <div class="remote-ph-name" id="remotePHName">Waiting for peer…</div>
+      </div>
+    </div>
+    <div class="local-video-pip" id="localVideoPIP">
+      <video id="localVideoEl" autoplay muted playsinline></video>
+      <span class="local-video-label">You</span>
+    </div>
+  </div>
+
+  <div class="vcall-controls">
+    <button class="vcall-ctrl-btn mic-ctrl" id="vcallMicBtn"
+            title="Mute / Unmute" aria-pressed="true" aria-label="Toggle microphone">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+        <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+      </svg>
+    </button>
+    <button class="vcall-ctrl-btn end-call-btn" id="vcallEndBtn"
+            title="End Call" aria-label="End call">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
+      </svg>
+    </button>
+    <button class="vcall-ctrl-btn cam-ctrl" id="vcallCamBtn"
+            title="Toggle Camera" aria-pressed="true" aria-label="Toggle camera">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M15 10l4.553-2.277A1 1 0 0121 8.72v6.56a1 1 0 01-1.447.899L15 14"/>
+        <rect x="1" y="6" width="14" height="12" rx="2"/>
+      </svg>
+    </button>
+  </div>
+
+</div>
+
+
+<!-- ================================================================
+     CONTEXT MENU
+================================================================ -->
+<div class="ctx-menu" id="ctxMenu" hidden role="menu" aria-label="User options">
+  <div class="ctx-user-hdr" id="ctxUserHdr"></div>
+  <hr class="ctx-hr">
+  <button class="ctx-item" id="ctxPrivateBtn" role="menuitem">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+    </svg>
+    Private Message
+  </button>
+  <button class="ctx-item ctx-cam-item" id="ctxCamBtn" role="menuitem">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 10l4.553-2.277A1 1 0 0121 8.72v6.56a1 1 0 01-1.447.899L15 14"/>
+      <rect x="1" y="6" width="14" height="12" rx="2"/>
+    </svg>
+    Request Camera
+  </button>
+</div>
+<div class="ctx-overlay" id="ctxOverlay" hidden aria-hidden="true"></div>
+
+
+<!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="script.js"></script>
+</body>
+</html>
