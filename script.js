@@ -701,6 +701,13 @@ function openPrivateChat(uid) {
         ${user.online ? '<span class="pchat-online-dot"></span>' : ''}
       </div>
       <div class="pchat-ctrls">
+        <button class="pchat-ctrl-btn pchat-vcall-btn" title="Video Call" aria-label="Start video call">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="23 7 16 12 23 17 23 7"/>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          </svg>
+        </button>
         <button class="pchat-ctrl-btn pchat-min-btn" title="Minimise">—</button>
         <button class="pchat-ctrl-btn pchat-close-btn" title="Close">✕</button>
       </div>
@@ -718,6 +725,11 @@ function openPrivateChat(uid) {
   makeDraggable(popup, popup.querySelector('.pchat-hdr'));
   popup.querySelector('.pchat-min-btn').addEventListener('click',   () => minPChat(uid));
   popup.querySelector('.pchat-close-btn').addEventListener('click', () => closePChat(uid));
+  popup.querySelector('.pchat-vcall-btn').addEventListener('click', () => {
+    if (!supabaseReady()) { showToast('⚠️ Server connection required for video calls.'); return; }
+    broadcast('cam-req', uid, { reqType: 'private' });
+    showToast(`📹 Video call request sent to ${user.name}…`);
+  });
   const input = popup.querySelector(`#pchat-input-${uid}`);
   const sBtn  = popup.querySelector(`#pchat-send-${uid}`);
   function doSend() {
@@ -768,19 +780,25 @@ function updateMinBadge(uid) {
   const chat = state.privateChats[uid]; const badge = $(`min-badge-${uid}`); if (!badge) return;
   if (chat?.unread > 0) { badge.textContent = chat.unread; badge.hidden = false; } else { badge.hidden = true; }
 }
-/** Handle incoming private message from Broadcast */
+/** Handle incoming private message from Broadcast — auto-opens the chat window */
 function handleIncomingPM(payload) {
   if (payload.to !== state.currentUser?.id) return;
   ensureUser(payload.from, payload.fromName);
   const chat = initOrGetPChat(payload.from);
   const msg  = { from: payload.from, text: payload.text, ts: payload.ts || Date.now() };
   chat.msgs.push(msg);
-  if (chat.popup && !chat.minimised) {
-    renderPMsg(payload.from, msg);
+  playNotificationSound();
+
+  if (!chat.popup) {
+    /* First message from this user → auto-open the chat window.
+       openPrivateChat renders all msgs from chat.msgs (including this one). */
+    openPrivateChat(payload.from);
+  } else if (chat.minimised) {
+    /* Window exists but is minimised → restore it */
+    restorePChat(payload.from);
   } else {
-    chat.unread++; updateMinBadge(payload.from);
-    showToast(`💬 ${payload.fromName}: ${payload.text.slice(0,50)}`);
-    playNotificationSound();
+    /* Window already open → append message */
+    renderPMsg(payload.from, msg);
   }
 }
 
@@ -888,12 +906,31 @@ function createCameraWindow(uid, stream, name, isOwn) {
 function closeCameraWindow(uid) {
   const cw = state.cameraWindows[uid]; if (!cw) return;
   stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];
+  /* Close any WebRTC peer connections linked to this stream */
+  if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
+  if (state.outgoingPCs[uid]) { state.outgoingPCs[uid].close(); delete state.outgoingPCs[uid]; }
   if (uid === state.currentUser?.id || uid === 'me') {
     state.localStream?.getTracks().forEach(t => t.stop()); state.localStream = null;
     state.currentUser.hasCamera = false;
     dom.cameraBtnLabel.textContent = 'Camera Off'; dom.cameraBtnHeader.classList.remove('camera-on');
+    /* Tell every other user to destroy their window for us */
+    broadcastAll('cam-closed', {});
     updateOwnPresence(); renderUsers(); showToast('📹 Camera disabled.');
   }
+}
+/** Someone else turned off their camera — destroy our window for them */
+function handleCamClosed(payload) {
+  if (payload.from === state.currentUser?.id) return; // ignore own echo
+  const uid = payload.from;
+  const cw = state.cameraWindows[uid];
+  if (cw) {
+    stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];
+  }
+  if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
+  if (state.outgoingPCs[uid]) { state.outgoingPCs[uid].close(); delete state.outgoingPCs[uid]; }
+  const u = state.users.find(u => u.id === uid);
+  if (u) { u.hasCamera = false; renderUsers(); }
+  showToast(`📹 ${payload.fromName} turned off their camera`);
 }
 
 function toggleCamMic(uid) {
@@ -970,12 +1007,18 @@ function initCameraSystem() { dom.cameraBtnHeader.addEventListener('click', togg
 
 /** Broadcast a signal to a specific user (all clients see it; filtered by .to) */
 function broadcast(event, toUid, extra = {}) {
-  if (!state.signalCh) {
-    console.warn('Signal channel not ready'); return;
-  }
+  if (!state.signalCh) { console.warn('Signal channel not ready'); return; }
   state.signalCh.send({
     type: 'broadcast', event,
     payload: { from: state.currentUser.id, fromName: state.currentUser.name, to: toUid, ...extra },
+  });
+}
+/** Broadcast to ALL connected users (no .to filter used by receivers) */
+function broadcastAll(event, extra = {}) {
+  if (!state.signalCh) return;
+  state.signalCh.send({
+    type: 'broadcast', event,
+    payload: { from: state.currentUser.id, fromName: state.currentUser.name, ...extra },
   });
 }
 
@@ -988,21 +1031,74 @@ function requestPublicCamera(targetUid) {
   showToast(`📹 Camera request sent to ${target.name}…`);
 }
 
-/** B receives a public camera request from A */
+/** Handles both public camera requests and private video call requests */
 function handleCamRequest(payload) {
   if (payload.to !== state.currentUser?.id) return;
-  if (payload.reqType !== 'public') return;
-  dom.camReqBody.textContent = `${payload.fromName} wants to see your camera.`;
-  dom.camReqOverlay.hidden = false;
-  dom.camAcceptBtn.onclick = async () => {
-    dom.camReqOverlay.hidden = true;
-    await sharePublicCameraTo(payload.from, payload.fromName);
-  };
-  dom.camRejectBtn.onclick = () => {
-    dom.camReqOverlay.hidden = true;
-    broadcast('cam-rejected', payload.from, {});
-    showToast(`❌ Camera request from ${payload.fromName} declined.`);
-  };
+
+  if (payload.reqType === 'public') {
+    dom.camReqBody.textContent = `${payload.fromName} wants to see your camera.`;
+    dom.camReqOverlay.hidden = false;
+    dom.camAcceptBtn.onclick = async () => {
+      dom.camReqOverlay.hidden = true;
+      await sharePublicCameraTo(payload.from, payload.fromName);
+    };
+    dom.camRejectBtn.onclick = () => {
+      dom.camReqOverlay.hidden = true;
+      broadcast('cam-rejected', payload.from, {});
+      showToast(`❌ Camera request from ${payload.fromName} declined.`);
+    };
+  } else if (payload.reqType === 'private') {
+    dom.camReqBody.textContent = `${payload.fromName} wants to start a private video call.`;
+    dom.camReqOverlay.hidden = false;
+    dom.camAcceptBtn.onclick = async () => {
+      dom.camReqOverlay.hidden = true;
+      await acceptPrivateCall(payload.from, payload.fromName);
+    };
+    dom.camRejectBtn.onclick = () => {
+      dom.camReqOverlay.hidden = true;
+      broadcast('cam-rejected', payload.from, { reqType: 'private' });
+      showToast(`❌ Video call from ${payload.fromName} declined.`);
+    };
+  }
+}
+
+/**
+ * B accepted a private video call from A.
+ * B: get local stream, show vcall window, tell A we accepted (A will send the offer).
+ */
+async function acceptPrivateCall(fromUid, fromName) {
+  try {
+    if (!state.localStream) {
+      state.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    }
+    const user = findUser(fromUid) || { name: fromName, isGuest: true };
+    dom.localVideoEl.srcObject  = state.localStream;
+    dom.vcallName.textContent   = user.name;
+    dom.vcallStatus.textContent = 'Connecting…';
+    dom.vcallAvatar.textContent = initials(user.name);
+    dom.vcallAvatar.style.background = avatarColor(user.name);
+    dom.remotePlaceholder.style.display = '';
+    dom.vcallWin.hidden = false;
+    state.activeCallUID = fromUid;
+    /* Signal acceptance — A will react by creating and sending the WebRTC offer */
+    broadcast('cam-accepted', fromUid, { reqType: 'private' });
+  } catch (err) {
+    showToast('⚠️ Could not access camera/mic: ' + err.message);
+  }
+}
+
+/**
+ * A receives cam-accepted:
+ *   - for public: the offer is already on its way (sent by sharePublicCameraTo)
+ *   - for private: A must now initiate WebRTC as the offerer
+ */
+function handleCamAccepted(payload) {
+  if (payload.to !== state.currentUser?.id) return;
+  if (payload.reqType === 'private') {
+    /* We are A (the caller) — B accepted → open our side of vcall and send WebRTC offer */
+    startPrivateCall(payload.from);
+  }
+  /* public: offer was already sent inside sharePublicCameraTo — nothing to do here */
 }
 
 /** B shares their camera stream to A via WebRTC */
@@ -1063,24 +1159,38 @@ async function handleWebRTCSignal(payload) {
   if (isPrivate) {
     /* Private call signalling — uses vcallWin (PiP) */
     if (sigType === 'offer') {
+      /* B receives offer from A → set up peer, show vcall window, send answer */
       const pc = new RTCPeerConnection(ICE_SERVERS);
       state.privatePeer = pc;
       state.activeCallUID = from;
       pc.onicecandidate = ({ candidate }) => {
-        if (candidate) broadcast('webrtc', from, { sigType:'ice', candidate, ctx:'private' });
+        if (candidate) broadcast('webrtc', from, { sigType: 'ice', candidate, ctx: 'private' });
       };
       pc.ontrack = ({ streams }) => {
-        dom.remoteVideoEl.srcObject = streams[0];
+        dom.remoteVideoEl.srcObject     = streams[0];
         dom.remotePlaceholder.style.display = 'none';
+        dom.vcallStatus.textContent     = 'Connected';
       };
+      /* Add local stream tracks so A can see B too */
       if (state.localStream) state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
-      await pc.setRemoteDescription({ type:'offer', sdp });
+      /* Show vcall window for B (already opened in acceptPrivateCall, but ensure it's visible) */
+      const caller = findUser(from);
+      dom.localVideoEl.srcObject  = state.localStream;
+      dom.vcallName.textContent   = caller?.name || from;
+      dom.vcallStatus.textContent = 'Connecting…';
+      dom.vcallAvatar.textContent = initials(caller?.name || '?');
+      dom.vcallAvatar.style.background = avatarColor(caller?.name || '?');
+      dom.vcallWin.hidden = false;
+      await pc.setRemoteDescription({ type: 'offer', sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      broadcast('webrtc', from, { sigType:'answer', sdp: answer.sdp, ctx:'private' });
+      broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'private' });
     }
     else if (sigType === 'answer') {
-      if (state.privatePeer) await state.privatePeer.setRemoteDescription({ type:'answer', sdp });
+      if (state.privatePeer) {
+        await state.privatePeer.setRemoteDescription({ type: 'answer', sdp });
+        dom.vcallStatus.textContent = 'Connected';
+      }
     }
     else if (sigType === 'ice') {
       if (state.privatePeer && candidate) await state.privatePeer.addIceCandidate(candidate).catch(console.warn);
@@ -1093,34 +1203,35 @@ function openRemoteCamWindow(uid, stream) {
   createCameraWindow(uid, stream, user?.name || uid, false);
 }
 
-/* ── Private video call (from private chat) ────────────────────── */
+/* ── Private video call — A creates offer after B accepts ─────── */
 async function startPrivateCall(targetUid) {
   const target = findUser(targetUid);
-  if (!supabaseReady()) { showToast('⚠️ Server connection required for calls.'); return; }
   try {
     if (!state.localStream) {
-      state.localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+      state.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.privatePeer = pc; state.activeCallUID = targetUid;
     state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate) broadcast('webrtc', targetUid, { sigType:'ice', candidate, ctx:'private' });
+      if (candidate) broadcast('webrtc', targetUid, { sigType: 'ice', candidate, ctx: 'private' });
     };
     pc.ontrack = ({ streams }) => {
       dom.remoteVideoEl.srcObject = streams[0];
       dom.remotePlaceholder.style.display = 'none';
+      dom.vcallStatus.textContent = 'Connected';
     };
-    /* Show call window */
-    dom.localVideoEl.srcObject = state.localStream;
+    /* Show our side of the call window */
+    dom.localVideoEl.srcObject  = state.localStream;
     dom.vcallName.textContent   = target?.name || targetUid;
     dom.vcallStatus.textContent = 'Calling…';
     dom.vcallAvatar.textContent = initials(target?.name || '?');
     dom.vcallAvatar.style.background = avatarColor(target?.name || '?');
+    dom.remotePlaceholder.style.display = '';
     dom.vcallWin.hidden = false;
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    broadcast('webrtc', targetUid, { sigType:'offer', sdp: offer.sdp, ctx:'private' });
+    broadcast('webrtc', targetUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'private' });
   } catch (err) { showToast('⚠️ Could not start call: ' + err.message); }
 }
 
@@ -1138,8 +1249,6 @@ function initCallControls() {
     state.localStream?.getVideoTracks().forEach(t => { t.enabled = !o; });
   });
   makeDraggable(dom.vcallWin, dom.vcallDragHandle);
-  dom.camAcceptBtn.addEventListener('click', () => { dom.camReqOverlay.hidden = true; });
-  dom.camRejectBtn.addEventListener('click', () => { dom.camReqOverlay.hidden = true; showToast('❌ Request declined.'); });
 }
 function endCall() {
   state.privatePeer?.close(); state.privatePeer = null;
@@ -1312,13 +1421,15 @@ async function connectSupabase() {
         if (status === 'SUBSCRIBED') await updateOwnPresence();
       });
 
-    /* ── 4. Signal channel (Broadcast — typing, PM, WebRTC, cam-req) ── */
+    /* ── 4. Signal channel (Broadcast — typing, PM, WebRTC, cam events) ── */
     state.signalCh = state.supa.channel('broadcast:signals-main');
     state.signalCh
-      .on('broadcast', { event:'typing'   }, ({ payload }) => handleTyping(payload))
-      .on('broadcast', { event:'pm'       }, ({ payload }) => handleIncomingPM(payload))
-      .on('broadcast', { event:'webrtc'   }, ({ payload }) => handleWebRTCSignal(payload))
-      .on('broadcast', { event:'cam-req'  }, ({ payload }) => handleCamRequest(payload))
+      .on('broadcast', { event:'typing'      }, ({ payload }) => handleTyping(payload))
+      .on('broadcast', { event:'pm'          }, ({ payload }) => handleIncomingPM(payload))
+      .on('broadcast', { event:'webrtc'      }, ({ payload }) => handleWebRTCSignal(payload))
+      .on('broadcast', { event:'cam-req'     }, ({ payload }) => handleCamRequest(payload))
+      .on('broadcast', { event:'cam-accepted'}, ({ payload }) => handleCamAccepted(payload))
+      .on('broadcast', { event:'cam-closed'  }, ({ payload }) => handleCamClosed(payload))
       .subscribe();
 
     showToast('🟢 Connected to NeverVideoChat');

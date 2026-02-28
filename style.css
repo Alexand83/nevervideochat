@@ -969,6 +969,8 @@ a:hover { text-decoration: underline; }
   transition: all var(--tf);
 }
 .pchat-ctrl-btn:hover { background: var(--bg-hover); color: var(--tx0); }
+.pchat-vcall-btn { color: var(--accent) !important; }
+.pchat-vcall-btn:hover { background: var(--accent) !important; color: #fff !important; }
 
 .pchat-msgs {
   flex: 1;
