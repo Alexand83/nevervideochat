@@ -459,7 +459,8 @@ async function sendMessage() {
 ================================================================ */
 function renderUsers() {
   dom.usersList.innerHTML = '';
-  const all = [state.currentUser, ...state.users];
+  /* Show only online users (+ ourselves, always online) */
+  const all = [state.currentUser, ...state.users.filter(u => u?.online)];
   const online = all.filter(u => u?.online).length;
   dom.onlineCountLabel.textContent = online;
   dom.onlineBadge.textContent = online;
