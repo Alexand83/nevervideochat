@@ -635,6 +635,13 @@ function initVoiceRecording() {
   dom.recStopBtn.addEventListener('click',  stopRecording);
   dom.recCancelBtn.addEventListener('click',cancelRecording);
 }
+/* Maps MediaRecorder mimeType → file extension for Supabase Storage */
+function mimeToExt(mimeType) {
+  const base = (mimeType || '').split(';')[0].toLowerCase().trim();
+  return { 'audio/webm':'webm', 'audio/ogg':'ogg', 'audio/mp4':'mp4',
+           'audio/x-m4a':'m4a', 'audio/aac':'aac', 'audio/mpeg':'mp3' }[base] || 'webm';
+}
+
 function startRecording() {
   if (!navigator.mediaDevices || !window.MediaRecorder) {
     showToast('⚠️ Voice recording is not supported in this browser.'); return;
@@ -642,31 +649,60 @@ function startRecording() {
   navigator.mediaDevices.getUserMedia({ audio: true })
     .then(stream => {
       state.recordingChunks = []; state.recordingSeconds = 0;
-      const mime = ['audio/webm;codecs=opus','audio/webm','audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+      /* FIX: include audio/mp4 for iOS Safari which doesn't support webm */
+      const mime = ['audio/webm;codecs=opus','audio/webm','audio/ogg','audio/mp4']
+                     .find(t => MediaRecorder.isTypeSupported(t)) || '';
       state.mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
       state.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) state.recordingChunks.push(e.data); };
+
       state.mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(state.recordingChunks, { type: state.mediaRecorder.mimeType || 'audio/webm' });
-        /* Upload to Supabase Storage; fall back to local object URL */
-        let src = URL.createObjectURL(blob);
-        if (supabaseReady()) {
-          const url = await uploadToStorage(blob, 'voices', 'webm');
-          if (url) src = url;
+
+        const actualMime = state.mediaRecorder.mimeType || 'audio/webm';
+        const ext        = mimeToExt(actualMime);  /* FIX: correct extension per browser */
+        const blob       = new Blob(state.recordingChunks, { type: actualMime });
+
+        /* FIX: never fall back to a blob: URL — blob: URLs are
+           browser-local and useless for other users.
+           If Storage upload fails, abort and tell the user.         */
+        if (!supabaseReady()) {
+          showToast('⚠️ Not connected — voice messages require Supabase Storage.');
+          dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer);
+          dom.recTimer.textContent = '0:00'; return;
         }
-        const html = `<div class="voice-msg-wrap">🎙️ Voice message<audio controls src="${src}"></audio></div>`;
+
+        showToast('⏳ Uploading voice message…');
+        const url = await uploadToStorage(blob, 'voices', ext);
+
+        if (!url) {
+          /* Upload failed — a blob: URL would break for all other users */
+          showToast('⚠️ Voice upload failed. Check that the Supabase Storage ' +
+                    '"chat-media" bucket exists and allows public access.');
+          dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer);
+          dom.recTimer.textContent = '0:00'; return;
+        }
+
+        /* URL is a permanent public Supabase Storage URL — safe to store in DB */
+        const html = `<div class="voice-msg-wrap">🎙️ Voice message` +
+                     `<audio controls src="${url}" preload="metadata"></audio></div>`;
         addMessage({ userId: 'me', html, ts: Date.now() });
-        if (supabaseReady()) {
-          state.supa.from('messages').insert({
-            user_id: state.currentUser.id, username: state.currentUser.name, content: html,
-          }).then(({ error }) => { if (error) console.warn('voice msg insert:', error); });
-        }
-        dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer); dom.recTimer.textContent = '0:00';
+
+        state.supa.from('messages').insert({
+          user_id:  state.currentUser.id,
+          username: state.currentUser.name,
+          content:  html,
+        }).then(({ error }) => { if (error) console.warn('voice msg DB insert:', error); });
+
+        dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer);
+        dom.recTimer.textContent = '0:00';
       };
+
       state.mediaRecorder.start(250); dom.voiceRecStrip.hidden = false;
       state.recordingTimer = setInterval(() => {
         state.recordingSeconds++;
-        const m = Math.floor(state.recordingSeconds/60), s = String(state.recordingSeconds%60).padStart(2,'0');
+        const m = Math.floor(state.recordingSeconds/60),
+              s = String(state.recordingSeconds%60).padStart(2,'0');
         dom.recTimer.textContent = `${m}:${s}`;
       }, 1000);
     })
