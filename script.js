@@ -191,6 +191,12 @@ const state = {
   /* Typing debounce */
   typingTimer: null,
 
+  /* Presence leave debounce timers
+     { [uid]: timeoutId }
+     Supabase fires leave+join on every .track() update; we wait 600ms
+     before treating a leave as a real disconnect.                     */
+  presenceLeaveTimers: {},
+
   /* Context menu */
   contextTargetUID: null,
 
@@ -900,7 +906,12 @@ function createCameraWindow(uid, stream, name, isOwn) {
   document.body.appendChild(win);
   state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true };
   const videoEl = $(`cam-vid-${uid}`);
-  if (videoEl) videoEl.srcObject = stream;
+  if (videoEl) {
+    videoEl.srcObject = stream;
+    /* BUG-2 FIX: call play() explicitly so browsers that block
+       autoplay audio (especially on mobile) start playback.       */
+    videoEl.play().catch(() => {});
+  }
   win.querySelector('.cam-win-close-btn').addEventListener('click', () => closeCameraWindow(uid));
   if (isOwn) {
     const mb = $(`cam-mic-btn-${uid}`);
@@ -1001,9 +1012,19 @@ async function startOwnCamera() {
 /* ── Mic level meter (per-window, Web Audio AnalyserNode) ────────── */
 function startMicMeter(stream, uid) {
   stopMicMeter(uid);
+  const audioTrack = stream.getAudioTracks()[0];
+  if (!audioTrack) return;
   try {
+    /* BUG-2 FIX: Create a SEPARATE MediaStream for analysis that wraps
+       only the audio track.  This prevents the AudioContext from
+       "owning" the microphone stream and interfering with WebRTC audio
+       on iOS Safari / some Chrome versions.                           */
+    const analysisStream = new MediaStream([audioTrack]);
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = ctx.createMediaStreamSource(stream);
+    /* Resume immediately — browsers start AudioContext in suspended
+       state until user interaction; resume avoids a silent analyser  */
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const src = ctx.createMediaStreamSource(analysisStream);
     const an  = ctx.createAnalyser(); an.fftSize=256; an.smoothingTimeConstant=0.75;
     src.connect(an);
     const data = new Uint8Array(an.frequencyBinCount);
@@ -1150,7 +1171,11 @@ async function sharePublicCameraTo(toUid) {
     }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.outgoingPCs[toUid] = pc;
-    state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
+    /* BUG-2 FIX: only add tracks whose readyState is 'live' to avoid
+       sending ended/stopped tracks to the remote peer               */
+    state.localStream.getTracks()
+      .filter(t => t.readyState === 'live')
+      .forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) broadcast('webrtc', toUid, { sigType:'ice', candidate, ctx:'public' });
     };
@@ -1205,11 +1230,16 @@ async function handleWebRTCSignal(payload) {
       };
       pc.ontrack = ({ streams }) => {
         dom.remoteVideoEl.srcObject     = streams[0];
+        dom.remoteVideoEl.play().catch(() => {}); /* BUG-2: explicit play */
         dom.remotePlaceholder.style.display = 'none';
         dom.vcallStatus.textContent     = 'Connected';
       };
       /* Add local stream tracks so A can see B too */
-      if (state.localStream) state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
+      if (state.localStream) {
+        state.localStream.getTracks()
+          .filter(t => t.readyState === 'live')
+          .forEach(t => pc.addTrack(t, state.localStream));
+      }
       /* Show vcall window for B (already opened in acceptPrivateCall, but ensure it's visible) */
       const caller = findUser(from);
       dom.localVideoEl.srcObject  = state.localStream;
@@ -1252,12 +1282,15 @@ async function startPrivateCall(targetUid) {
     }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.privatePeer = pc; state.activeCallUID = targetUid;
-    state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
+    state.localStream.getTracks()
+      .filter(t => t.readyState === 'live')
+      .forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) broadcast('webrtc', targetUid, { sigType: 'ice', candidate, ctx: 'private' });
     };
     pc.ontrack = ({ streams }) => {
       dom.remoteVideoEl.srcObject = streams[0];
+      dom.remoteVideoEl.play().catch(() => {});   /* BUG-2: explicit play */
       dom.remotePlaceholder.style.display = 'none';
       dom.vcallStatus.textContent = 'Connected';
     };
@@ -1491,36 +1524,64 @@ async function connectSupabase() {
     });
     state.presenceCh
       .on('presence', { event:'sync' }, () => syncPresence(state.presenceCh.presenceState()))
+
+      /* ── join ──────────────────────────────────────────────────────
+         Fires for a real join AND every time a user calls .track()
+         to update their presence (e.g. camera toggle).
+         BUG-1 FIX: update hasCamera + renderUsers immediately here.
+         BUG-3 FIX: cancel any pending "left" timer for this uid.    */
       .on('presence', { event:'join' }, ({ key, newPresences }) => {
-        if (key !== state.currentUser.id) showToast(`👤 ${newPresences[0].name} joined the chat`);
+        const uid  = String(key);
+        const myId = String(state.currentUser?.id);
+        if (uid === myId) return;
+
+        /* Cancel debounced-leave timer for this uid (was a presence
+           update, not a real disconnect)                             */
+        if (state.presenceLeaveTimers[uid]) {
+          clearTimeout(state.presenceLeaveTimers[uid]);
+          delete state.presenceLeaveTimers[uid];
+        }
+
+        const info      = newPresences[0];
+        const wasOnline = !!state.users.find(u => String(u.id) === uid)?.online;
+        ensureUser(uid, info.name, { isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera });
+        renderUsers(); /* immediately reflect camera-icon change      */
+        if (!wasOnline) showToast(`👤 ${info.name} joined the chat`);
       })
+
+      /* ── leave ─────────────────────────────────────────────────────
+         BUG-3 FIX: Supabase fires leave+join on every .track() call
+         (presence update).  Debounce 600ms; if a join arrives first,
+         cancel the timer — it was just a presence update.
+         Also never process our own leave (reconnect artefact).       */
       .on('presence', { event:'leave' }, ({ key, leftPresences }) => {
         const uid  = String(key);
         const myId = String(state.currentUser?.id);
-
-        /* IMPORTANT: Supabase can fire 'leave' for our own ID during reconnects.
-           Never process our own leave — it would delete our cam window and
-           break toggleOwnCamera by leaving state.localStream alive with no window. */
         if (uid === myId) return;
 
+        /* Look up name now, before the user might be removed         */
         const u    = state.users.find(u => String(u.id) === uid)
                   ?? state.users.find(u => String(u.id) === String(leftPresences?.[0]?.id));
         const name = u?.name ?? leftPresences?.[0]?.name ?? 'A user';
 
-        if (u) { u.online = false; renderUsers(); }
-        showToast(`👋 ${name} left`);
+        clearTimeout(state.presenceLeaveTimers[uid]);
+        state.presenceLeaveTimers[uid] = setTimeout(() => {
+          delete state.presenceLeaveTimers[uid];
 
-        /* Close any camera window open for this user (browser-close fallback).
-           closeCameraWindow handles peer cleanup correctly for remote users. */
-        if (state.cameraWindows[uid]) {
-          closeCameraWindow(uid);
-        }
+          /* Double-check: is the user still present? (rejoined quickly) */
+          const stillPresent = !!(state.presenceCh?.presenceState()?.[uid]);
+          if (stillPresent) return;
 
-        /* End any active private call with this user */
-        if (state.activeCallUID === uid && !dom.vcallWin.hidden) {
-          endCall(false);
-          showToast(`📵 ${name} disconnected — call ended.`);
-        }
+          const uu = state.users.find(u => String(u.id) === uid);
+          if (uu) { uu.online = false; renderUsers(); }
+          showToast(`👋 ${name} left`);
+
+          if (state.cameraWindows[uid]) closeCameraWindow(uid);
+          if (state.activeCallUID === uid && !dom.vcallWin.hidden) {
+            endCall(false);
+            showToast(`📵 ${name} disconnected — call ended.`);
+          }
+        }, 600);
       })
       .subscribe(async status => {
         if (status === 'SUBSCRIBED') await updateOwnPresence();
