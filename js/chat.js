@@ -51,6 +51,19 @@ export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, qu
   };
   room.messages.push(msg);
 
+  /* ── Enforce max 60 messages limit ── */
+  const MAX_MESSAGES = 60;
+  if (room.messages.length > MAX_MESSAGES) {
+    const removed = room.messages.splice(0, room.messages.length - MAX_MESSAGES);
+    /* Remove old messages from DOM if this is the active room */
+    if (rId === state.activeRoom && dom.msgsContainer) {
+      removed.forEach(oldMsg => {
+        const group = dom.msgsContainer.querySelector(`[data-msg-id="${oldMsg.id}"]`);
+        if (group) group.remove();
+      });
+    }
+  }
+
   /* Increment unread count if message is in a non-active room */
   if (rId !== state.activeRoom && userId !== 'me' && userId !== state.currentUser?.id) {
     room.unreadCount = (room.unreadCount || 0) + 1;
@@ -59,7 +72,11 @@ export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, qu
   }
 
   /* Only render if this is the active room */
-  if (rId === state.activeRoom) renderMessage(msg);
+  if (rId === state.activeRoom) {
+    renderMessage(msg);
+    /* Hide welcome banner when first message arrives */
+    if (dom.welcomeBanner?.parentNode) dom.welcomeBanner.remove();
+  }
 }
 
 /* ── Render a single message bubble ── */

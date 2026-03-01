@@ -27,36 +27,17 @@ export async function connectRoom(roomId) {
   if (!state.supa || !state.rooms[roomId]) return;
   const room = state.rooms[roomId];
 
-  /* ── 1. Clear old messages before loading new ones ── */
+  /* ── 1. Clear old messages - new users don't see old messages ── */
   room.messages = [];
   if (roomId === state.activeRoom && dom.msgsContainer) {
     dom.msgsContainer.innerHTML = '';
-  }
-
-  /* ── 2. Load last 60 messages for this room ── */
-  const { data: msgs, error: msgErr } = await state.supa
-    .from('messages').select('id, user_id, username, content, room_id, reactions, created_at')
-    .eq('room_id', roomId)
-    .order('created_at', { ascending: true }).limit(60);
-
-  if (!msgErr && msgs?.length) {
-    if (dom.welcomeBanner?.parentNode && roomId === state.activeRoom) dom.welcomeBanner.remove();
-    msgs.forEach(m => {
-      const isMine = m.user_id === state.currentUser.id;
-      if (!isMine && state.ignoredUsers[String(m.user_id)]) return;
-      if (!isMine) ensureUser(m.user_id, m.username);
-      const { html, quoteHtml, quoteName } = extractQuote(m.content);
-      addMessage(
-        { userId: isMine ? 'me' : m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id },
-        roomId
-      );
-    });
-    /* Re-render if this is the active room */
-    if (roomId === state.activeRoom && dom.msgsContainer) {
-      room.messages.forEach(msg => renderMessage(msg));
-      dom.msgsContainer.scrollTop = dom.msgsContainer.scrollHeight;
+    /* Show welcome banner if no messages */
+    if (dom.welcomeBanner && !dom.welcomeBanner.parentNode) {
+      dom.msgsContainer.appendChild(dom.welcomeBanner);
     }
   }
+
+  /* ── 2. Don't load old messages - only show new ones from now on ── */
 
   /* ── 2. Subscribe to new messages (Postgres Changes filtered by room_id) ── */
   const dbSub = state.supa.channel(`db-messages-${roomId}`)
