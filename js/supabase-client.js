@@ -27,7 +27,13 @@ export async function connectRoom(roomId) {
   if (!state.supa || !state.rooms[roomId]) return;
   const room = state.rooms[roomId];
 
-  /* ── 1. Load last 60 messages for this room ── */
+  /* ── 1. Clear old messages before loading new ones ── */
+  room.messages = [];
+  if (roomId === state.activeRoom && dom.msgsContainer) {
+    dom.msgsContainer.innerHTML = '';
+  }
+
+  /* ── 2. Load last 60 messages for this room ── */
   const { data: msgs, error: msgErr } = await state.supa
     .from('messages').select('id, user_id, username, content, room_id, reactions, created_at')
     .eq('room_id', roomId)
@@ -47,7 +53,6 @@ export async function connectRoom(roomId) {
     });
     /* Re-render if this is the active room */
     if (roomId === state.activeRoom && dom.msgsContainer) {
-      dom.msgsContainer.innerHTML = '';
       room.messages.forEach(msg => renderMessage(msg));
       dom.msgsContainer.scrollTop = dom.msgsContainer.scrollHeight;
     }

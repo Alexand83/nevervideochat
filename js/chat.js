@@ -340,15 +340,50 @@ async function toggleReaction(msgId, emoji) {
     }
   }
   
-  /* Re-render this message */
+  /* Update only reactions in DOM (don't re-render entire message) */
   const group = dom.msgsContainer.querySelector(`[data-msg-id="${msgId}"]`);
   if (group && roomId === state.activeRoom) {
-    group.remove();
-    renderMessage(msg);
+    updateMessageReactions(group, reactions);
   }
   
   /* Broadcast reaction change */
   if (_broadcast) _broadcast('reaction-update', null, { msgId, emoji, userId: myId, added: idx < 0 });
+}
+
+/* ── Update only reactions DOM without re-rendering entire message ── */
+function updateMessageReactions(groupEl, reactions) {
+  const bubble = groupEl.querySelector('.msg-bubble');
+  if (!bubble) return;
+  
+  /* Remove old reactions div */
+  const oldReactions = bubble.querySelector('.msg-reactions');
+  if (oldReactions) oldReactions.remove();
+  
+  /* Create new reactions div */
+  const reactionsDiv = document.createElement('div');
+  reactionsDiv.className = 'msg-reactions';
+  if (reactions && Object.keys(reactions).length > 0) {
+    Object.entries(reactions).forEach(([emoji, userIds]) => {
+      if (!Array.isArray(userIds) || userIds.length === 0) return;
+      const reactBtn = document.createElement('button');
+      reactBtn.className = 'msg-reaction';
+      const hasReacted = userIds.includes(String(state.currentUser?.id));
+      if (hasReacted) reactBtn.classList.add('reacted');
+      reactBtn.textContent = `${emoji} ${userIds.length}`;
+      reactBtn.title = `${userIds.length} reaction${userIds.length > 1 ? 's' : ''}`;
+      const msgId = groupEl.dataset.msgId;
+      reactBtn.addEventListener('click', () => toggleReaction(msgId, emoji));
+      reactionsDiv.appendChild(reactBtn);
+    });
+  }
+  
+  /* Insert reactions before actions row (or at end of bubble if no actions) */
+  const actionsRow = bubble.parentElement.querySelector('.msg-actions');
+  if (actionsRow) {
+    bubble.insertBefore(reactionsDiv, null); /* append to bubble */
+  } else {
+    bubble.appendChild(reactionsDiv);
+  }
 }
 
 export function handleReactionUpdate(payload) {
@@ -376,12 +411,11 @@ export function handleReactionUpdate(payload) {
   }
   msg.reactions = reactions;
   
-  /* Re-render if in active room */
+  /* Update only reactions in DOM (don't re-render entire message) */
   if (roomId === state.activeRoom) {
     const group = dom.msgsContainer.querySelector(`[data-msg-id="${payload.msgId}"]`);
     if (group) {
-      group.remove();
-      renderMessage(msg);
+      updateMessageReactions(group, reactions);
     }
   }
 }

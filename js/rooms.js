@@ -201,11 +201,15 @@ export function renderActiveRoomMessages() {
 
   /* Clear and re-render from room.messages cache */
   msgsContainer.innerHTML = '';
-  room.messages.forEach(msg => {
-    /* renderMessage is imported lazily from chat.js via forward ref */
-    if (_renderMessage) _renderMessage(msg);
-  });
-  msgsContainer.scrollTop = msgsContainer.scrollHeight;
+  if (dom.welcomeBanner && room.messages.length === 0) {
+    msgsContainer.appendChild(dom.welcomeBanner);
+  } else {
+    room.messages.forEach(msg => {
+      /* renderMessage is imported lazily from chat.js via forward ref */
+      if (_renderMessage) _renderMessage(msg);
+    });
+    msgsContainer.scrollTop = msgsContainer.scrollHeight;
+  }
 }
 
 let _renderMessage = null;
