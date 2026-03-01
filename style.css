@@ -1410,6 +1410,19 @@ a:hover { text-decoration: underline; }
 .ctx-item:hover { background: var(--bg-hover); }
 .ctx-item.ctx-cam-item:hover { background: var(--accent-dim); color: var(--accent-h); }
 
+/* Cam button: enabled = always accent-coloured so it's never confused with disabled */
+.ctx-item.ctx-cam-item:not(:disabled) {
+  color: var(--accent-h);
+}
+.ctx-item.ctx-cam-item:not(:disabled) svg { stroke: var(--accent-h); }
+
+/* Disabled buttons in context menu */
+.ctx-item:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  color: var(--tx2);
+}
+
 .ctx-overlay {
   position: fixed;
   inset: 0;

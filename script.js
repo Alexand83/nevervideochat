@@ -1558,17 +1558,18 @@ function openContextMenu(uid, anchor) {
   const alreadyView  = !!state.cameraWindows[String(uid)];
   const pendingReq   = !!state.pendingCamRequests[String(uid)];
   const camRejected  = !!state.rejectedCamUsers[String(uid)];
-  const isOffline    = !user.online;
+  const isOffline    = user.online !== true;
   /* Button is blocked only by hard states; hasCamera may be stale — don't use it */
   const camBlocked   = alreadyView || pendingReq || camRejected || isOffline;
   dom.ctxCamBtn.disabled      = camBlocked;
-  dom.ctxCamBtn.style.opacity = camBlocked ? '0.4' : '1';
-  dom.ctxCamBtn.title = alreadyView  ? 'Already viewing this camera'
-                      : pendingReq   ? 'Request already sent — waiting for reply'
-                      : camRejected  ? 'Rejected — unblock in Settings → "Blocked Requests"'
-                      : isOffline    ? 'User is offline'
-                      : user.hasCamera ? 'Request Camera'
-                      : 'Request Camera (camera may not be active)';
+  dom.ctxCamBtn.style.opacity = camBlocked ? '0.35' : '1';
+
+  const reason = alreadyView ? 'Already viewing'
+               : pendingReq  ? 'Request pending'
+               : camRejected ? 'User rejected — unblock in Settings'
+               : isOffline   ? `User offline (online=${user.online})`
+               : '';
+  dom.ctxCamBtn.title = reason || (user.hasCamera ? 'Request Camera' : 'Request Camera (cam may be off)');
   const r = anchor.getBoundingClientRect();
   dom.ctxMenu.style.top  = `${clamp(r.bottom+4,4,window.innerHeight-200)}px`;
   dom.ctxMenu.style.left = `${clamp(r.left,4,window.innerWidth-210)}px`;
