@@ -165,7 +165,7 @@ export async function closeCameraWindow(uid) {
 
 export function handleCamClosed(payload) {
   if (payload.from === state.currentUser?.id) return;
-  const uid      = payload.from;
+  const uid      = String(payload.from);
   const inMyRoom = !payload.room_id || payload.room_id === state.activeRoom;
 
   /* Close the local window if it's open */
@@ -173,12 +173,15 @@ export function handleCamClosed(payload) {
   if (cw) { stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid]; }
   if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
 
-  /* Only clear the cam icon if the camera was in our room */
-  if (inMyRoom) {
-    const u = state.users.find(u => u.id === uid);
-    if (u) { u.hasCamera = false; renderUsers(); }
-    showToast(`📹 ${payload.fromName} turned off their camera`);
+  /* Clear hasCamera in ALL joined rooms for this user */
+  for (const room of Object.values(state.rooms)) {
+    if (room.users[uid]) room.users[uid].hasCamera = false;
   }
+  const u = state.users.find(u => u.id === uid);
+  if (u) u.hasCamera = false;
+
+  renderUsers();
+  if (inMyRoom) showToast(`📹 ${payload.fromName} turned off their camera`);
 }
 
 function toggleCamMic(uid) {

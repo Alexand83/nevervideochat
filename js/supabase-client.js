@@ -99,11 +99,19 @@ export async function connectSupabase() {
       })
       .on('broadcast', { event: 'cam-opened'   }, ({ payload }) => {
         if (String(payload.from) === String(state.currentUser?.id)) return;
-        /* Only show cam icon if the user activated it in our active room */
-        const inMyRoom = !payload.room_id || payload.room_id === state.activeRoom;
-        const u = state.users.find(u => String(u.id) === String(payload.from));
-        if (u) { u.hasCamera = inMyRoom; renderUsers(); }
-        else if (inMyRoom) { ensureUser(String(payload.from), payload.fromName, { hasCamera: true, online: true }); renderUsers(); }
+        const fromId   = String(payload.from);
+        const camRoom  = payload.room_id || null;   /* room where cam was activated */
+
+        /* Update room.users for EVERY joined room — icon true only in camRoom */
+        for (const [rId, room] of Object.entries(state.rooms)) {
+          if (room.users[fromId]) room.users[fromId].hasCamera = (rId === camRoom);
+        }
+        /* Keep global state.users in sync (used as fallback) */
+        const inMyRoom = !camRoom || camRoom === state.activeRoom;
+        const u = state.users.find(u => String(u.id) === fromId);
+        if (u) u.hasCamera = inMyRoom;
+        else if (inMyRoom) ensureUser(fromId, payload.fromName, { hasCamera: true, online: true });
+        renderUsers();
       })
       .on('broadcast', { event: 'cam-closed'   }, ({ payload }) => handleCamClosed(payload))
       .on('broadcast', { event: 'call-ended'   }, ({ payload }) => {
