@@ -77,7 +77,12 @@ export function renderUsers() {
     info.append(nameEl, sub);
     li.append(av, info);
 
-    if (user.hasCamera && user.online) {
+    /* For the current user: show cam icon only in the room where cam is active */
+    const hasCamHere = user.id === state.currentUser?.id
+      ? (state.cameraRoom === roomId)
+      : (user.hasCamera && user.online);
+
+    if (hasCamHere) {
       const ci = document.createElement('span');
       ci.className = 'user-cam-icon'; ci.textContent = '📹'; ci.title = 'Camera on';
       li.appendChild(ci);
