@@ -203,10 +203,19 @@ const state = {
 
   /* Users who rejected OUR camera requests.
      { [uid]: displayName }
-     Persisted to localStorage under 'nvc_rejected_cams'.
-     A user stays in this list until the local user manually removes them
-     from the Settings → "Blocked Camera Requests" panel.              */
+     Persisted to localStorage under 'nvc_rejected_cams'.            */
   rejectedCamUsers: {},
+
+  /* Users we are ignoring — messages and PMs hidden, cam access revoked.
+     { [uid]: displayName }
+     Persisted to localStorage under 'nvc_ignored_users'.            */
+  ignoredUsers: {},
+
+  /* Current reply-to context for public chat quotes */
+  replyTo: null,  /* { userId, name, html } | null */
+
+  /* Users currently viewing my own cam stream { [uid]: name }       */
+  camViewers: {},
 
   /* Presence leave debounce timers
      { [uid]: timeoutId }
@@ -272,7 +281,7 @@ const dom = {
   ctxPrivateBtn: $('ctxPrivateBtn'), ctxCamBtn: $('ctxCamBtn'), ctxOverlay: $('ctxOverlay'),
 
   /* Header user chip */
-  headerUser: $('headerUser'), headerAvatarChip: $('headerAvatarChip'),
+  headerAvatarChip: $('headerAvatarChip'),
   headerProfileBtn: $('headerProfileBtn'), headerSettingsBtn: $('headerSettingsBtn'),
 
   /* Auth modal */
@@ -303,6 +312,20 @@ const dom = {
   /* Rejected cam list */
   rejectedCamsSection: $('rejectedCamsSection'),
   rejectedCamsList:    $('rejectedCamsList'),
+
+  /* Ignored users list */
+  ignoredUsersSection: $('ignoredUsersSection'),
+  ignoredUsersList:    $('ignoredUsersList'),
+
+  /* Context menu ignore */
+  ctxIgnoreBtn:   $('ctxIgnoreBtn'),
+  ctxIgnoreLabel: $('ctxIgnoreLabel'),
+
+  /* Reply/quote preview bar */
+  replyPreviewBar:    $('replyPreviewBar'),
+  replyPreviewAuthor: $('replyPreviewAuthor'),
+  replyPreviewText:   $('replyPreviewText'),
+  replyPreviewCancel: $('replyPreviewCancel'),
 };
 
 /* ================================================================
@@ -385,6 +408,35 @@ function addRejectedCam(uid, name) {
 function removeRejectedCam(uid) {
   delete state.rejectedCamUsers[String(uid)];
   saveRejectedCams();
+}
+
+/* ── Ignored users helpers ──────────────────────────────────────── */
+function loadIgnoredUsers() {
+  try { return JSON.parse(localStorage.getItem('nvc_ignored_users') || '{}'); } catch { return {}; }
+}
+function saveIgnoredUsers() {
+  localStorage.setItem('nvc_ignored_users', JSON.stringify(state.ignoredUsers));
+}
+function addIgnoredUser(uid, name) {
+  state.ignoredUsers[String(uid)] = name || 'User';
+  saveIgnoredUsers();
+
+  /* Immediately revoke any cam access this user has to my stream */
+  const uidStr = String(uid);
+  if (state.outgoingPCs[uidStr]) {
+    try { state.outgoingPCs[uidStr].close(); } catch {}
+    delete state.outgoingPCs[uidStr];
+    broadcast('cam-revoked', uidStr, {});
+  }
+  delete state.camViewers[uidStr];
+  refreshViewersPanel(state.currentUser?.id);
+
+  /* Close any remote cam window of theirs we have open */
+  if (state.cameraWindows[uidStr]) closeCameraWindow(uidStr);
+}
+function removeIgnoredUser(uid) {
+  delete state.ignoredUsers[String(uid)];
+  saveIgnoredUsers();
 }
 
 /* ================================================================
@@ -731,28 +783,6 @@ function setAvatarDisplay(el, name, avatarUrl) {
 function updateHeaderUser() {
   const u = state.currentUser;
   if (!u) return;
-
-  /* Header left: name + registered/guest badge */
-  if (dom.headerUser) {
-    dom.headerUser.innerHTML = '';
-
-    const nameEl = document.createElement('span');
-    nameEl.className   = 'header-user-name';
-    nameEl.textContent = u.username || u.name;   /* prefer display name */
-    dom.headerUser.appendChild(nameEl);
-
-    const badge = document.createElement('span');
-    if (u.isGuest) {
-      badge.className   = 'header-user-badge guest';
-      badge.textContent = 'Guest';
-    } else {
-      badge.className   = 'header-user-badge registered';
-      badge.textContent = '✓';
-      badge.title       = 'Registered account';
-    }
-    dom.headerUser.appendChild(badge);
-  }
-
   /* Header profile button: avatar chip */
   setAvatarDisplay(dom.headerAvatarChip, u.username || u.name, u.avatarUrl);
 }
@@ -799,6 +829,7 @@ function openSettingsModal() {
   dom.micDeviceSelect.value    = s.micId    || '';
   dom.detectDevicesHint.textContent = 'Click "Detect Devices" to list your cameras and microphones.\nBrowser permission for camera/mic is required.';
   renderRejectedCams();
+  renderIgnoredUsers();
   dom.settingsModal.hidden = false;
 }
 
@@ -841,6 +872,54 @@ function renderRejectedCams() {
     item.append(nameEl, removeBtn);
     list.appendChild(item);
   });
+}
+
+/** Render ignored users list in Settings */
+function renderIgnoredUsers() {
+  const list = dom.ignoredUsersList;
+  if (!list) return;
+  list.innerHTML = '';
+  const entries = Object.entries(state.ignoredUsers);
+  if (entries.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'rejected-cams-empty'; p.textContent = 'No ignored users.';
+    list.appendChild(p); return;
+  }
+  entries.forEach(([uid, name]) => {
+    const item = document.createElement('div');
+    item.className = 'rejected-cam-item';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'rejected-cam-name'; nameEl.textContent = name;
+    const btn = document.createElement('button');
+    btn.className = 'rejected-cam-remove-btn'; btn.textContent = 'Unignore';
+    btn.title = `Stop ignoring ${name}`;
+    btn.addEventListener('click', () => {
+      removeIgnoredUser(uid);
+      renderIgnoredUsers();
+      showToast(`✅ ${name} unignored.`);
+    });
+    item.append(nameEl, btn);
+    list.appendChild(item);
+  });
+}
+
+/* ── Quote / reply helpers ──────────────────────────────────────── */
+function setReplyTo(userId, name, html) {
+  state.replyTo = { userId, name, html };
+  if (dom.replyPreviewBar)    dom.replyPreviewBar.hidden = false;
+  if (dom.replyPreviewAuthor) dom.replyPreviewAuthor.textContent = name;
+  if (dom.replyPreviewText) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    dom.replyPreviewText.textContent = tmp.textContent.slice(0, 80) + (tmp.textContent.length > 80 ? '…' : '');
+  }
+  dom.msgInput?.focus();
+}
+function clearReplyTo() {
+  state.replyTo = null;
+  if (dom.replyPreviewBar) dom.replyPreviewBar.hidden = true;
+  if (dom.replyPreviewAuthor) dom.replyPreviewAuthor.textContent = '';
+  if (dom.replyPreviewText)   dom.replyPreviewText.textContent   = '';
 }
 
 async function populateDeviceSelects() {
@@ -960,8 +1039,25 @@ function showToast(msg, duration = 3500) {
 /* ================================================================
    9. MESSAGES — render + send
 ================================================================ */
-function addMessage({ userId, html, ts = Date.now() }) {
-  const msg = { id: `m${Date.now()}${Math.random()}`, userId, html, ts };
+/** Extract embedded quote metadata from stored message content */
+function extractQuote(content) {
+  if (!content || !content.includes('msg-quote-meta')) return { html: content, quoteHtml: null, quoteName: null };
+  try {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = content;
+    const meta = tmp.querySelector('.msg-quote-meta');
+    if (!meta) return { html: content, quoteHtml: null, quoteName: null };
+    const quoteName = meta.getAttribute('data-quote-name') || '';
+    const quoteHtml = decodeURIComponent(meta.getAttribute('data-quote-html') || '');
+    meta.remove();
+    return { html: tmp.innerHTML, quoteHtml: quoteHtml || null, quoteName: quoteName || null };
+  } catch { return { html: content, quoteHtml: null, quoteName: null }; }
+}
+
+function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, quoteName = null }) {
+  /* Don't show messages from ignored users */
+  if (userId && userId !== 'me' && state.ignoredUsers[String(userId)]) return;
+  const msg = { id: `m${Date.now()}${Math.random()}`, userId, html, ts, quoteHtml, quoteName };
   state.messages.push(msg);
   renderMessage(msg);
 }
@@ -1013,9 +1109,34 @@ function renderMessage(msg) {
 
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
-  bubble.innerHTML = processHtml(msg.html);
 
-  content.append(meta, bubble);
+  /* If msg includes a quote block, render it first */
+  if (msg.quoteHtml) {
+    const qBlock = document.createElement('div');
+    qBlock.className = 'msg-quote';
+    const qAuthor = document.createElement('span');
+    qAuthor.className = 'msg-quote-author';
+    qAuthor.textContent = msg.quoteName || '';
+    const qText = document.createElement('span');
+    qText.className = 'msg-quote-text';
+    const tmp = document.createElement('div'); tmp.innerHTML = msg.quoteHtml;
+    qText.textContent = tmp.textContent.slice(0, 120) + (tmp.textContent.length > 120 ? '…' : '');
+    qBlock.append(qAuthor, qText);
+    bubble.appendChild(qBlock);
+  }
+
+  const textDiv = document.createElement('div');
+  textDiv.innerHTML = processHtml(msg.html);
+  bubble.appendChild(textDiv);
+
+  /* Reply button */
+  const replyBtn = document.createElement('button');
+  replyBtn.className = 'msg-reply-btn';
+  replyBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/></svg> Reply`;
+  const authorName = isMine ? 'You' : user.name;
+  replyBtn.addEventListener('click', () => setReplyTo(msg.userId, authorName, msg.html));
+
+  content.append(meta, bubble, replyBtn);
   group.append(avatar, content);
   dom.msgsContainer.appendChild(group);
   scrollToBottom();
@@ -1056,16 +1177,26 @@ async function sendMessage() {
     dom.imgPreviewStrip.hidden = true;
   }
 
+  /* Build quote prefix if replying */
+  const quote     = state.replyTo;
+  const quoteHtml = quote?.html  || null;
+  const quoteName = quote?.name  || null;
+  clearReplyTo();
+
   /* Optimistic: show immediately */
-  addMessage({ userId: 'me', html, ts: Date.now() });
+  addMessage({ userId: 'me', html, ts: Date.now(), quoteHtml, quoteName });
   dom.msgInput.innerHTML = '';
 
-  /* Persist to Supabase (non-blocking) */
+  /* Persist to Supabase — encode quote in content as a special prefix */
+  const fullContent = quoteHtml
+    ? `<div data-quote-name="${escHtml(quoteName||'')}" data-quote-html="${encodeURIComponent(quoteHtml)}" class="msg-quote-meta"></div>${html}`
+    : html;
+
   if (supabaseReady()) {
     state.supa.from('messages').insert({
       user_id:  state.currentUser.id,
       username: state.currentUser.name,
-      content:  html,
+      content:  fullContent,
     }).then(({ error }) => { if (error) console.warn('msg insert:', error); });
   }
 }
@@ -1477,6 +1608,9 @@ function handleIncomingPM(payload) {
   const fromId   = String(payload.from);
   const fromName = payload.fromName || 'User';
 
+  /* Silently drop messages from ignored users */
+  if (state.ignoredUsers[fromId]) return;
+
   ensureUser(fromId, fromName, { online: true });
 
   const chat = initOrGetPChat(fromId);
@@ -1523,6 +1657,15 @@ function openContextMenu(uid, anchor) {
                : isOffline   ? 'User is offline'
                : '';
   dom.ctxCamBtn.title = reason || (user.hasCamera ? 'Request Camera' : 'Request Camera (cam may not be active)');
+
+  /* Ignore button label + style */
+  const isIgnored = !!state.ignoredUsers[String(uid)];
+  if (dom.ctxIgnoreBtn) {
+    dom.ctxIgnoreBtn.classList.toggle('is-ignored', isIgnored);
+    if (dom.ctxIgnoreLabel) dom.ctxIgnoreLabel.textContent = isIgnored ? 'Unignore User' : 'Ignore User';
+    dom.ctxIgnoreBtn.title = isIgnored ? 'Stop ignoring this user' : 'Hide messages and revoke cam access';
+  }
+
   const r = anchor.getBoundingClientRect();
   dom.ctxMenu.style.top  = `${clamp(r.bottom+4,4,window.innerHeight-200)}px`;
   dom.ctxMenu.style.left = `${clamp(r.left,4,window.innerWidth-210)}px`;
@@ -1532,6 +1675,20 @@ function closeCtxMenu() { dom.ctxMenu.hidden=true; dom.ctxOverlay.hidden=true; s
 function initContextMenu() {
   dom.ctxPrivateBtn.addEventListener('click', () => { const u=state.contextTargetUID; closeCtxMenu(); if(u) openPrivateChat(u); });
   dom.ctxCamBtn.addEventListener('click',    () => { const u=state.contextTargetUID; closeCtxMenu(); if(u) requestPublicCamera(u); });
+  dom.ctxIgnoreBtn?.addEventListener('click', () => {
+    const u = state.contextTargetUID;
+    const user = findUser(u);
+    closeCtxMenu();
+    if (!u || !user) return;
+    const name = user.username || user.name;
+    if (state.ignoredUsers[String(u)]) {
+      removeIgnoredUser(u);
+      showToast(`✅ ${name} unignored.`);
+    } else {
+      addIgnoredUser(u, name);
+      showToast(`🔇 ${name} ignored — their messages are now hidden.`);
+    }
+  });
   dom.ctxOverlay.addEventListener('click', closeCtxMenu);
   document.addEventListener('keydown', e => { if(e.key==='Escape') closeCtxMenu(); });
 }
@@ -1555,6 +1712,9 @@ function createCameraWindow(uid, stream, name, isOwn) {
   win.style.right  = (20 + n * CAM_STEP) + 'px';
   win.style.bottom = (80 + n * CAM_STEP) + 'px';
   win.style.zIndex = String(650 + n);
+  const viewersBtnHtml = isOwn ? `<button class="cam-viewers-btn" id="cam-viewers-btn-${uid}" title="Who is watching">👁 <span id="cam-viewers-count-${uid}">0</span></button>
+    <div class="cam-viewers-panel" id="cam-viewers-panel-${uid}" hidden></div>` : '';
+
   const footer = isOwn ? `
     <div class="cam-win-footer">
       <button class="cam-ctrl-btn" id="cam-mic-btn-${uid}" aria-label="Toggle microphone" aria-pressed="true">
@@ -1584,6 +1744,7 @@ function createCameraWindow(uid, stream, name, isOwn) {
         <span class="cam-win-name">${escHtml(name)}</span>
         ${isOwn ? '<span class="cam-win-you-tag">You</span>' : ''}
       </div>
+      ${viewersBtnHtml}
       <button class="cam-win-close-btn" aria-label="Close camera window">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -1614,9 +1775,65 @@ function createCameraWindow(uid, stream, name, isOwn) {
     const mb = $(`cam-mic-btn-${uid}`);
     if (mb) mb.addEventListener('click', () => toggleCamMic(uid));
     startMicMeter(stream, uid);
+
+    /* Viewers button toggle */
+    const vBtn = $(`cam-viewers-btn-${uid}`);
+    const vPanel = $(`cam-viewers-panel-${uid}`);
+    if (vBtn && vPanel) {
+      vBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        vPanel.hidden = !vPanel.hidden;
+        if (!vPanel.hidden) refreshViewersPanel(uid);
+      });
+      document.addEventListener('click', () => { if (vPanel) vPanel.hidden = true; });
+    }
   }
   makeDraggable(win, $(`cam-win-hdr-${uid}`));
   makeResizable(win, $(`cam-rz-${uid}`));
+}
+
+function refreshViewersPanel(ownUid) {
+  const panel = $(`cam-viewers-panel-${ownUid}`);
+  const countEl = $(`cam-viewers-count-${ownUid}`);
+  const entries = Object.entries(state.camViewers);
+  if (countEl) countEl.textContent = String(entries.length);
+  if (!panel) return;
+  panel.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'cam-viewers-title'; title.textContent = 'Viewers';
+  panel.appendChild(title);
+  if (entries.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'cam-viewers-empty'; empty.textContent = 'No one watching yet.';
+    panel.appendChild(empty); return;
+  }
+  entries.forEach(([vUid, vName]) => {
+    const row = document.createElement('div');
+    row.className = 'cam-viewer-item';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'cam-viewer-name'; nameEl.textContent = vName;
+    const kickBtn = document.createElement('button');
+    kickBtn.className = 'cam-viewer-kick'; kickBtn.textContent = '✕';
+    kickBtn.title = `Stop sharing with ${vName}`;
+    kickBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      revokeViewer(vUid);
+      refreshViewersPanel(ownUid);
+      showToast(`🚫 Stopped sharing cam with ${vName}.`);
+    });
+    row.append(nameEl, kickBtn);
+    panel.appendChild(row);
+  });
+}
+
+function revokeViewer(viewerUid) {
+  const uid = String(viewerUid);
+  if (state.outgoingPCs[uid]) {
+    try { state.outgoingPCs[uid].close(); } catch {}
+    delete state.outgoingPCs[uid];
+  }
+  delete state.camViewers[uid];
+  broadcast('cam-revoked', uid, {});
 }
 
 function closeCameraWindow(uid) {
@@ -1929,6 +2146,19 @@ async function sharePublicCameraTo(toUid) {
     await pc.setLocalDescription(offer);
     broadcast('webrtc', toUid, { sigType:'offer', sdp: offer.sdp, ctx:'public' });
     broadcast('cam-accepted', toUid, {});
+
+    /* Track this viewer */
+    const viewerUser = findUser(toUid);
+    state.camViewers[toUid] = viewerUser?.username || viewerUser?.name || toUid;
+    refreshViewersPanel(state.currentUser.id);
+
+    /* Remove viewer when connection drops */
+    pc.addEventListener('connectionstatechange', () => {
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        delete state.camViewers[toUid];
+        refreshViewersPanel(state.currentUser?.id);
+      }
+    });
   } catch (err) { showToast('⚠️ Could not share camera: ' + err.message); }
 }
 
@@ -2314,8 +2544,10 @@ async function connectSupabase() {
       if (dom.welcomeBanner?.parentNode) dom.welcomeBanner.remove();
       msgs.forEach(m => {
         const isMine = m.user_id === state.currentUser.id;
+        if (!isMine && state.ignoredUsers[String(m.user_id)]) return; // ignored
         if (!isMine) ensureUser(m.user_id, m.username);
-        renderMessage({ userId: isMine ? 'me' : m.user_id, username: m.username, html: m.content, ts: new Date(m.created_at).getTime() });
+        const { html: mHtml, quoteHtml: mQHtml, quoteName: mQName } = extractQuote(m.content);
+        renderMessage({ userId: isMine ? 'me' : m.user_id, username: m.username, html: mHtml, quoteHtml: mQHtml, quoteName: mQName, ts: new Date(m.created_at).getTime() });
       });
     }
 
@@ -2323,8 +2555,10 @@ async function connectSupabase() {
     state.supa.channel('db-messages')
       .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' }, ({ new: m }) => {
         if (m.user_id === state.currentUser.id) return; // already rendered optimistically
+        if (state.ignoredUsers[String(m.user_id)]) return; // ignored
         ensureUser(m.user_id, m.username);
-        renderMessage({ userId: m.user_id, username: m.username, html: m.content, ts: new Date(m.created_at).getTime() });
+        const { html, quoteHtml, quoteName } = extractQuote(m.content);
+        renderMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime() });
         playNotificationSound();
       })
       .subscribe();
@@ -2416,6 +2650,13 @@ async function connectSupabase() {
         /* The RECEIVER decides to block — this side only clears the pending state */
         showToast(`❌ ${payload.fromName || 'User'} declined your camera request.`);
       })
+      .on('broadcast', { event:'cam-revoked' }, ({ payload }) => {
+        if (String(payload.to) !== String(state.currentUser?.id)) return;
+        /* The stream owner kicked us — close our remote window */
+        const fromId = String(payload.from);
+        if (state.cameraWindows[fromId]) closeCameraWindow(fromId);
+        showToast(`📵 Camera access revoked.`);
+      })
       .on('broadcast', { event:'cam-opened'   }, ({ payload }) => {
         /* INSTANT-ICON FIX: camera-open via fast Broadcast so the
            user-list camera icon updates in <100ms instead of ~1-2s  */
@@ -2497,8 +2738,12 @@ async function finishInit() {
   /* pendingCamRequests are session-only — always start clean */
   state.pendingCamRequests = {};
 
-  /* Load persisted rejected-cam list */
+  /* Load persisted lists */
   state.rejectedCamUsers = loadRejectedCams();
+  state.ignoredUsers     = loadIgnoredUsers();
+
+  /* Reply cancel button */
+  dom.replyPreviewCancel?.addEventListener('click', clearReplyTo);
 
   renderUsers();
   updateHeaderUser();

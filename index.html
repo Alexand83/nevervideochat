@@ -6,7 +6,7 @@
   <meta name="description" content="NeverVideoChat – Modern Real-Time Video Chat">
   <meta name="theme-color" content="#0d1117">
   <title>NeverVideoChat</title>
-  <link rel="stylesheet" href="style.css?v=20260301">
+  <link rel="stylesheet" href="style.css?v=20260302">
 </head>
 <body>
 
@@ -15,9 +15,6 @@
 ================================================================ -->
 <header class="app-header" role="banner">
   <div class="header-inner">
-
-    <!-- Left column: current user chip (avatar + name) -->
-    <div class="header-user" id="headerUser" aria-label="Current user"></div>
 
     <!-- Logo — inline SVG webcam + NVC, zero external requests -->
     <div class="logo-wrap" id="logoWrap">
@@ -202,6 +199,16 @@
         <button class="rec-cancel-btn" id="recCancelBtn" aria-label="Cancel recording">Cancel</button>
       </div>
 
+      <!-- Quote/reply preview bar (shown when replying to a message) -->
+      <div class="reply-preview-bar" id="replyPreviewBar" hidden>
+        <div class="reply-preview-inner">
+          <span class="reply-preview-label">Replying to</span>
+          <span class="reply-preview-author" id="replyPreviewAuthor"></span>
+          <span class="reply-preview-text" id="replyPreviewText"></span>
+        </div>
+        <button class="reply-preview-cancel" id="replyPreviewCancel" aria-label="Cancel reply">✕</button>
+      </div>
+
       <!-- Main input row -->
       <div class="input-row">
         <div class="msg-input" id="msgInput"
@@ -379,6 +386,14 @@
     </svg>
     Request Camera
   </button>
+  <hr class="ctx-hr">
+  <button class="ctx-item ctx-ignore-item" id="ctxIgnoreBtn" role="menuitem">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+    </svg>
+    <span id="ctxIgnoreLabel">Ignore User</span>
+  </button>
 </div>
 <div class="ctx-overlay" id="ctxOverlay" hidden aria-hidden="true"></div>
 
@@ -540,6 +555,18 @@
       </div>
     </div>
 
+    <!-- Ignored users — always shown, JS fills the list -->
+    <div class="settings-section" id="ignoredUsersSection">
+      <h3 class="settings-section-title">🔇 Ignored Users</h3>
+      <p class="settings-hint">
+        Ignored users' messages are hidden in public chat and private messages.
+        Their camera access to you is also revoked. Click <strong>Unignore</strong> to restore.
+      </p>
+      <div id="ignoredUsersList" class="rejected-cams-list">
+        <!-- filled by renderIgnoredUsers() -->
+      </div>
+    </div>
+
     <!-- Webcam & Audio section -->
     <div class="settings-section">
       <h3 class="settings-section-title">📷 Webcam &amp; Audio</h3>
@@ -574,6 +601,6 @@
 
 <!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20260301"></script>
+<script src="script.js?v=20260302"></script>
 </body>
 </html>
