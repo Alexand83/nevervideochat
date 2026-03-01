@@ -876,11 +876,11 @@ function renderRejectedCams() {
     const removeBtn = document.createElement('button');
     removeBtn.className   = 'rejected-cam-remove-btn';
     removeBtn.textContent = 'Unblock';
-    removeBtn.title       = `Allow ${name} to receive camera requests again`;
+              removeBtn.title       = `Allow ${name} to send camera requests to you again`;
     removeBtn.addEventListener('click', () => {
       removeRejectedCam(uid);
       renderRejectedCams();
-      showToast(`✅ ${name} unblocked — you can send camera requests again.`);
+                showToast(`✅ ${name} unblocked — they can send you camera requests again.`);
     });
 
     item.append(nameEl, removeBtn);
@@ -1557,19 +1557,17 @@ function openContextMenu(uid, anchor) {
     ${escHtml(user.name)}</span>`;
   const alreadyView  = !!state.cameraWindows[String(uid)];
   const pendingReq   = !!state.pendingCamRequests[String(uid)];
-  const camRejected  = !!state.rejectedCamUsers[String(uid)];
   const isOffline    = user.online !== true;
-  /* Button is blocked only by hard states; hasCamera may be stale — don't use it */
-  const camBlocked   = alreadyView || pendingReq || camRejected || isOffline;
+  /* Only block on states we actually know about — the receiver manages their own block list */
+  const camBlocked   = alreadyView || pendingReq || isOffline;
   dom.ctxCamBtn.disabled      = camBlocked;
   dom.ctxCamBtn.style.opacity = camBlocked ? '0.35' : '1';
 
-  const reason = alreadyView ? 'Already viewing'
-               : pendingReq  ? 'Request pending'
-               : camRejected ? 'User rejected — unblock in Settings'
-               : isOffline   ? `User offline (online=${user.online})`
+  const reason = alreadyView ? 'Already viewing their camera'
+               : pendingReq  ? 'Request already sent — waiting for reply'
+               : isOffline   ? 'User is offline'
                : '';
-  dom.ctxCamBtn.title = reason || (user.hasCamera ? 'Request Camera' : 'Request Camera (cam may be off)');
+  dom.ctxCamBtn.title = reason || (user.hasCamera ? 'Request Camera' : 'Request Camera (cam may not be active)');
   const r = anchor.getBoundingClientRect();
   dom.ctxMenu.style.top  = `${clamp(r.bottom+4,4,window.innerHeight-200)}px`;
   dom.ctxMenu.style.left = `${clamp(r.left,4,window.innerWidth-210)}px`;
@@ -1854,10 +1852,6 @@ function requestPublicCamera(targetUid) {
   if (state.cameraWindows[uid]) {
     showToast(`📹 Already viewing ${target.name}'s camera.`); return;
   }
-  /* Previously rejected — user must unblock from Settings */
-  if (state.rejectedCamUsers[uid]) {
-    showToast(`🚫 ${target.name} rejected your request. Unblock in Settings → "Blocked Requests".`); return;
-  }
   /* Request already sent and pending */
   if (state.pendingCamRequests[uid]) {
     showToast(`⏳ Already waiting for ${target.name}'s reply. (60s auto-expire)`); return;
@@ -1871,29 +1865,40 @@ function requestPublicCamera(targetUid) {
 function handleCamRequest(payload) {
   if (payload.to !== state.currentUser?.id) return;
 
+  const fromId   = String(payload.from);
+  const fromName = payload.fromName || 'User';
+
+  /* ── Auto-reject if this sender was previously blocked by me ── */
+  if (state.rejectedCamUsers[fromId]) {
+    broadcast('cam-rejected', fromId, { reqType: payload.reqType || 'public' });
+    return; /* silent — don't show dialog, don't show toast */
+  }
+
   if (payload.reqType === 'public') {
-    dom.camReqBody.textContent = `${payload.fromName} wants to see your camera.`;
+    dom.camReqBody.textContent = `${fromName} wants to see your camera.`;
     dom.camReqOverlay.hidden = false;
     dom.camAcceptBtn.onclick = async () => {
       dom.camReqOverlay.hidden = true;
-      await sharePublicCameraTo(payload.from, payload.fromName);
+      await sharePublicCameraTo(fromId, fromName);
     };
     dom.camRejectBtn.onclick = () => {
       dom.camReqOverlay.hidden = true;
-      broadcast('cam-rejected', payload.from, {});
-      showToast(`❌ Camera request from ${payload.fromName} declined.`);
+      addRejectedCam(fromId, fromName);           /* ← save to MY blocked list */
+      broadcast('cam-rejected', fromId, {});
+      showToast(`❌ Request from ${fromName} declined and blocked. Manage in Settings.`);
     };
   } else if (payload.reqType === 'private') {
-    dom.camReqBody.textContent = `${payload.fromName} wants to start a private video call.`;
+    dom.camReqBody.textContent = `${fromName} wants to start a private video call.`;
     dom.camReqOverlay.hidden = false;
     dom.camAcceptBtn.onclick = async () => {
       dom.camReqOverlay.hidden = true;
-      await acceptPrivateCall(payload.from, payload.fromName);
+      await acceptPrivateCall(fromId, fromName);
     };
     dom.camRejectBtn.onclick = () => {
       dom.camReqOverlay.hidden = true;
-      broadcast('cam-rejected', payload.from, { reqType: 'private' });
-      showToast(`❌ Video call from ${payload.fromName} declined.`);
+      addRejectedCam(fromId, fromName);           /* ← save to MY blocked list */
+      broadcast('cam-rejected', fromId, { reqType: 'private' });
+      showToast(`❌ Video call from ${fromName} declined and blocked. Manage in Settings.`);
     };
   }
 }
@@ -2453,11 +2458,8 @@ async function connectSupabase() {
         if (String(payload.to) !== String(state.currentUser?.id)) return;
         const fromId = String(payload.from);
         clearPendingCamRequest(fromId);
-
-        /* Add to permanent rejected list — user stays blocked until manually unblocked */
-        addRejectedCam(fromId, payload.fromName || 'User');
-
-        showToast(`🚫 ${payload.fromName} rejected your request. Go to Settings to unblock.`);
+        /* The RECEIVER decides to block — this side only clears the pending state */
+        showToast(`❌ ${payload.fromName || 'User'} declined your camera request.`);
       })
       .on('broadcast', { event:'cam-opened'   }, ({ payload }) => {
         /* INSTANT-ICON FIX: camera-open via fast Broadcast so the
