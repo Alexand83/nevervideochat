@@ -299,6 +299,10 @@ const dom = {
   cameraDeviceSelect: $('cameraDeviceSelect'), micDeviceSelect: $('micDeviceSelect'),
   detectDevicesBtn: $('detectDevicesBtn'), detectDevicesHint: $('detectDevicesHint'),
   settingsSaveBtn: $('settingsSaveBtn'),
+
+  /* Rejected cam list */
+  rejectedCamsSection: $('rejectedCamsSection'),
+  rejectedCamsList:    $('rejectedCamsList'),
 };
 
 /* ================================================================
@@ -777,15 +781,22 @@ function openSettingsModal() {
   dom.settingsModal.hidden = false;
 }
 
-/** Render the rejected-cam list inside Settings modal */
+/** Render the rejected-cam list inside Settings modal.
+ *  The section is ALWAYS visible; shows an empty-state hint when the list is empty. */
 function renderRejectedCams() {
-  const section = $('rejectedCamsSection');
-  const list    = $('rejectedCamsList');
-  if (!section || !list) return;
+  const list = dom.rejectedCamsList;
+  if (!list) return;
 
-  const entries = Object.entries(state.rejectedCamUsers);
-  section.hidden = entries.length === 0;
   list.innerHTML = '';
+  const entries = Object.entries(state.rejectedCamUsers);
+
+  if (entries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className   = 'rejected-cams-empty';
+    empty.textContent = 'No blocked users.';
+    list.appendChild(empty);
+    return;
+  }
 
   entries.forEach(([uid, name]) => {
     const item = document.createElement('div');

@@ -2141,8 +2141,15 @@ a:hover { text-decoration: underline; }
   flex-direction: column;
   gap: var(--s2);
   margin-top: var(--s2);
-  max-height: 220px;
+  max-height: 200px;
   overflow-y: auto;
+}
+.rejected-cams-empty {
+  font-size: var(--fz-sm);
+  color: var(--tx2);
+  text-align: center;
+  padding: var(--s3);
+  font-style: italic;
 }
 .rejected-cam-item {
   display: flex;

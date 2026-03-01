@@ -528,6 +528,18 @@
       <button class="nvc-modal-close-btn" id="settingsModalClose" aria-label="Close settings">✕</button>
     </div>
 
+    <!-- Blocked camera requests — always shown, JS fills the list -->
+    <div class="settings-section" id="rejectedCamsSection">
+      <h3 class="settings-section-title">🚫 Blocked Camera Requests</h3>
+      <p class="settings-hint">
+        Users who rejected your camera request stay here until you remove them.
+        Click <strong>Unblock</strong> to allow sending requests again.
+      </p>
+      <div id="rejectedCamsList" class="rejected-cams-list">
+        <!-- filled by renderRejectedCams() -->
+      </div>
+    </div>
+
     <!-- Webcam & Audio section -->
     <div class="settings-section">
       <h3 class="settings-section-title">📷 Webcam &amp; Audio</h3>
@@ -549,18 +561,6 @@
         Click "Detect Devices" to list your cameras and microphones.<br>
         Browser permission for camera/mic is required.
       </p>
-    </div>
-
-    <!-- Blocked camera requests -->
-    <div class="settings-section" id="rejectedCamsSection">
-      <h3 class="settings-section-title">🚫 Blocked Camera Requests</h3>
-      <p class="settings-hint">
-        Users who rejected your camera request stay here until you remove them.<br>
-        Removing unblocks them — you'll be able to send requests again.
-      </p>
-      <div id="rejectedCamsList" class="rejected-cams-list">
-        <!-- filled by JS -->
-      </div>
     </div>
 
     <!-- Save -->
