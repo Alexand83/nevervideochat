@@ -1482,10 +1482,31 @@ async function connectSupabase() {
         if (key !== state.currentUser.id) showToast(`👤 ${newPresences[0].name} joined the chat`);
       })
       .on('presence', { event:'leave' }, ({ key, leftPresences }) => {
-        /* Use `key` (= the user's own ID used when calling .track()) — more reliable */
-        const u = state.users.find(u => String(u.id) === String(key))
-                ?? state.users.find(u => String(u.id) === String(leftPresences?.[0]?.id));
-        if (u) { u.online = false; renderUsers(); showToast(`👋 ${u.name} left`); }
+        const uid = String(key);
+        const u   = state.users.find(u => String(u.id) === uid)
+                 ?? state.users.find(u => String(u.id) === String(leftPresences?.[0]?.id));
+        const name = u?.name ?? leftPresences?.[0]?.name ?? 'A user';
+
+        if (u) { u.online = false; renderUsers(); }
+        showToast(`👋 ${name} left`);
+
+        /* Close any camera window we have open for this user.
+           Handles the case where they closed the browser without
+           explicitly turning off their camera (no cam-closed broadcast). */
+        const cw = state.cameraWindows[uid];
+        if (cw) {
+          stopMicMeter(uid);
+          cw.el.remove();
+          delete state.cameraWindows[uid];
+          if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
+          if (state.outgoingPCs[uid]) { state.outgoingPCs[uid].close(); delete state.outgoingPCs[uid]; }
+        }
+
+        /* Also end any active private call with this user */
+        if (state.activeCallUID === uid && !dom.vcallWin.hidden) {
+          endCall(false);
+          showToast(`📵 ${name} disconnected — call ended.`);
+        }
       })
       .subscribe(async status => {
         if (status === 'SUBSCRIBED') await updateOwnPresence();
