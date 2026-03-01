@@ -768,7 +768,18 @@ function minPChat(uid) {
 function restorePChat(uid) {
   const chat = state.privateChats[uid];
   if (!chat?.popup) { openPrivateChat(uid); return; }
-  chat.popup.style.display = ''; chat.minimised = false; chat.unread = 0; updateMinBadge(uid);
+  chat.popup.style.display = '';
+  chat.minimised = false;
+
+  /* Re-renderizza tutti i messaggi per mostrare quelli arrivati mentre era minimizzata */
+  const msgCont = chat.popup.querySelector(`#pchat-msgs-${uid}`);
+  if (msgCont) {
+    msgCont.innerHTML = '';
+    chat.msgs.forEach(m => renderPMsg(uid, m));
+  }
+
+  chat.unread = 0;
+  updateMinBadge(uid);
   dom.minimisedBar.querySelector(`[data-userid="${uid}"]`)?.remove();
 }
 function closePChat(uid) {
@@ -781,14 +792,12 @@ function updateMinBadge(uid) {
   const chat = state.privateChats[uid]; const badge = $(`min-badge-${uid}`); if (!badge) return;
   if (chat?.unread > 0) { badge.textContent = chat.unread; badge.hidden = false; } else { badge.hidden = true; }
 }
-/** Handle incoming private message from Broadcast — auto-opens the chat window */
+/** Handle incoming private message from Broadcast */
 function handleIncomingPM(payload) {
-  /* String comparison — avoids strict-equality mismatch between number/string IDs */
   if (String(payload.to) !== String(state.currentUser?.id)) return;
   const fromId   = String(payload.from);
   const fromName = payload.fromName || 'User';
 
-  /* Ensure sender exists in state — mark online so context menu works */
   ensureUser(fromId, fromName, { online: true });
 
   const chat = initOrGetPChat(fromId);
@@ -797,13 +806,15 @@ function handleIncomingPM(payload) {
   playNotificationSound();
 
   if (!chat.popup) {
-    /* First message → auto-open window (renders all msgs including this one) */
+    /* Prima volta che questo utente scrive → apri la finestra (auto-open solo al primo msg) */
     openPrivateChat(fromId);
   } else if (chat.minimised) {
-    /* Minimised → restore */
-    restorePChat(fromId);
+    /* Finestra minimizzata → NON aprire, aggiorna solo il badge */
+    chat.unread++;
+    updateMinBadge(fromId);
+    showToast(`💬 ${fromName}: ${payload.text.slice(0, 60)}`);
   } else {
-    /* Already open → append */
+    /* Finestra già aperta e visibile → aggiungi il messaggio */
     renderPMsg(fromId, msg);
   }
 }
