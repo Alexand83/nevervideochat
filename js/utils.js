@@ -115,73 +115,87 @@ function _evXY(e) {
   return { x: src.clientX, y: src.clientY };
 }
 
-/** Convert right/bottom positioning to left/top so dragging works correctly */
+/** Ensure element is position:fixed and pinned to left/top viewport coords.
+ *  Works for both fixed (cam windows) and relative/static (pchat popups). */
 function _pinToLeftTop(el) {
-  if (el.style.left && el.style.left !== 'auto') return;   /* already pinned */
+  const already = el.style.left && el.style.left !== 'auto' && el.style.left !== '';
+  if (already && getComputedStyle(el).position === 'fixed') return;   /* nothing to do */
   const r = el.getBoundingClientRect();
+  el.style.position = 'fixed';
   el.style.left   = r.left + 'px';
   el.style.top    = r.top  + 'px';
   el.style.right  = 'auto';
   el.style.bottom = 'auto';
+  el.style.margin = '0';
 }
 
 export function makeDraggable(el, handle) {
   if (!handle) return;
-  let ox = 0, oy = 0, mx = 0, my = 0, active = false;
+  let ox = 0, oy = 0, mx = 0, my = 0;
 
-  function onStart(e) {
-    if (e.touches && e.touches.length > 1) return;   /* ignore pinch */
-    e.preventDefault();
-    _pinToLeftTop(el);
-    active = true;
-    ox = el.offsetLeft; oy = el.offsetTop;
-    const { x, y } = _evXY(e);
-    mx = x; my = y;
-  }
   function onMove(e) {
-    if (!active) return;
     e.preventDefault();
     const { x, y } = _evXY(e);
     el.style.left = clamp(ox + x - mx, 0, window.innerWidth  - el.offsetWidth)  + 'px';
     el.style.top  = clamp(oy + y - my, 0, window.innerHeight - el.offsetHeight) + 'px';
   }
-  function onEnd() { active = false; }
+  function onEnd() {
+    document.removeEventListener('mousemove',   onMove);
+    document.removeEventListener('touchmove',   onMove);
+    document.removeEventListener('mouseup',     onEnd);
+    document.removeEventListener('touchend',    onEnd);
+    document.removeEventListener('touchcancel', onEnd);
+  }
+  function onStart(e) {
+    /* Never block interactive elements inside the handle (close btn, etc.) */
+    if (e.target.closest('button, a, input, select, textarea, [role="button"]')) return;
+    if (e.touches && e.touches.length > 1) return;   /* ignore pinch-to-zoom */
+    e.preventDefault();
+    _pinToLeftTop(el);
+    ox = el.offsetLeft; oy = el.offsetTop;
+    const { x, y } = _evXY(e);
+    mx = x; my = y;
+    document.addEventListener('mousemove',   onMove);
+    document.addEventListener('touchmove',   onMove,  { passive: false });
+    document.addEventListener('mouseup',     onEnd);
+    document.addEventListener('touchend',    onEnd);
+    document.addEventListener('touchcancel', onEnd);
+  }
 
-  handle.addEventListener('mousedown',   onStart);
-  handle.addEventListener('touchstart',  onStart, { passive: false });
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('touchmove', onMove,  { passive: false });
-  document.addEventListener('mouseup',   onEnd);
-  document.addEventListener('touchend',  onEnd);
-  document.addEventListener('touchcancel', onEnd);
+  handle.addEventListener('mousedown',  onStart);
+  handle.addEventListener('touchstart', onStart, { passive: false });
 }
 
 export function makeResizable(el, handle) {
   if (!handle) return;
-  let sw = 0, sh = 0, mx = 0, my = 0, active = false;
+  let sw = 0, sh = 0, mx = 0, my = 0;
 
-  function onStart(e) {
-    if (e.touches && e.touches.length > 1) return;
-    e.preventDefault(); e.stopPropagation();
-    active = true;
-    sw = el.offsetWidth; sh = el.offsetHeight;
-    const { x, y } = _evXY(e);
-    mx = x; my = y;
-  }
   function onMove(e) {
-    if (!active) return;
     e.preventDefault();
     const { x, y } = _evXY(e);
     el.style.width  = Math.max(200, sw + x - mx) + 'px';
     el.style.height = Math.max(150, sh + y - my) + 'px';
   }
-  function onEnd() { active = false; }
+  function onEnd() {
+    document.removeEventListener('mousemove',   onMove);
+    document.removeEventListener('touchmove',   onMove);
+    document.removeEventListener('mouseup',     onEnd);
+    document.removeEventListener('touchend',    onEnd);
+    document.removeEventListener('touchcancel', onEnd);
+  }
+  function onStart(e) {
+    if (e.touches && e.touches.length > 1) return;
+    e.preventDefault(); e.stopPropagation();
+    sw = el.offsetWidth; sh = el.offsetHeight;
+    const { x, y } = _evXY(e);
+    mx = x; my = y;
+    document.addEventListener('mousemove',   onMove);
+    document.addEventListener('touchmove',   onMove,  { passive: false });
+    document.addEventListener('mouseup',     onEnd);
+    document.addEventListener('touchend',    onEnd);
+    document.addEventListener('touchcancel', onEnd);
+  }
 
-  handle.addEventListener('mousedown',   onStart);
-  handle.addEventListener('touchstart',  onStart, { passive: false });
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('touchmove', onMove,  { passive: false });
-  document.addEventListener('mouseup',   onEnd);
-  document.addEventListener('touchend',  onEnd);
-  document.addEventListener('touchcancel', onEnd);
+  handle.addEventListener('mousedown',  onStart);
+  handle.addEventListener('touchstart', onStart, { passive: false });
 }

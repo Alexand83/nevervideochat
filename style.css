@@ -973,6 +973,7 @@ a:hover { text-decoration: underline; }
   cursor: grab;
   flex-shrink: 0;
   user-select: none;
+  touch-action: none;
 }
 .pchat-hdr:active { cursor: grabbing; }
 
