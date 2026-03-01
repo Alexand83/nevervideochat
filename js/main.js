@@ -16,6 +16,7 @@ import { initCameraSystem, initCallControls } from './camera.js';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initContextMenu, openContextMenu,
          initPanelResize, initMobilePanel, setUIDeps } from './ui.js';
+import { broadcast } from './broadcast.js';
 
 /* ── Wire cross-module forward references ── */
 setOpenContextMenu(openContextMenu);   /* users.js → context menu */
