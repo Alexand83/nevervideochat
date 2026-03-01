@@ -56,7 +56,30 @@ export async function connectRoom(roomId) {
   /* ── 2. Subscribe to new messages (Postgres Changes filtered by room_id) ── */
   const dbSub = state.supa.channel(`db-messages-${roomId}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, ({ new: m }) => {
-      if (m.user_id === state.currentUser.id) return; /* already rendered optimistically */
+      if (m.user_id === state.currentUser.id) {
+        /* This is our own message - update the temp ID with the DB UUID */
+        const room = state.rooms[roomId];
+        if (room) {
+          /* Find the most recent message from us without a DB ID */
+          const tempMsg = room.messages
+            .filter(msg => msg.userId === 'me' || msg.userId === state.currentUser.id)
+            .find(msg => msg.id.startsWith('m') && msg.id.length < 20);
+          if (tempMsg) {
+            tempMsg.id = m.id;
+            tempMsg.reactions = m.reactions || {};
+            /* Update DOM */
+            const group = dom.msgsContainer.querySelector(`[data-msg-id="${tempMsg.id}"]`);
+            if (group) {
+              group.dataset.msgId = m.id;
+              /* Re-render to show reactions if any */
+              if (m.reactions && Object.keys(m.reactions).length > 0) {
+                group.remove();
+                renderMessage(tempMsg);
+              }
+            }
+        }
+        return; /* already rendered optimistically */
+      }
       if (state.ignoredUsers[String(m.user_id)]) return;
       ensureUser(m.user_id, m.username);
       const { html, quoteHtml, quoteName } = extractQuote(m.content);

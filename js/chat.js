@@ -210,7 +210,8 @@ export async function sendMessage() {
   clearReplyTo();
 
   /* Optimistic render */
-  addMessage({ userId: 'me', html, ts: Date.now(), quoteHtml, quoteName });
+  const tempId = `m${Date.now()}${Math.random()}`;
+  addMessage({ userId: 'me', html, ts: Date.now(), quoteHtml, quoteName, msgId: tempId });
   dom.msgInput.innerHTML = '';
 
   /* Persist to Supabase with room_id */
@@ -225,7 +226,28 @@ export async function sendMessage() {
       content:  fullContent,
       room_id:  state.activeRoom,
       reactions: {},
-    }).then(({ error }) => { if (error) console.warn('[NVC] msg insert:', error); });
+    }).then(({ data, error }) => {
+      if (error) {
+        console.warn('[NVC] msg insert:', error);
+        return;
+      }
+      /* Update local message with DB UUID */
+      if (data && data[0]) {
+        const dbId = data[0].id;
+        const room = state.rooms[state.activeRoom];
+        if (room) {
+          const localMsg = room.messages.find(m => m.id === tempId);
+          if (localMsg) {
+            localMsg.id = dbId;
+            /* Update DOM if message is rendered */
+            const group = dom.msgsContainer.querySelector(`[data-msg-id="${tempId}"]`);
+            if (group) {
+              group.dataset.msgId = dbId;
+            }
+          }
+        }
+      }
+    });
   }
 }
 
@@ -270,7 +292,10 @@ function openReactionPicker(e, msgId) {
 }
 
 async function toggleReaction(msgId, emoji) {
-  if (!_supabaseReady?.() || !msgId) return;
+  if (!_supabaseReady?.() || !msgId) {
+    console.warn('[NVC] toggleReaction: missing supabase or msgId', { msgId, ready: !!_supabaseReady?.() });
+    return;
+  }
   
   /* Find message in all rooms */
   let msg = null, roomId = null;
@@ -278,25 +303,42 @@ async function toggleReaction(msgId, emoji) {
     msg = state.rooms[rid].messages.find(m => m.id === msgId);
     if (msg) { roomId = rid; break; }
   }
-  if (!msg) return;
+  if (!msg) {
+    console.warn('[NVC] toggleReaction: message not found', { msgId, rooms: Object.keys(state.rooms) });
+    return;
+  }
   
   const myId = String(state.currentUser?.id);
-  const reactions = msg.reactions || {};
-  const userIds = reactions[emoji] || [];
+  const reactions = { ...(msg.reactions || {}) }; /* clone to avoid mutation issues */
+  const userIds = [...(reactions[emoji] || [])]; /* clone array */
   const idx = userIds.indexOf(myId);
   
   if (idx >= 0) {
     userIds.splice(idx, 1);
-    if (userIds.length === 0) delete reactions[emoji];
+    if (userIds.length === 0) {
+      delete reactions[emoji];
+    } else {
+      reactions[emoji] = userIds;
+    }
   } else {
     userIds.push(myId);
+    reactions[emoji] = userIds;
   }
+  
+  /* Update local state */
   msg.reactions = reactions;
   
-  /* Update DB */
-  await state.supa.from('messages')
-    .update({ reactions })
-    .eq('id', msgId);
+  /* Update DB - only if msgId is a UUID (from DB), not a temp ID */
+  if (msgId.startsWith('m') && msgId.length < 20) {
+    console.warn('[NVC] toggleReaction: skipping DB update for temp ID', { msgId });
+  } else {
+    const { error } = await state.supa.from('messages')
+      .update({ reactions })
+      .eq('id', msgId);
+    if (error) {
+      console.error('[NVC] toggleReaction: DB update failed', { error, msgId });
+    }
+  }
   
   /* Re-render this message */
   const group = dom.msgsContainer.querySelector(`[data-msg-id="${msgId}"]`);
