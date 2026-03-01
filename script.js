@@ -217,6 +217,9 @@ const state = {
 
   /* Web Audio for notifications */
   audioCtx: null,
+
+  /* Device settings (camera/mic deviceId, loaded from localStorage) */
+  settings: {},
 };
 
 /* ================================================================
@@ -260,6 +263,34 @@ const dom = {
 
   ctxMenu: $('ctxMenu'), ctxUserHdr: $('ctxUserHdr'),
   ctxPrivateBtn: $('ctxPrivateBtn'), ctxCamBtn: $('ctxCamBtn'), ctxOverlay: $('ctxOverlay'),
+
+  /* Header user chip */
+  headerUser: $('headerUser'), headerAvatarChip: $('headerAvatarChip'),
+  headerProfileBtn: $('headerProfileBtn'), headerSettingsBtn: $('headerSettingsBtn'),
+
+  /* Auth modal */
+  authModal: $('authModal'),
+  authTabLogin: $('authTabLogin'), authTabRegister: $('authTabRegister'),
+  loginForm: $('loginForm'), loginNick: $('loginNick'), loginPwd: $('loginPwd'),
+  loginError: $('loginError'), loginSubmitBtn: $('loginSubmitBtn'),
+  registerForm: $('registerForm'), regNick: $('regNick'), regPwd: $('regPwd'),
+  regPwdConfirm: $('regPwdConfirm'), registerError: $('registerError'),
+  registerSubmitBtn: $('registerSubmitBtn'), guestContinueBtn: $('guestContinueBtn'),
+
+  /* Profile modal */
+  profileModal: $('profileModal'), profileModalClose: $('profileModalClose'),
+  profileAvatarDisplay: $('profileAvatarDisplay'),
+  profileAvatarChangeBtn: $('profileAvatarChangeBtn'),
+  profileAvatarInput: $('profileAvatarInput'),
+  profileNameInput: $('profileNameInput'),
+  profileAccountInfo: $('profileAccountInfo'),
+  profileSaveBtn: $('profileSaveBtn'), profileLogoutBtn: $('profileLogoutBtn'),
+
+  /* Settings modal */
+  settingsModal: $('settingsModal'), settingsModalClose: $('settingsModalClose'),
+  cameraDeviceSelect: $('cameraDeviceSelect'), micDeviceSelect: $('micDeviceSelect'),
+  detectDevicesBtn: $('detectDevicesBtn'), detectDevicesHint: $('detectDevicesHint'),
+  settingsSaveBtn: $('settingsSaveBtn'),
 };
 
 /* ================================================================
@@ -295,36 +326,457 @@ function findUser(id) {
 function ensureUser(id, name, extra = {}) {
   if (!id || id === state.currentUser?.id) return;
   let u = state.users.find(u => u.id === id);
-  if (!u) { u = { id, name, isGuest: true, online: false, hasCamera: false }; state.users.push(u); }
-  if (name)                 u.name      = name;
-  if ('isGuest'   in extra) u.isGuest   = extra.isGuest;
-  if ('online'    in extra) u.online    = extra.online;
-  if ('hasCamera' in extra) u.hasCamera = extra.hasCamera;
+  if (!u) { u = { id, name, isGuest: true, online: false, hasCamera: false, avatarUrl: null }; state.users.push(u); }
+  if (name)                  u.name      = name;
+  if ('isGuest'   in extra)  u.isGuest   = extra.isGuest;
+  if ('online'    in extra)  u.online    = extra.online;
+  if ('hasCamera' in extra)  u.hasCamera = extra.hasCamera;
+  if ('avatarUrl' in extra)  u.avatarUrl = extra.avatarUrl;
   return u;
 }
 function supabaseReady() { return !!state.supa; }
 
 /* ================================================================
-   5. USER IDENTITY (stored in localStorage — no login required)
+   4b. AUTH — Register · Login · Logout · Session restore
+   ─────────────────────────────────────────────────────────────────
+   Uses Supabase Auth with a fake e-mail: {nick}@nvc.local
+   ⚠ IMPORTANT: Disable e-mail confirmation in your Supabase project:
+     Dashboard → Authentication → Providers → Email
+     → "Confirm email": OFF  → Save
 ================================================================ */
-function getOrCreateIdentity() {
+const AUTH_EMAIL_DOMAIN = 'nvc.local';
+
+function nickToEmail(nick) {
+  /* Sanitise nickname to a valid email-local part */
+  return `${nick.toLowerCase().replace(/[^a-z0-9._-]/g, '_')}@${AUTH_EMAIL_DOMAIN}`;
+}
+
+async function registerUser(nick, password) {
+  const email = nickToEmail(nick);
+  const { data, error } = await state.supa.auth.signUp({ email, password });
+  if (error) throw error;
+  const userId = data.user.id;
+
+  /* Create / upsert profile row */
+  await state.supa.from('profiles').upsert({
+    id:           userId,
+    username:     nick,
+    display_name: nick,
+    is_guest:     false,
+  }, { onConflict: 'id' });
+
+  /* Persist session tokens manually (persistSession: false) */
+  if (data.session) persistAuthSession(data.session);
+
+  return { userId, nick, avatarUrl: null };
+}
+
+async function loginUser(nick, password) {
+  const email = nickToEmail(nick);
+  const { data, error } = await state.supa.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+
+  if (data.session) persistAuthSession(data.session);
+
+  /* Load profile */
+  const { data: profile } = await state.supa
+    .from('profiles').select('*').eq('id', data.user.id).single();
+
+  return {
+    userId:    data.user.id,
+    nick:      profile?.display_name || nick,
+    username:  profile?.username     || nick,
+    avatarUrl: profile?.avatar_url   || null,
+  };
+}
+
+async function logoutUser() {
+  clearAuthSession();
+  localStorage.removeItem('nvc_identity');
+  try { await state.supa?.auth.signOut(); } catch (_) {}
+  location.reload();
+}
+
+function persistAuthSession(session) {
+  localStorage.setItem('nvc_auth_session', JSON.stringify({
+    access_token:  session.access_token,
+    refresh_token: session.refresh_token,
+  }));
+}
+function clearAuthSession() {
+  localStorage.removeItem('nvc_auth_session');
+}
+
+/** Try to restore a previous registered session. Returns user object or null. */
+async function tryRestoreSession() {
+  if (!state.supa) return null;
+  try {
+    const stored = JSON.parse(localStorage.getItem('nvc_auth_session') || 'null');
+    if (!stored?.access_token) return null;
+
+    const { data, error } = await state.supa.auth.setSession({
+      access_token:  stored.access_token,
+      refresh_token: stored.refresh_token,
+    });
+    if (error || !data?.user) { clearAuthSession(); return null; }
+
+    /* Refresh tokens */
+    if (data.session) persistAuthSession(data.session);
+
+    /* Load profile */
+    const { data: profile } = await state.supa
+      .from('profiles').select('*').eq('id', data.user.id).single();
+
+    return {
+      id:        data.user.id,
+      name:      profile?.display_name || `User_${data.user.id.slice(0, 6)}`,
+      username:  profile?.username     || null,
+      avatarUrl: profile?.avatar_url   || null,
+      isGuest:   false,
+      online:    true,
+      hasCamera: false,
+    };
+  } catch (e) {
+    console.warn('[Auth] Session restore failed:', e);
+    clearAuthSession();
+    return null;
+  }
+}
+
+/* ── Auth modal initialisation ──────────────────────────────── */
+function initAuthModal() {
+  /* Tab switching */
+  dom.authTabLogin.addEventListener('click', () => switchAuthTab('login'));
+  dom.authTabRegister.addEventListener('click', () => switchAuthTab('register'));
+
+  /* Sign-in form */
+  dom.loginForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const nick = dom.loginNick.value.trim();
+    const pwd  = dom.loginPwd.value;
+    if (!nick || !pwd) return;
+    setAuthBtnLoading(dom.loginSubmitBtn, true, 'Signing in…');
+    hideAuthError('loginError');
+    try {
+      const user = await loginUser(nick, pwd);
+      applyAuthIdentity(user.userId, user.nick, user.username, user.avatarUrl, false);
+      dom.authModal.hidden = true;
+      finishInit();
+    } catch (err) {
+      const msg = err.message?.includes('Invalid') ? 'Incorrect nickname or password.' : (err.message || 'Sign-in failed.');
+      showAuthError('loginError', msg);
+    } finally { setAuthBtnLoading(dom.loginSubmitBtn, false, 'Sign In'); }
+  });
+
+  /* Register form */
+  dom.registerForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const nick    = dom.regNick.value.trim();
+    const pwd     = dom.regPwd.value;
+    const confirm = dom.regPwdConfirm.value;
+    hideAuthError('registerError');
+    if (!nick || nick.length < 3) return showAuthError('registerError', 'Nickname must be at least 3 characters.');
+    if (pwd.length < 6)           return showAuthError('registerError', 'Password must be at least 6 characters.');
+    if (pwd !== confirm)          return showAuthError('registerError', 'Passwords do not match.');
+    setAuthBtnLoading(dom.registerSubmitBtn, true, 'Creating…');
+    try {
+      const user = await registerUser(nick, pwd);
+      applyAuthIdentity(user.userId, nick, nick, null, false);
+      dom.authModal.hidden = true;
+      finishInit();
+    } catch (err) {
+      let msg = err.message || 'Registration failed.';
+      if (msg.includes('already registered') || msg.includes('already exists')) msg = 'This nickname is already taken.';
+      showAuthError('registerError', msg);
+    } finally { setAuthBtnLoading(dom.registerSubmitBtn, false, 'Create Account'); }
+  });
+
+  /* Guest button */
+  dom.guestContinueBtn.addEventListener('click', () => {
+    state.currentUser = getOrCreateGuestIdentity();
+    dom.authModal.hidden = true;
+    finishInit();
+  });
+}
+
+function switchAuthTab(tab) {
+  const isLogin = tab === 'login';
+  dom.authTabLogin.classList.toggle('active', isLogin);
+  dom.authTabRegister.classList.toggle('active', !isLogin);
+  dom.loginForm.hidden    = !isLogin;
+  dom.registerForm.hidden = isLogin;
+  hideAuthError('loginError');
+  hideAuthError('registerError');
+}
+
+function showAuthError(id, msg) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.hidden = false;
+}
+function hideAuthError(id) {
+  const el = $(id); if (el) el.hidden = true;
+}
+function setAuthBtnLoading(btn, loading, loadingText) {
+  btn.disabled = loading;
+  if (loading) btn.dataset.origText = btn.textContent;
+  btn.textContent = loading ? loadingText : (btn.dataset.origText || btn.textContent);
+}
+
+/** Build and store identity after successful auth */
+function applyAuthIdentity(id, name, username, avatarUrl, isGuest) {
+  state.currentUser = { id, name, username: username || null, avatarUrl: avatarUrl || null, isGuest, online: true, hasCamera: false };
+  localStorage.setItem('nvc_identity', JSON.stringify(state.currentUser));
+}
+
+/* ================================================================
+   4c. PROFILE — display name · avatar upload · save
+================================================================ */
+
+function initProfileModal() {
+  dom.headerProfileBtn?.addEventListener('click', openProfileModal);
+  dom.profileModalClose?.addEventListener('click', () => { dom.profileModal.hidden = true; });
+  dom.profileAvatarChangeBtn?.addEventListener('click', () => dom.profileAvatarInput.click());
+  dom.profileAvatarInput?.addEventListener('change', async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    /* Instant preview */
+    const reader = new FileReader();
+    reader.onload = ev => setAvatarDisplay(dom.profileAvatarDisplay, null, ev.target.result);
+    reader.readAsDataURL(file);
+    /* Upload */
+    try {
+      const url = await uploadAvatarFile(file);
+      if (url) dom.profileAvatarInput.dataset.uploadedUrl = url;
+    } catch (err) { showToast('⚠️ Avatar upload failed: ' + err.message); }
+    e.target.value = '';
+  });
+  dom.profileSaveBtn?.addEventListener('click', async () => {
+    const name = dom.profileNameInput.value.trim();
+    if (!name) return showToast('⚠️ Display name cannot be empty.');
+    const newUrl = dom.profileAvatarInput.dataset.uploadedUrl || state.currentUser.avatarUrl || null;
+    dom.profileSaveBtn.disabled = true; dom.profileSaveBtn.textContent = 'Saving…';
+    try {
+      await saveProfile(name, newUrl);
+      dom.profileModal.hidden = true;
+      showToast('✅ Profile saved.');
+    } catch (err) { showToast('⚠️ Could not save profile: ' + err.message); }
+    finally { dom.profileSaveBtn.disabled = false; dom.profileSaveBtn.textContent = 'Save Changes'; }
+  });
+  dom.profileLogoutBtn?.addEventListener('click', async () => {
+    if (!confirm('Log out?')) return;
+    await logoutUser();
+  });
+  /* Close on backdrop click */
+  dom.profileModal?.addEventListener('click', e => { if (e.target === dom.profileModal) dom.profileModal.hidden = true; });
+}
+
+function openProfileModal() {
+  const u = state.currentUser;
+  if (!u) return;
+  dom.profileNameInput.value = u.name || '';
+  delete dom.profileAvatarInput.dataset.uploadedUrl;
+  setAvatarDisplay(dom.profileAvatarDisplay, u.name, u.avatarUrl);
+  dom.profileAccountInfo.textContent = u.isGuest
+    ? 'Guest account — changes apply this session only.'
+    : `Registered as @${u.username || u.name}`;
+  dom.profileLogoutBtn.hidden = u.isGuest;
+  dom.profileModal.hidden = false;
+}
+
+async function uploadAvatarFile(file) {
+  if (!state.supa) throw new Error('Not connected.');
+  const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
+  const path = `avatars/${state.currentUser.id}_${Date.now()}.${ext}`;
+  const { error } = await state.supa.storage.from('chat-media').upload(path, file, { upsert: true });
+  if (error) throw error;
+  const { data } = state.supa.storage.from('chat-media').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function saveProfile(displayName, avatarUrl) {
+  state.currentUser.name = displayName;
+  if (avatarUrl) state.currentUser.avatarUrl = avatarUrl;
+  localStorage.setItem('nvc_identity', JSON.stringify(state.currentUser));
+
+  if (!state.currentUser.isGuest && state.supa) {
+    await state.supa.from('profiles').upsert({
+      id:           state.currentUser.id,
+      username:     state.currentUser.username || state.currentUser.name,
+      display_name: displayName,
+      avatar_url:   avatarUrl || null,
+      is_guest:     false,
+    }, { onConflict: 'id' });
+  }
+
+  updateHeaderUser();
+  await updateOwnPresence();
+  renderUsers();
+}
+
+/** Render avatar into a container div: photo if available, else coloured initials */
+function setAvatarDisplay(el, name, avatarUrl) {
+  if (!el) return;
+  if (avatarUrl) {
+    el.style.backgroundImage  = `url(${avatarUrl})`;
+    el.style.backgroundSize   = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.style.background       = ''; /* let bg-image win */
+    el.textContent            = '';
+    el.classList.add('has-photo');
+  } else {
+    el.style.backgroundImage = '';
+    el.style.background      = name ? avatarColor(name) : 'var(--bg3)';
+    el.textContent           = name ? initials(name) : '?';
+    el.classList.remove('has-photo');
+  }
+}
+
+/** Refresh the header chip (left column) */
+function updateHeaderUser() {
+  const u = state.currentUser;
+  if (!u) return;
+
+  /* Header left: name chip */
+  if (dom.headerUser) {
+    dom.headerUser.innerHTML = '';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'header-user-name';
+    nameEl.textContent = u.name;
+    dom.headerUser.appendChild(nameEl);
+  }
+
+  /* Header profile button: avatar chip */
+  setAvatarDisplay(dom.headerAvatarChip, u.name, u.avatarUrl);
+}
+
+/* ================================================================
+   4d. SETTINGS — camera / mic device selection
+================================================================ */
+
+function initSettingsModal() {
+  dom.headerSettingsBtn?.addEventListener('click', openSettingsModal);
+  dom.settingsModalClose?.addEventListener('click', () => { dom.settingsModal.hidden = true; });
+  dom.settingsModal?.addEventListener('click', e => { if (e.target === dom.settingsModal) dom.settingsModal.hidden = true; });
+
+  dom.detectDevicesBtn?.addEventListener('click', async () => {
+    dom.detectDevicesBtn.textContent = 'Detecting…';
+    dom.detectDevicesBtn.disabled    = true;
+    try {
+      await populateDeviceSelects();
+      dom.detectDevicesHint.textContent = '✅ Devices detected. Select and press Save.';
+    } catch (err) {
+      dom.detectDevicesHint.textContent = '⚠️ Could not detect devices: ' + err.message;
+    } finally {
+      dom.detectDevicesBtn.textContent = '🔍 Detect Devices';
+      dom.detectDevicesBtn.disabled    = false;
+    }
+  });
+
+  dom.settingsSaveBtn?.addEventListener('click', () => {
+    const s = {
+      cameraId: dom.cameraDeviceSelect.value || '',
+      micId:    dom.micDeviceSelect.value    || '',
+    };
+    saveDeviceSettings(s);
+    state.settings = s;
+    dom.settingsModal.hidden = true;
+    showToast('✅ Settings saved.');
+  });
+}
+
+function openSettingsModal() {
+  /* Load saved settings into selects */
+  const s = loadDeviceSettings();
+  dom.cameraDeviceSelect.value = s.cameraId || '';
+  dom.micDeviceSelect.value    = s.micId    || '';
+  dom.detectDevicesHint.textContent = 'Click "Detect Devices" to list your cameras and microphones.\nBrowser permission for camera/mic is required.';
+  dom.settingsModal.hidden = false;
+}
+
+async function populateDeviceSelects() {
+  /* Request permission first so device labels are revealed */
+  const perm = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() => null);
+  if (perm) perm.getTracks().forEach(t => t.stop());
+
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const cameras = devices.filter(d => d.kind === 'videoinput');
+  const mics    = devices.filter(d => d.kind === 'audioinput');
+
+  /* Camera select */
+  const savedCam = dom.cameraDeviceSelect.value;
+  dom.cameraDeviceSelect.innerHTML = '<option value="">Default camera</option>';
+  cameras.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value       = d.deviceId;
+    opt.textContent = d.label || `Camera ${i + 1}`;
+    if (d.deviceId === savedCam) opt.selected = true;
+    dom.cameraDeviceSelect.appendChild(opt);
+  });
+
+  /* Mic select */
+  const savedMic = dom.micDeviceSelect.value;
+  dom.micDeviceSelect.innerHTML = '<option value="">Default microphone</option>';
+  mics.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value       = d.deviceId;
+    opt.textContent = d.label || `Microphone ${i + 1}`;
+    if (d.deviceId === savedMic) opt.selected = true;
+    dom.micDeviceSelect.appendChild(opt);
+  });
+}
+
+function loadDeviceSettings() {
+  try {
+    const key = `nvc_settings_${state.currentUser?.id || 'guest'}`;
+    return JSON.parse(localStorage.getItem(key) || '{}');
+  } catch { return {}; }
+}
+
+function saveDeviceSettings(settings) {
+  const key = `nvc_settings_${state.currentUser?.id || 'guest'}`;
+  localStorage.setItem(key, JSON.stringify(settings));
+}
+
+/** Build getUserMedia constraints from saved settings */
+function getMediaConstraints() {
+  const s = state.settings || {};
+  return {
+    video: s.cameraId
+      ? { deviceId: { exact: s.cameraId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+    audio: s.micId
+      ? { deviceId: { exact: s.micId }, echoCancellation: true, noiseSuppression: true }
+      : { echoCancellation: true, noiseSuppression: true },
+  };
+}
+
+/* ================================================================
+   5. USER IDENTITY
+================================================================ */
+/** Return existing guest identity or create a new one */
+function getOrCreateGuestIdentity() {
   try {
     const stored = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
-    if (stored?.id && stored?.name) return stored;
+    if (stored?.id && stored?.name && stored?.isGuest !== false) return stored;
   } catch (_) {}
-  const id   = (typeof crypto !== 'undefined' && crypto.randomUUID)
-                  ? crypto.randomUUID()
-                  : `u${Date.now()}${Math.random().toString(36).slice(2,8)}`;
+  const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `u${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
   const user = {
     id,
-    name:    `Guest_${Math.floor(Math.random() * 90000) + 10000}`,
-    isGuest: true,
-    online:  true,
+    name:      `Guest_${Math.floor(Math.random() * 90000) + 10000}`,
+    isGuest:   true,
+    online:    true,
     hasCamera: false,
+    avatarUrl: null,
   };
   localStorage.setItem('nvc_identity', JSON.stringify(user));
   return user;
 }
+/** Kept for backward-compatibility (called by some older code paths) */
+function getOrCreateIdentity() { return getOrCreateGuestIdentity(); }
 
 /* ================================================================
    6. LOGO — inline SVG, nothing to load
@@ -379,8 +831,17 @@ function renderMessage(msg) {
   group.className = `msg-group${isMine ? ' own' : ''}`;
 
   const avatar = document.createElement('div');
-  avatar.className = 'msg-avatar'; avatar.style.background = color;
-  avatar.textContent = init; avatar.title = user.name;
+  avatar.className = 'msg-avatar';
+  avatar.title = user.name;
+  if (user.avatarUrl) {
+    avatar.classList.add('has-photo');
+    avatar.style.backgroundImage    = `url(${user.avatarUrl})`;
+    avatar.style.backgroundSize     = 'cover';
+    avatar.style.backgroundPosition = 'center';
+  } else {
+    avatar.style.background = color;
+    avatar.textContent = init;
+  }
   if (!isMine) avatar.addEventListener('click', () => openContextMenu(msg.userId, avatar));
 
   const content = document.createElement('div');
@@ -478,8 +939,16 @@ function renderUsers() {
     li.className = 'user-item'; li.setAttribute('role','listitem'); li.dataset.userId = user.id;
 
     const av = document.createElement('div');
-    av.className = 'user-item-avatar'; av.style.background = avatarColor(user.name);
-    av.textContent = initials(user.name);
+    av.className = 'user-item-avatar';
+    if (user.avatarUrl) {
+      av.classList.add('has-photo');
+      av.style.backgroundImage    = `url(${user.avatarUrl})`;
+      av.style.backgroundSize     = 'cover';
+      av.style.backgroundPosition = 'center';
+    } else {
+      av.style.background = avatarColor(user.name);
+      av.textContent = initials(user.name);
+    }
     const dot = document.createElement('span');
     dot.className = `status-dot${user.online ? '' : ' offline'}`;
     av.appendChild(dot);
@@ -1077,9 +1546,7 @@ async function startOwnCamera() {
       await new Promise(r => setTimeout(r, MIN_RELEASE_MS - msSinceClosed));
     }
 
-    state.localStream = await navigator.mediaDevices.getUserMedia({
-      video: { width:{ideal:1280}, height:{ideal:720}, facingMode:'user' }, audio: true,
-    });
+    state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
     state.currentUser.hasCamera = true;
     dom.cameraBtnLabel.textContent = 'Camera On';
     dom.cameraBtnHeader.classList.add('camera-on');
@@ -1222,7 +1689,7 @@ function handleCamRequest(payload) {
 async function acceptPrivateCall(fromUid, fromName) {
   try {
     if (!state.localStream) {
-      state.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
       state.streamOpenedForCall = true;
     } else {
       state.streamOpenedForCall = false;
@@ -1265,7 +1732,7 @@ async function sharePublicCameraTo(toUid) {
     if (!state.localStream) {
       const msSinceClosed = Date.now() - state.cameraClosedAt;
       if (msSinceClosed < 450) await new Promise(r => setTimeout(r, 450 - msSinceClosed));
-      state.localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+      state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
       state.currentUser.hasCamera = true;
       dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
       createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
@@ -1380,7 +1847,7 @@ async function startPrivateCall(targetUid) {
   const target = findUser(targetUid);
   try {
     if (!state.localStream) {
-      state.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
       state.streamOpenedForCall = true;   // opened just for this call → stop on endCall
     } else {
       state.streamOpenedForCall = false;  // pre-existing public cam → keep it after call
@@ -1593,6 +2060,7 @@ async function updateOwnPresence() {
     isGuest:   state.currentUser.isGuest,
     hasCamera: state.currentUser.hasCamera,
     online:    true,
+    avatarUrl: state.currentUser.avatarUrl || null,
   });
 }
 
@@ -1605,7 +2073,7 @@ function syncPresence(presenceState) {
   Object.entries(presenceState).forEach(([uid, presences]) => {
     if (String(uid) === myId) return;
     const info = presences[0];
-    ensureUser(String(uid), info.name, { isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera });
+    ensureUser(String(uid), info.name, { isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
   });
   /* Mark everyone NOT in the current presence state as offline */
   state.users.forEach(u => { u.online = onlineIds.has(String(u.id)); });
@@ -1633,27 +2101,32 @@ function handleTyping(payload) {
   }
 }
 
-async function connectSupabase() {
-  /* Check credentials are filled in */
+/** Create the Supabase JS client (called early, before auth modal) */
+function initSupabaseClient() {
   if (!SUPABASE_URL.includes('supabase.co') || SUPABASE_ANON_KEY.startsWith('YOUR_')) {
-    console.warn('[NeverVideoChat] Supabase not configured. Running in local-only mode.');
+    console.warn('[NeverVideoChat] Supabase not configured — local-only mode.');
+    return false;
+  }
+  /* persistSession: false stops the SDK from touching third-party localStorage
+     (Edge / Safari block it as "Tracking Prevention").
+     We save/restore tokens ourselves in nvc_auth_session.                    */
+  state.supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession:     false,
+      autoRefreshToken:   false,
+      detectSessionInUrl: false,
+    },
+  });
+  return true;
+}
+
+async function connectSupabase() {
+  if (!state.supa) {
     showToast('⚠️ Supabase not configured — local mode. Fill in SUPABASE_URL and SUPABASE_ANON_KEY in script.js');
     return;
   }
 
   try {
-    /* Init Supabase client */
-    /* Tracking-Prevention fix: disable Supabase auth session persistence.
-       We use anonymous access only — no login needed.
-       This stops the SDK from touching third-party localStorage
-       (which Edge/Safari block as "Tracking Prevention").         */
-    state.supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession:      false,
-        autoRefreshToken:    false,
-        detectSessionInUrl:  false,
-      },
-    });
 
     /* ── 1. Load last 60 public messages ── */
     const { data: msgs, error: msgErr } = await state.supa
@@ -1705,7 +2178,7 @@ async function connectSupabase() {
 
         const info      = newPresences[0];
         const wasOnline = !!state.users.find(u => String(u.id) === uid)?.online;
-        ensureUser(uid, info.name, { isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera });
+        ensureUser(uid, info.name, { isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
         renderUsers(); /* immediately reflect camera-icon change      */
         if (!wasOnline) showToast(`👤 ${info.name} joined the chat`);
       })
@@ -1799,10 +2272,7 @@ async function connectSupabase() {
    23. INIT
 ================================================================ */
 async function init() {
-  /* Load/create user identity */
-  state.currentUser = getOrCreateIdentity();
-
-  renderUsers();
+  /* ── 1. Init non-Supabase UI ── */
   initToolbar();
   initImageAttach();
   initEmojiPicker();
@@ -1812,10 +2282,43 @@ async function init() {
   initCallControls();
   initMobilePanel();
   initPanelResize();
+  initAuthModal();
+  initProfileModal();
+  initSettingsModal();
 
-  /* Connect to Supabase (non-blocking) */
-  connectSupabase().catch(err => console.error(err));
+  /* ── 2. Create Supabase client (needed for auth) ── */
+  initSupabaseClient();
 
+  /* ── 3. Try to restore a registered session ── */
+  const restoredUser = await tryRestoreSession();
+  if (restoredUser) {
+    state.currentUser = restoredUser;
+    localStorage.setItem('nvc_identity', JSON.stringify(state.currentUser));
+    state.settings = loadDeviceSettings();
+    await finishInit();
+    return;
+  }
+
+  /* ── 4. Check for existing guest identity ── */
+  try {
+    const stored = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
+    if (stored?.id && stored?.name) {
+      state.currentUser = stored;
+      state.settings = loadDeviceSettings();
+      await finishInit();
+      return;
+    }
+  } catch (_) {}
+
+  /* ── 5. No identity → show auth modal ── */
+  dom.authModal.hidden = false;
+}
+
+/** Called after a user identity has been established (auth or guest) */
+async function finishInit() {
+  renderUsers();
+  updateHeaderUser();
+  connectSupabase().catch(err => console.error('[NVC]', err));
   dom.msgInput.focus();
 }
 

@@ -16,8 +16,8 @@
 <header class="app-header" role="banner">
   <div class="header-inner">
 
-    <!-- Empty spacer so logo is truly centered with CSS grid -->
-    <div class="header-spacer" aria-hidden="true"></div>
+    <!-- Left column: current user chip (avatar + name) -->
+    <div class="header-user" id="headerUser" aria-label="Current user"></div>
 
     <!-- Logo — inline SVG webcam + NVC, zero external requests -->
     <div class="logo-wrap" id="logoWrap">
@@ -57,6 +57,23 @@
 
     <!-- Header Actions -->
     <div class="header-actions">
+
+      <!-- Settings button -->
+      <button class="hdr-btn hdr-icon-only-btn" id="headerSettingsBtn"
+              title="Settings" aria-label="Open settings">
+        <svg class="hdr-icon" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+      </button>
+
+      <!-- Profile button -->
+      <button class="hdr-btn hdr-icon-only-btn hdr-profile-btn" id="headerProfileBtn"
+              title="My Profile" aria-label="Open profile">
+        <div class="hdr-avatar-chip" id="headerAvatarChip" aria-hidden="true"></div>
+      </button>
+
       <button class="hdr-btn camera-btn" id="cameraBtnHeader"
               title="Enable Camera" aria-label="Toggle camera">
         <svg class="hdr-icon" viewBox="0 0 24 24" fill="none"
@@ -364,6 +381,179 @@
   </button>
 </div>
 <div class="ctx-overlay" id="ctxOverlay" hidden aria-hidden="true"></div>
+
+
+<!-- ================================================================
+     AUTH MODAL — shown on first visit (no stored identity)
+================================================================ -->
+<div class="nvc-modal-backdrop" id="authModal" role="dialog" aria-modal="true"
+     aria-labelledby="authModalTitle" hidden>
+  <div class="nvc-modal auth-modal">
+
+    <!-- Brand header -->
+    <div class="auth-header">
+      <div class="auth-logo-row">
+        <svg class="auth-logo-svg" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="52" height="52" rx="13" fill="url(#aGrad)"/>
+          <defs>
+            <linearGradient id="aGrad" x1="0" y1="0" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#1f6feb"/>
+              <stop offset="100%" stop-color="#a371f7"/>
+            </linearGradient>
+          </defs>
+          <rect x="9" y="14" width="24" height="18" rx="4" fill="white" fill-opacity="0.95"/>
+          <circle cx="21" cy="23" r="6" fill="#1f6feb"/>
+          <circle cx="21" cy="23" r="3.5" fill="white" fill-opacity="0.9"/>
+          <circle cx="21" cy="23" r="1.8" fill="#1f6feb"/>
+          <circle cx="19.5" cy="21.5" r="0.8" fill="white" fill-opacity="0.7"/>
+          <polygon points="35,16 43,23 35,30" fill="white" fill-opacity="0.95"/>
+          <rect x="19" y="32" width="4" height="4" rx="1" fill="white" fill-opacity="0.85"/>
+          <rect x="14" y="36" width="14" height="3" rx="1.5" fill="white" fill-opacity="0.85"/>
+        </svg>
+        <h1 class="auth-title" id="authModalTitle">NeverVideoChat</h1>
+      </div>
+      <p class="auth-sub">Join the conversation</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="auth-tabs" role="tablist">
+      <button class="auth-tab active" id="authTabLogin"
+              role="tab" aria-selected="true" aria-controls="loginForm">Sign In</button>
+      <button class="auth-tab" id="authTabRegister"
+              role="tab" aria-selected="false" aria-controls="registerForm">Register</button>
+    </div>
+
+    <!-- Sign In form -->
+    <form class="auth-form" id="loginForm" autocomplete="on">
+      <div class="auth-field">
+        <label for="loginNick">Nickname</label>
+        <input type="text" id="loginNick" placeholder="Your nickname"
+               autocomplete="username" maxlength="30" required>
+      </div>
+      <div class="auth-field">
+        <label for="loginPwd">Password</label>
+        <input type="password" id="loginPwd" placeholder="Password"
+               autocomplete="current-password" required>
+      </div>
+      <div class="auth-error" id="loginError" hidden></div>
+      <button type="submit" class="auth-btn-primary" id="loginSubmitBtn">Sign In</button>
+    </form>
+
+    <!-- Register form -->
+    <form class="auth-form" id="registerForm" hidden autocomplete="on">
+      <div class="auth-field">
+        <label for="regNick">Choose Nickname</label>
+        <input type="text" id="regNick" placeholder="e.g. CoolUser42"
+               autocomplete="username" maxlength="30" minlength="3" required>
+      </div>
+      <div class="auth-field">
+        <label for="regPwd">Password</label>
+        <input type="password" id="regPwd" placeholder="At least 6 characters"
+               autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="auth-field">
+        <label for="regPwdConfirm">Confirm Password</label>
+        <input type="password" id="regPwdConfirm" placeholder="Repeat password"
+               autocomplete="new-password" required>
+      </div>
+      <div class="auth-error" id="registerError" hidden></div>
+      <button type="submit" class="auth-btn-primary" id="registerSubmitBtn">Create Account</button>
+    </form>
+
+    <!-- Divider -->
+    <div class="auth-divider"><span>or</span></div>
+
+    <button class="auth-btn-ghost" id="guestContinueBtn" type="button">
+      Continue as Guest
+    </button>
+
+  </div>
+</div>
+
+
+<!-- ================================================================
+     PROFILE MODAL
+================================================================ -->
+<div class="nvc-modal-backdrop" id="profileModal" role="dialog" aria-modal="true"
+     aria-labelledby="profileModalTitle" hidden>
+  <div class="nvc-modal profile-modal">
+
+    <div class="nvc-modal-hdr">
+      <h2 id="profileModalTitle">My Profile</h2>
+      <button class="nvc-modal-close-btn" id="profileModalClose" aria-label="Close profile">✕</button>
+    </div>
+
+    <!-- Avatar section -->
+    <div class="profile-avatar-section">
+      <div class="profile-avatar-wrap">
+        <div class="profile-avatar" id="profileAvatarDisplay" aria-label="Profile photo"></div>
+        <button class="profile-avatar-change-btn" id="profileAvatarChangeBtn"
+                title="Change photo" aria-label="Change profile photo">📷</button>
+      </div>
+      <input type="file" id="profileAvatarInput" accept="image/*" hidden aria-hidden="true">
+      <p class="profile-avatar-hint">Click 📷 to upload a photo</p>
+    </div>
+
+    <!-- Fields -->
+    <div class="profile-fields">
+      <label class="profile-label" for="profileNameInput">Display Name</label>
+      <input type="text" class="profile-input" id="profileNameInput"
+             maxlength="30" placeholder="Your display name" autocomplete="nickname">
+      <div class="profile-account-info" id="profileAccountInfo"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="profile-actions">
+      <button class="auth-btn-primary" id="profileSaveBtn">Save Changes</button>
+      <button class="auth-btn-danger" id="profileLogoutBtn" hidden>Logout</button>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ================================================================
+     SETTINGS MODAL
+================================================================ -->
+<div class="nvc-modal-backdrop" id="settingsModal" role="dialog" aria-modal="true"
+     aria-labelledby="settingsModalTitle" hidden>
+  <div class="nvc-modal settings-modal">
+
+    <div class="nvc-modal-hdr">
+      <h2 id="settingsModalTitle">Settings</h2>
+      <button class="nvc-modal-close-btn" id="settingsModalClose" aria-label="Close settings">✕</button>
+    </div>
+
+    <!-- Webcam & Audio section -->
+    <div class="settings-section">
+      <h3 class="settings-section-title">📷 Webcam &amp; Audio</h3>
+
+      <label class="settings-label" for="cameraDeviceSelect">Camera</label>
+      <select class="settings-select" id="cameraDeviceSelect">
+        <option value="">Default camera</option>
+      </select>
+
+      <label class="settings-label" for="micDeviceSelect">Microphone</label>
+      <select class="settings-select" id="micDeviceSelect">
+        <option value="">Default microphone</option>
+      </select>
+
+      <button class="auth-btn-ghost settings-detect-btn" id="detectDevicesBtn" type="button">
+        🔍 Detect Devices
+      </button>
+      <p class="settings-hint" id="detectDevicesHint">
+        Click "Detect Devices" to list your cameras and microphones.<br>
+        Browser permission for camera/mic is required.
+      </p>
+    </div>
+
+    <!-- Save -->
+    <div class="settings-actions">
+      <button class="auth-btn-primary" id="settingsSaveBtn">Save Settings</button>
+    </div>
+
+  </div>
+</div>
 
 
 <!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
