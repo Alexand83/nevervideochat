@@ -1555,18 +1555,20 @@ function openContextMenu(uid, anchor) {
                  background:${color};align-items:center;justify-content:center;
                  font-size:9px;font-weight:700;color:#fff;flex-shrink:0">${init}</span>
     ${escHtml(user.name)}</span>`;
-  const camOk        = user.hasCamera && user.online;
   const alreadyView  = !!state.cameraWindows[String(uid)];
   const pendingReq   = !!state.pendingCamRequests[String(uid)];
   const camRejected  = !!state.rejectedCamUsers[String(uid)];
-  const camBlocked   = !camOk || alreadyView || pendingReq || camRejected;
-  dom.ctxCamBtn.disabled     = camBlocked;
+  const isOffline    = !user.online;
+  /* Button is blocked only by hard states; hasCamera may be stale — don't use it */
+  const camBlocked   = alreadyView || pendingReq || camRejected || isOffline;
+  dom.ctxCamBtn.disabled      = camBlocked;
   dom.ctxCamBtn.style.opacity = camBlocked ? '0.4' : '1';
   dom.ctxCamBtn.title = alreadyView  ? 'Already viewing this camera'
                       : pendingReq   ? 'Request already sent — waiting for reply'
                       : camRejected  ? 'Rejected — unblock in Settings → "Blocked Requests"'
-                      : !camOk       ? 'Camera not available'
-                      : 'Request Camera';
+                      : isOffline    ? 'User is offline'
+                      : user.hasCamera ? 'Request Camera'
+                      : 'Request Camera (camera may not be active)';
   const r = anchor.getBoundingClientRect();
   dom.ctxMenu.style.top  = `${clamp(r.bottom+4,4,window.innerHeight-200)}px`;
   dom.ctxMenu.style.left = `${clamp(r.left,4,window.innerWidth-210)}px`;
@@ -1845,7 +1847,7 @@ function broadcastAll(event, extra = {}) {
 function requestPublicCamera(targetUid) {
   const uid = String(targetUid);
   const target = findUser(uid);
-  if (!target?.hasCamera || !target.online) { showToast(`${target?.name || 'User'} camera is not enabled.`); return; }
+  if (!target?.online) { showToast(`${target?.name || 'User'} is offline.`); return; }
   if (!supabaseReady()) { showToast('⚠️ Server connection required for camera requests.'); return; }
   /* Already viewing their camera */
   if (state.cameraWindows[uid]) {
@@ -1853,11 +1855,11 @@ function requestPublicCamera(targetUid) {
   }
   /* Previously rejected — user must unblock from Settings */
   if (state.rejectedCamUsers[uid]) {
-    showToast(`🚫 ${target.name} rejected your request. Unblock them in Settings → "Blocked Requests".`); return;
+    showToast(`🚫 ${target.name} rejected your request. Unblock in Settings → "Blocked Requests".`); return;
   }
   /* Request already sent and pending */
   if (state.pendingCamRequests[uid]) {
-    showToast(`⏳ Already waiting for ${target.name}'s reply.`); return;
+    showToast(`⏳ Already waiting for ${target.name}'s reply. (60s auto-expire)`); return;
   }
   setPendingCamRequest(uid, 'public', target.name);
   broadcast('cam-req', uid, { reqType: 'public' });
@@ -2534,6 +2536,9 @@ async function init() {
 
 /** Called after a user identity has been established (auth or guest) */
 async function finishInit() {
+  /* pendingCamRequests are session-only — always start clean */
+  state.pendingCamRequests = {};
+
   /* Load persisted rejected-cam list */
   state.rejectedCamUsers = loadRejectedCams();
 
