@@ -929,13 +929,19 @@ function closeCameraWindow(uid) {
   /* Close any WebRTC peer connections linked to this stream */
   if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
   if (state.outgoingPCs[uid]) { state.outgoingPCs[uid].close(); delete state.outgoingPCs[uid]; }
-  if (uid === state.currentUser?.id || uid === 'me') {
+
+  const isOwn = uid === state.currentUser?.id || uid === 'me';
+  if (isOwn) {
+    /* Own camera: stop tracks, reset UI, notify others */
     state.localStream?.getTracks().forEach(t => t.stop()); state.localStream = null;
     state.currentUser.hasCamera = false;
     dom.cameraBtnLabel.textContent = 'Camera Off'; dom.cameraBtnHeader.classList.remove('camera-on');
-    /* Tell every other user to destroy their window for us */
     broadcastAll('cam-closed', {});
     updateOwnPresence(); renderUsers(); showToast('📹 Camera disabled.');
+  } else {
+    /* Remote camera: update that user's hasCamera in local state so the icon disappears */
+    const u = state.users.find(u => String(u.id) === String(uid));
+    if (u) { u.hasCamera = false; renderUsers(); }
   }
 }
 /** Someone else turned off their camera — destroy our window for them */
@@ -1482,27 +1488,28 @@ async function connectSupabase() {
         if (key !== state.currentUser.id) showToast(`👤 ${newPresences[0].name} joined the chat`);
       })
       .on('presence', { event:'leave' }, ({ key, leftPresences }) => {
-        const uid = String(key);
-        const u   = state.users.find(u => String(u.id) === uid)
-                 ?? state.users.find(u => String(u.id) === String(leftPresences?.[0]?.id));
+        const uid  = String(key);
+        const myId = String(state.currentUser?.id);
+
+        /* IMPORTANT: Supabase can fire 'leave' for our own ID during reconnects.
+           Never process our own leave — it would delete our cam window and
+           break toggleOwnCamera by leaving state.localStream alive with no window. */
+        if (uid === myId) return;
+
+        const u    = state.users.find(u => String(u.id) === uid)
+                  ?? state.users.find(u => String(u.id) === String(leftPresences?.[0]?.id));
         const name = u?.name ?? leftPresences?.[0]?.name ?? 'A user';
 
         if (u) { u.online = false; renderUsers(); }
         showToast(`👋 ${name} left`);
 
-        /* Close any camera window we have open for this user.
-           Handles the case where they closed the browser without
-           explicitly turning off their camera (no cam-closed broadcast). */
-        const cw = state.cameraWindows[uid];
-        if (cw) {
-          stopMicMeter(uid);
-          cw.el.remove();
-          delete state.cameraWindows[uid];
-          if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
-          if (state.outgoingPCs[uid]) { state.outgoingPCs[uid].close(); delete state.outgoingPCs[uid]; }
+        /* Close any camera window open for this user (browser-close fallback).
+           closeCameraWindow handles peer cleanup correctly for remote users. */
+        if (state.cameraWindows[uid]) {
+          closeCameraWindow(uid);
         }
 
-        /* Also end any active private call with this user */
+        /* End any active private call with this user */
         if (state.activeCallUID === uid && !dom.vcallWin.hidden) {
           endCall(false);
           showToast(`📵 ${name} disconnected — call ended.`);
