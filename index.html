@@ -19,13 +19,37 @@
     <!-- Empty spacer so logo is truly centered with CSS grid -->
     <div class="header-spacer" aria-hidden="true"></div>
 
-    <!-- Logo SVG inline — no external dependency -->
+    <!-- Logo — inline SVG webcam + NVC, zero external requests -->
     <div class="logo-wrap" id="logoWrap">
-      <div id="logoFallback" class="logo-fallback">
-        <svg class="logo-icon-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="44" height="44" rx="10" fill="#1f6feb"/>
-          <path d="M8 15a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H10a2 2 0 01-2-2V15z" fill="white"/>
-          <path d="M28 18.5l7-4.5v14l-7-4.5V18.5z" fill="white"/>
+      <div class="logo-fallback">
+        <!-- Webcam icon with NVC badge -->
+        <svg class="logo-icon-svg" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Rounded background -->
+          <rect width="52" height="52" rx="13" fill="url(#nvcGrad)"/>
+          <defs>
+            <linearGradient id="nvcGrad" x1="0" y1="0" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#1f6feb"/>
+              <stop offset="100%" stop-color="#a371f7"/>
+            </linearGradient>
+          </defs>
+          <!-- Webcam body (rounded rect) -->
+          <rect x="9" y="14" width="24" height="18" rx="4" fill="white" fill-opacity="0.95"/>
+          <!-- Webcam lens ring -->
+          <circle cx="21" cy="23" r="6" fill="#1f6feb"/>
+          <circle cx="21" cy="23" r="3.5" fill="white" fill-opacity="0.9"/>
+          <circle cx="21" cy="23" r="1.8" fill="#1f6feb"/>
+          <!-- Lens shine -->
+          <circle cx="19.5" cy="21.5" r="0.8" fill="white" fill-opacity="0.7"/>
+          <!-- Webcam play-button triangle -->
+          <polygon points="35,16 43,23 35,30" fill="white" fill-opacity="0.95"/>
+          <!-- Stand neck -->
+          <rect x="19" y="32" width="4" height="4" rx="1" fill="white" fill-opacity="0.85"/>
+          <!-- Stand base -->
+          <rect x="14" y="36" width="14" height="3" rx="1.5" fill="white" fill-opacity="0.85"/>
+          <!-- NVC text badge -->
+          <rect x="7" y="40" width="22" height="9" rx="4.5" fill="white" fill-opacity="0.15"/>
+          <text x="18" y="47.5" font-family="system-ui,Arial,sans-serif" font-size="6.5"
+                font-weight="800" fill="white" text-anchor="middle" letter-spacing="0.5">NVC</text>
         </svg>
         <span class="logo-text">NeverVideoChat</span>
       </div>
