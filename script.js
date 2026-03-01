@@ -622,20 +622,22 @@ async function saveProfile(displayName, avatarUrl) {
   renderUsers();
 }
 
-/** Render avatar into a container div: photo if available, else coloured initials */
+/** Render avatar into a container div: photo if available, else coloured initials.
+ *  NOTE: we use backgroundColor + backgroundImage as SEPARATE properties to avoid
+ *  the `background` shorthand resetting backgroundImage in some browsers.          */
 function setAvatarDisplay(el, name, avatarUrl) {
   if (!el) return;
   if (avatarUrl) {
-    el.style.backgroundImage  = `url(${avatarUrl})`;
-    el.style.backgroundSize   = 'cover';
+    el.style.backgroundImage    = `url(${avatarUrl})`;
+    el.style.backgroundSize     = 'cover';
     el.style.backgroundPosition = 'center';
-    el.style.background       = ''; /* let bg-image win */
-    el.textContent            = '';
+    el.style.backgroundColor    = 'transparent';
+    el.textContent              = '';
     el.classList.add('has-photo');
   } else {
-    el.style.backgroundImage = '';
-    el.style.background      = name ? avatarColor(name) : 'var(--bg3)';
-    el.textContent           = name ? initials(name) : '?';
+    el.style.backgroundImage    = 'none';
+    el.style.backgroundColor    = name ? avatarColor(name) : 'var(--bg3)';
+    el.textContent              = name ? initials(name) : '?';
     el.classList.remove('has-photo');
   }
 }
@@ -645,13 +647,25 @@ function updateHeaderUser() {
   const u = state.currentUser;
   if (!u) return;
 
-  /* Header left: name chip */
+  /* Header left: name + registered/guest badge */
   if (dom.headerUser) {
     dom.headerUser.innerHTML = '';
+
     const nameEl = document.createElement('span');
-    nameEl.className = 'header-user-name';
+    nameEl.className   = 'header-user-name';
     nameEl.textContent = u.name;
     dom.headerUser.appendChild(nameEl);
+
+    const badge = document.createElement('span');
+    if (u.isGuest) {
+      badge.className   = 'header-user-badge guest';
+      badge.textContent = 'Guest';
+    } else {
+      badge.className   = 'header-user-badge registered';
+      badge.textContent = '✓';
+      badge.title       = 'Registered account';
+    }
+    dom.headerUser.appendChild(badge);
   }
 
   /* Header profile button: avatar chip */
