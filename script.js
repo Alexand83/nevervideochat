@@ -735,8 +735,9 @@ function openPrivateChat(uid) {
   popup.querySelector('.pchat-close-btn').addEventListener('click', () => closePChat(uid));
   popup.querySelector('.pchat-vcall-btn').addEventListener('click', () => {
     if (!supabaseReady()) { showToast('⚠️ Server connection required for video calls.'); return; }
+    if (!dom.vcallWin.hidden) { showToast('📹 A video call is already active.'); return; }
     if (state.pendingCamRequests[String(uid)]) {
-      showToast(`⏳ Already waiting for ${user.name}'s reply — request already sent.`); return;
+      showToast(`⏳ Already waiting for ${user.name}'s reply.`); return;
     }
     state.pendingCamRequests[String(uid)] = 'private';
     broadcast('cam-req', uid, { reqType: 'private' });
@@ -842,8 +843,16 @@ function openContextMenu(uid, anchor) {
                  background:${color};align-items:center;justify-content:center;
                  font-size:9px;font-weight:700;color:#fff;flex-shrink:0">${init}</span>
     ${escHtml(user.name)}</span>`;
-  dom.ctxCamBtn.disabled      = !user.hasCamera || !user.online;
-  dom.ctxCamBtn.style.opacity = (user.hasCamera && user.online) ? '1' : '0.4';
+  const camOk        = user.hasCamera && user.online;
+  const alreadyView  = !!state.cameraWindows[String(uid)];
+  const pendingReq   = !!state.pendingCamRequests[String(uid)];
+  const camBlocked   = !camOk || alreadyView || pendingReq;
+  dom.ctxCamBtn.disabled     = camBlocked;
+  dom.ctxCamBtn.style.opacity = camBlocked ? '0.4' : '1';
+  dom.ctxCamBtn.title = alreadyView ? 'Already viewing this camera'
+                      : pendingReq  ? 'Request already sent — waiting for reply'
+                      : !camOk      ? 'Camera not available'
+                      : 'Request Camera';
   const r = anchor.getBoundingClientRect();
   dom.ctxMenu.style.top  = `${clamp(r.bottom+4,4,window.innerHeight-200)}px`;
   dom.ctxMenu.style.left = `${clamp(r.left,4,window.innerWidth-210)}px`;
@@ -1126,9 +1135,13 @@ function requestPublicCamera(targetUid) {
   const target = findUser(uid);
   if (!target?.hasCamera || !target.online) { showToast(`${target?.name || 'User'} camera is not enabled.`); return; }
   if (!supabaseReady()) { showToast('⚠️ Server connection required for camera requests.'); return; }
-  /* Prevent duplicate requests */
+  /* Already viewing their camera */
+  if (state.cameraWindows[uid]) {
+    showToast(`📹 Already viewing ${target.name}'s camera.`); return;
+  }
+  /* Request already sent and pending */
   if (state.pendingCamRequests[uid]) {
-    showToast(`⏳ Already waiting for ${target.name}'s reply — request already sent.`); return;
+    showToast(`⏳ Already waiting for ${target.name}'s reply.`); return;
   }
   state.pendingCamRequests[uid] = 'public';
   broadcast('cam-req', uid, { reqType: 'public' });
@@ -1321,6 +1334,8 @@ async function handleWebRTCSignal(payload) {
 
 function openRemoteCamWindow(uid, stream) {
   const user = findUser(uid);
+  /* Clear any pending request now that the stream is actually arriving */
+  delete state.pendingCamRequests[String(uid)];
   createCameraWindow(uid, stream, user?.name || uid, false);
 }
 
