@@ -107,34 +107,81 @@ export function scrollToBottom() {
   if (c) c.scrollTop = c.scrollHeight;
 }
 
-/* ── Drag + Resize ── */
-export function makeDraggable(el, handle) {
-  let ox = 0, oy = 0, mx = 0, my = 0;
-  handle.addEventListener('mousedown', e => {
-    e.preventDefault();
-    ox = el.offsetLeft; oy = el.offsetTop;
-    mx = e.clientX;     my = e.clientY;
-    const onMove = ev => {
-      el.style.left = clamp(ox + ev.clientX - mx, 0, window.innerWidth  - el.offsetWidth)  + 'px';
-      el.style.top  = clamp(oy + ev.clientY - my, 0, window.innerHeight - el.offsetHeight) + 'px';
-    };
-    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup',  onUp);
-  });
+/* ── Drag + Resize (mouse + touch) ── */
+
+/** Extract {x,y} from mouse or touch event */
+function _evXY(e) {
+  const src = e.touches ? e.touches[0] : e;
+  return { x: src.clientX, y: src.clientY };
 }
+
+/** Convert right/bottom positioning to left/top so dragging works correctly */
+function _pinToLeftTop(el) {
+  if (el.style.left && el.style.left !== 'auto') return;   /* already pinned */
+  const r = el.getBoundingClientRect();
+  el.style.left   = r.left + 'px';
+  el.style.top    = r.top  + 'px';
+  el.style.right  = 'auto';
+  el.style.bottom = 'auto';
+}
+
+export function makeDraggable(el, handle) {
+  if (!handle) return;
+  let ox = 0, oy = 0, mx = 0, my = 0, active = false;
+
+  function onStart(e) {
+    if (e.touches && e.touches.length > 1) return;   /* ignore pinch */
+    e.preventDefault();
+    _pinToLeftTop(el);
+    active = true;
+    ox = el.offsetLeft; oy = el.offsetTop;
+    const { x, y } = _evXY(e);
+    mx = x; my = y;
+  }
+  function onMove(e) {
+    if (!active) return;
+    e.preventDefault();
+    const { x, y } = _evXY(e);
+    el.style.left = clamp(ox + x - mx, 0, window.innerWidth  - el.offsetWidth)  + 'px';
+    el.style.top  = clamp(oy + y - my, 0, window.innerHeight - el.offsetHeight) + 'px';
+  }
+  function onEnd() { active = false; }
+
+  handle.addEventListener('mousedown',   onStart);
+  handle.addEventListener('touchstart',  onStart, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove,  { passive: false });
+  document.addEventListener('mouseup',   onEnd);
+  document.addEventListener('touchend',  onEnd);
+  document.addEventListener('touchcancel', onEnd);
+}
+
 export function makeResizable(el, handle) {
   if (!handle) return;
-  let sw = 0, sh = 0, mx = 0, my = 0;
-  handle.addEventListener('mousedown', e => {
+  let sw = 0, sh = 0, mx = 0, my = 0, active = false;
+
+  function onStart(e) {
+    if (e.touches && e.touches.length > 1) return;
     e.preventDefault(); e.stopPropagation();
-    sw = el.offsetWidth; sh = el.offsetHeight; mx = e.clientX; my = e.clientY;
-    const onMove = ev => {
-      el.style.width  = Math.max(220, sw + ev.clientX - mx) + 'px';
-      el.style.height = Math.max(160, sh + ev.clientY - my) + 'px';
-    };
-    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup',  onUp);
-  });
+    active = true;
+    sw = el.offsetWidth; sh = el.offsetHeight;
+    const { x, y } = _evXY(e);
+    mx = x; my = y;
+  }
+  function onMove(e) {
+    if (!active) return;
+    e.preventDefault();
+    const { x, y } = _evXY(e);
+    el.style.width  = Math.max(200, sw + x - mx) + 'px';
+    el.style.height = Math.max(150, sh + y - my) + 'px';
+  }
+  function onEnd() { active = false; }
+
+  handle.addEventListener('mousedown',   onStart);
+  handle.addEventListener('touchstart',  onStart, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove,  { passive: false });
+  document.addEventListener('mouseup',   onEnd);
+  document.addEventListener('touchend',  onEnd);
+  document.addEventListener('touchcancel', onEnd);
 }

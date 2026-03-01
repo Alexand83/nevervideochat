@@ -170,6 +170,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
 }
 
 .logo-icon-svg {
@@ -193,6 +194,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   justify-content: flex-end;
 }
 
@@ -200,6 +202,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   padding: 6px var(--s3);
   border-radius: var(--r2);
   background: var(--bg2);
@@ -335,6 +338,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: baseline;
   gap: var(--s2);
+  touch-action: none;
   padding: 0 var(--s2);
 }
 .msg-group.own .msg-meta { flex-direction: row-reverse; }
@@ -413,6 +417,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
 }
 .sys-msg::before, .sys-msg::after {
   content: '';
@@ -449,6 +454,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   padding: 2px var(--s4) var(--s2);
   min-height: 26px;
   opacity: 0;
@@ -499,6 +505,7 @@ a:hover { text-decoration: underline; }
   padding: var(--s2) var(--s3);
   border-bottom: 1px solid var(--border-subtle);
   gap: var(--s2);
+  touch-action: none;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -675,6 +682,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: flex-end;
   gap: var(--s2);
+  touch-action: none;
   padding: var(--s3);
 }
 
@@ -972,6 +980,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
 }
 .pchat-avatar {
   width: 26px; height: 26px;
@@ -1015,6 +1024,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   gap: var(--s2);
+  touch-action: none;
 }
 
 .pchat-msg { display: flex; flex-direction: column; gap: 2px; }
@@ -1039,6 +1049,7 @@ a:hover { text-decoration: underline; }
   border-top: 1px solid var(--border);
   display: flex;
   gap: var(--s2);
+  touch-action: none;
   align-items: center;
   flex-shrink: 0;
 }
@@ -1078,6 +1089,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: flex-end;
   gap: var(--s2);
+  touch-action: none;
   z-index: 499;
   pointer-events: none;
 }
@@ -1130,6 +1142,7 @@ a:hover { text-decoration: underline; }
   flex-direction: column;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   z-index: 800;
   pointer-events: none;
 }
@@ -1405,6 +1418,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   text-align: left;
   transition: background var(--tf);
 }
@@ -1540,6 +1554,7 @@ a:hover { text-decoration: underline; }
   flex-shrink: 0;
   user-select: none;
   gap: var(--s2);
+  touch-action: none;
 }
 .cam-win-hdr:active { cursor: grabbing; }
 
@@ -1547,6 +1562,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   min-width: 0;
 }
 
@@ -1629,6 +1645,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   padding: 5px var(--s3);
   border-radius: var(--r2);
   background: var(--bg3);
@@ -1715,6 +1732,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   min-width: 0;
   overflow: hidden;
 }
@@ -1957,6 +1975,7 @@ a:hover { text-decoration: underline; }
   align-items: center;
   justify-content: center;
   gap: var(--s2);
+  touch-action: none;
   margin-bottom: var(--s2);
 }
 .auth-logo-svg {
@@ -2021,6 +2040,7 @@ a:hover { text-decoration: underline; }
   flex-direction: column;
   align-items: center;
   gap: var(--s2);
+  touch-action: none;
   margin-bottom: var(--s5);
 }
 .profile-avatar-wrap { position: relative; }
@@ -2098,6 +2118,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   gap: var(--s2);
+  touch-action: none;
 }
 
 
@@ -2154,6 +2175,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   gap: var(--s2);
+  touch-action: none;
   margin-top: var(--s2);
   max-height: 200px;
   overflow-y: auto;
@@ -2215,6 +2237,7 @@ a:hover { text-decoration: underline; }
   align-items: center;
   justify-content: space-between;
   gap: var(--s2);
+  touch-action: none;
   padding: 6px var(--s3);
   background: var(--bg2);
   border-left: 3px solid var(--accent);
@@ -2321,6 +2344,7 @@ a:hover { text-decoration: underline; }
   border-radius: var(--r1);
   font-size: var(--fz-xs);
   gap: var(--s2);
+  touch-action: none;
 }
 .cam-viewer-item:hover { background: var(--bg-hover); }
 .cam-viewer-name { color: var(--tx0); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
