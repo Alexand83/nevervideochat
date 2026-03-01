@@ -926,20 +926,37 @@ function createCameraWindow(uid, stream, name, isOwn) {
 function closeCameraWindow(uid) {
   const cw = state.cameraWindows[uid]; if (!cw) return;
   stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];
-  /* Close any WebRTC peer connections linked to this stream */
-  if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
-  if (state.outgoingPCs[uid]) { state.outgoingPCs[uid].close(); delete state.outgoingPCs[uid]; }
 
   const isOwn = uid === state.currentUser?.id || uid === 'me';
+
   if (isOwn) {
-    /* Own camera: stop tracks, reset UI, notify others */
-    state.localStream?.getTracks().forEach(t => t.stop()); state.localStream = null;
+    /* ── Own camera ───────────────────────────────────────────────
+       Stop local tracks and close ALL outgoing PCs (we stop sending
+       to every viewer).  Keep incomingPCs open — we can still watch
+       other people's cameras even after turning ours off.           */
+    state.localStream?.getTracks().forEach(t => t.stop());
+    state.localStream = null;
+
+    Object.keys(state.outgoingPCs).forEach(peerId => {
+      state.outgoingPCs[peerId]?.close();
+      delete state.outgoingPCs[peerId];
+    });
+    /* incomingPCs intentionally left open */
+
     state.currentUser.hasCamera = false;
-    dom.cameraBtnLabel.textContent = 'Camera Off'; dom.cameraBtnHeader.classList.remove('camera-on');
+    dom.cameraBtnLabel.textContent = 'Camera Off';
+    dom.cameraBtnHeader.classList.remove('camera-on');
     broadcastAll('cam-closed', {});
     updateOwnPresence(); renderUsers(); showToast('📹 Camera disabled.');
   } else {
-    /* Remote camera: update that user's hasCamera in local state so the icon disappears */
+    /* ── Remote camera ────────────────────────────────────────────
+       Close only the INCOMING PC (we were receiving from them).
+       Never touch outgoingPCs[uid]: we might still be sending our
+       own stream to them — closing it would freeze THEIR view of us. */
+    if (state.incomingPCs[uid]) {
+      state.incomingPCs[uid].close();
+      delete state.incomingPCs[uid];
+    }
     const u = state.users.find(u => String(u.id) === String(uid));
     if (u) { u.hasCamera = false; renderUsers(); }
   }
@@ -949,11 +966,13 @@ function handleCamClosed(payload) {
   if (payload.from === state.currentUser?.id) return; // ignore own echo
   const uid = payload.from;
   const cw = state.cameraWindows[uid];
-  if (cw) {
-    stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];
-  }
+  if (cw) { stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid]; }
+
+  /* Close ONLY the incoming PC (we were receiving their stream).
+     NEVER close outgoingPCs[uid]: that is the connection we use to
+     send OUR stream to them — closing it would freeze their view of us. */
   if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
-  if (state.outgoingPCs[uid]) { state.outgoingPCs[uid].close(); delete state.outgoingPCs[uid]; }
+
   const u = state.users.find(u => u.id === uid);
   if (u) { u.hasCamera = false; renderUsers(); }
   showToast(`📹 ${payload.fromName} turned off their camera`);
