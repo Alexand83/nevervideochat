@@ -285,6 +285,7 @@ const dom = {
   profileNameInput: $('profileNameInput'),
   profileAccountInfo: $('profileAccountInfo'),
   profileSaveBtn: $('profileSaveBtn'), profileLogoutBtn: $('profileLogoutBtn'),
+  profileSwitchToAuthBtn: $('profileSwitchToAuthBtn'),
 
   /* Settings modal */
   settingsModal: $('settingsModal'), settingsModalClose: $('settingsModalClose'),
@@ -568,6 +569,11 @@ function initProfileModal() {
     if (!confirm('Log out?')) return;
     await logoutUser();
   });
+  dom.profileSwitchToAuthBtn?.addEventListener('click', () => {
+    dom.profileModal.hidden = true;
+    switchAuthTab('login');
+    dom.authModal.hidden = false;
+  });
   /* Close on backdrop click */
   dom.profileModal?.addEventListener('click', e => { if (e.target === dom.profileModal) dom.profileModal.hidden = true; });
 }
@@ -581,7 +587,8 @@ function openProfileModal() {
   dom.profileAccountInfo.textContent = u.isGuest
     ? 'Guest account — changes apply this session only.'
     : `Registered as @${u.username || u.name}`;
-  dom.profileLogoutBtn.hidden = u.isGuest;
+  dom.profileLogoutBtn.hidden        = u.isGuest;
+  dom.profileSwitchToAuthBtn.hidden  = !u.isGuest;
   dom.profileModal.hidden = false;
 }
 
