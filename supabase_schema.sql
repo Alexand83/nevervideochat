@@ -11,8 +11,12 @@ CREATE TABLE IF NOT EXISTS public.messages (
   user_id     TEXT        NOT NULL,
   username    TEXT        NOT NULL,
   content     TEXT        NOT NULL,
+  room_id     TEXT        NOT NULL DEFAULT 'general',
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add room_id column to existing tables (safe to run on already-created tables)
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS room_id TEXT NOT NULL DEFAULT 'general';
 
 -- Row Level Security
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
@@ -28,9 +32,12 @@ CREATE POLICY "Public insert messages"
   ON public.messages FOR INSERT
   WITH CHECK (true);
 
--- ── Indice per caricare i messaggi in ordine ───────────────────
+-- ── Indici per caricare i messaggi in ordine e per stanza ──────
 CREATE INDEX IF NOT EXISTS messages_created_at_idx
   ON public.messages (created_at ASC);
+
+CREATE INDEX IF NOT EXISTS messages_room_id_idx
+  ON public.messages (room_id, created_at ASC);
 
 -- ── Abilita Realtime sulla tabella messages ────────────────────
 -- (ignora se la tabella è già nella publication)
