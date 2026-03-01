@@ -5,7 +5,7 @@ export const state = {
   currentUser: null,
   users:       [],
 
-  /* Rooms: { [roomId]: { id, name, icon, messages, presenceCh, dbSub, users } } */
+  /* Rooms: { [roomId]: { id, name, icon, messages, presenceCh, dbSub, users, unreadCount } } */
   rooms:      {},
   activeRoom: 'general',
 

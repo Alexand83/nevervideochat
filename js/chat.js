@@ -10,10 +10,14 @@ import { findUser, ensureUser } from './users.js';
 let _openContextMenu = null;
 let _uploadToStorage = null;
 let _supabaseReady   = null;
-export function setChatDeps(openCtx, uploadStorage, supaReady) {
+let _renderRoomTabs  = null;
+let _broadcast       = null;
+export function setChatDeps(openCtx, uploadStorage, supaReady, renderTabs, broadcast) {
   _openContextMenu = openCtx;
   _uploadToStorage = uploadStorage;
   _supabaseReady   = supaReady;
+  _renderRoomTabs  = renderTabs;
+  _broadcast       = broadcast;
 }
 
 /* ── Extract quote metadata from persisted message content ── */
@@ -32,7 +36,7 @@ export function extractQuote(content) {
 }
 
 /* ── Add a message to the active room and render it ── */
-export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, quoteName = null, username = null }, roomId) {
+export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, quoteName = null, username = null, reactions = null, msgId = null }, roomId) {
   const rId  = roomId || state.activeRoom;
   const room = state.rooms[rId];
   if (!room) return;
@@ -40,8 +44,19 @@ export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, qu
   /* Filter ignored users */
   if (userId && userId !== 'me' && state.ignoredUsers[String(userId)]) return;
 
-  const msg = { id: `m${Date.now()}${Math.random()}`, userId, html, ts, quoteHtml, quoteName, username };
+  const msg = { 
+    id: msgId || `m${Date.now()}${Math.random()}`, 
+    userId, html, ts, quoteHtml, quoteName, username,
+    reactions: reactions || {}
+  };
   room.messages.push(msg);
+
+  /* Increment unread count if message is in a non-active room */
+  if (rId !== state.activeRoom && userId !== 'me' && userId !== state.currentUser?.id) {
+    room.unreadCount = (room.unreadCount || 0) + 1;
+    /* Forward ref to renderRoomTabs */
+    if (_renderRoomTabs) _renderRoomTabs();
+  }
 
   /* Only render if this is the active room */
   if (rId === state.activeRoom) renderMessage(msg);
@@ -109,18 +124,50 @@ export function renderMessage(msg) {
   }
 
   const textDiv = document.createElement('div');
+  textDiv.className = 'msg-text';
   textDiv.innerHTML = processHtml(msg.html);
   bubble.appendChild(textDiv);
 
+  /* Reactions */
+  const reactionsDiv = document.createElement('div');
+  reactionsDiv.className = 'msg-reactions';
+  if (msg.reactions && Object.keys(msg.reactions).length > 0) {
+    Object.entries(msg.reactions).forEach(([emoji, userIds]) => {
+      if (!Array.isArray(userIds) || userIds.length === 0) return;
+      const reactBtn = document.createElement('button');
+      reactBtn.className = 'msg-reaction';
+      const hasReacted = userIds.includes(String(state.currentUser?.id));
+      if (hasReacted) reactBtn.classList.add('reacted');
+      reactBtn.textContent = `${emoji} ${userIds.length}`;
+      reactBtn.title = `${userIds.length} reaction${userIds.length > 1 ? 's' : ''}`;
+      reactBtn.addEventListener('click', () => toggleReaction(msg.id, emoji));
+      reactionsDiv.appendChild(reactBtn);
+    });
+  }
+  bubble.appendChild(reactionsDiv);
+
+  /* Action buttons row */
+  const actionsRow = document.createElement('div');
+  actionsRow.className = 'msg-actions';
+  
+  /* Add reaction button */
+  const reactBtn = document.createElement('button');
+  reactBtn.className = 'msg-action-btn msg-react-btn';
+  reactBtn.innerHTML = '😊';
+  reactBtn.title = 'Add reaction';
+  reactBtn.addEventListener('click', (e) => openReactionPicker(e, msg.id));
+  
   /* Reply button */
   const replyBtn = document.createElement('button');
-  replyBtn.className = 'msg-reply-btn';
+  replyBtn.className = 'msg-action-btn msg-reply-btn';
   replyBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/></svg> Reply`;
   const authorName = isMine ? 'You' : user.name;
   replyBtn.addEventListener('click', () => setReplyTo(msg.userId, authorName, msg.html));
-
-  content.append(meta, bubble, replyBtn);
+  
+  actionsRow.append(reactBtn, replyBtn);
+  content.append(meta, bubble, actionsRow);
   group.append(avatar, content);
+  group.dataset.msgId = msg.id;
   dom.msgsContainer.appendChild(group);
   scrollToBottom();
 }
@@ -177,6 +224,225 @@ export async function sendMessage() {
       username: state.currentUser.name,
       content:  fullContent,
       room_id:  state.activeRoom,
+      reactions: {},
     }).then(({ error }) => { if (error) console.warn('[NVC] msg insert:', error); });
   }
+}
+
+/* ── Reactions ── */
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+let reactionPickerEl = null;
+
+function openReactionPicker(e, msgId) {
+  e.stopPropagation();
+  if (reactionPickerEl) reactionPickerEl.remove();
+  
+  const picker = document.createElement('div');
+  picker.className = 'reaction-picker';
+  QUICK_REACTIONS.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.className = 'reaction-picker-btn';
+    btn.textContent = emoji;
+    btn.addEventListener('click', () => {
+      toggleReaction(msgId, emoji);
+      picker.remove();
+      reactionPickerEl = null;
+    });
+    picker.appendChild(btn);
+  });
+  
+  const rect = e.target.getBoundingClientRect();
+  picker.style.left = `${rect.left}px`;
+  picker.style.top = `${rect.bottom + 4}px`;
+  document.body.appendChild(picker);
+  reactionPickerEl = picker;
+  
+  setTimeout(() => {
+    const clickOutside = (ev) => {
+      if (!picker.contains(ev.target)) {
+        picker.remove();
+        reactionPickerEl = null;
+        document.removeEventListener('click', clickOutside);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', clickOutside), 10);
+  }, 10);
+}
+
+async function toggleReaction(msgId, emoji) {
+  if (!_supabaseReady?.() || !msgId) return;
+  
+  /* Find message in all rooms */
+  let msg = null, roomId = null;
+  for (const rid in state.rooms) {
+    msg = state.rooms[rid].messages.find(m => m.id === msgId);
+    if (msg) { roomId = rid; break; }
+  }
+  if (!msg) return;
+  
+  const myId = String(state.currentUser?.id);
+  const reactions = msg.reactions || {};
+  const userIds = reactions[emoji] || [];
+  const idx = userIds.indexOf(myId);
+  
+  if (idx >= 0) {
+    userIds.splice(idx, 1);
+    if (userIds.length === 0) delete reactions[emoji];
+  } else {
+    userIds.push(myId);
+  }
+  msg.reactions = reactions;
+  
+  /* Update DB */
+  await state.supa.from('messages')
+    .update({ reactions })
+    .eq('id', msgId);
+  
+  /* Re-render this message */
+  const group = dom.msgsContainer.querySelector(`[data-msg-id="${msgId}"]`);
+  if (group && roomId === state.activeRoom) {
+    group.remove();
+    renderMessage(msg);
+  }
+  
+  /* Broadcast reaction change */
+  if (_broadcast) _broadcast('reaction-update', null, { msgId, emoji, userId: myId, added: idx < 0 });
+}
+
+export function handleReactionUpdate(payload) {
+  if (!payload.msgId) return;
+  const myId = String(state.currentUser?.id);
+  if (payload.userId === myId) return; /* already handled locally */
+  
+  /* Find message */
+  let msg = null, roomId = null;
+  for (const rid in state.rooms) {
+    msg = state.rooms[rid].messages.find(m => m.id === payload.msgId);
+    if (msg) { roomId = rid; break; }
+  }
+  if (!msg) return;
+  
+  const reactions = msg.reactions || {};
+  const userIds = reactions[payload.emoji] || [];
+  const idx = userIds.indexOf(payload.userId);
+  
+  if (payload.added) {
+    if (idx < 0) userIds.push(payload.userId);
+  } else {
+    if (idx >= 0) userIds.splice(idx, 1);
+    if (userIds.length === 0) delete reactions[payload.emoji];
+  }
+  msg.reactions = reactions;
+  
+  /* Re-render if in active room */
+  if (roomId === state.activeRoom) {
+    const group = dom.msgsContainer.querySelector(`[data-msg-id="${payload.msgId}"]`);
+    if (group) {
+      group.remove();
+      renderMessage(msg);
+    }
+  }
+}
+
+/* ── Search ── */
+let searchQuery = '';
+let searchResults = [];
+
+export function initSearch() {
+  if (!dom.headerSearchBtn || !dom.searchBar || !dom.searchInput) return;
+  
+  dom.headerSearchBtn.addEventListener('click', () => {
+    dom.searchBar.hidden = false;
+    dom.searchInput.focus();
+  });
+  
+  dom.searchCloseBtn?.addEventListener('click', () => {
+    dom.searchBar.hidden = true;
+    searchQuery = '';
+    searchResults = [];
+    clearSearchHighlight();
+  });
+  
+  dom.searchInput.addEventListener('input', (e) => {
+    searchQuery = e.target.value.trim().toLowerCase();
+    if (searchQuery.length < 2) {
+      clearSearchHighlight();
+      return;
+    }
+    performSearch();
+  });
+  
+  /* Ctrl+K shortcut */
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !e.target.matches('input, textarea')) {
+      e.preventDefault();
+      dom.searchBar.hidden = false;
+      dom.searchInput.focus();
+    }
+    if (e.key === 'Escape' && !dom.searchBar.hidden) {
+      dom.searchBar.hidden = true;
+      clearSearchHighlight();
+    }
+  });
+}
+
+function performSearch() {
+  const room = state.rooms[state.activeRoom];
+  if (!room) return;
+  
+  searchResults = room.messages.filter(msg => {
+    const text = (() => {
+      const div = document.createElement('div');
+      div.innerHTML = msg.html;
+      return div.textContent || '';
+    })().toLowerCase();
+    const username = (msg.username || '').toLowerCase();
+    return text.includes(searchQuery) || username.includes(searchQuery);
+  });
+  
+  highlightSearchResults();
+  scrollToFirstResult();
+}
+
+function highlightSearchResults() {
+  clearSearchHighlight();
+  if (searchResults.length === 0) return;
+  
+  const groups = Array.from(dom.msgsContainer.querySelectorAll('.msg-group'));
+  groups.forEach(group => {
+    const msgId = group.dataset.msgId;
+    if (!msgId) return;
+    const found = searchResults.find(m => m.id === msgId);
+    if (found) {
+      group.classList.add('search-match');
+      const textEl = group.querySelector('.msg-text');
+      if (textEl && searchQuery) {
+        const html = textEl.innerHTML;
+        const regex = new RegExp(`(${escapeRegex(searchQuery)})`, 'gi');
+        textEl.innerHTML = html.replace(regex, '<mark class="search-highlight">$1</mark>');
+      }
+    }
+  });
+}
+
+function clearSearchHighlight() {
+  dom.msgsContainer.querySelectorAll('.msg-group').forEach(g => {
+    g.classList.remove('search-match');
+    const textEl = g.querySelector('.msg-text');
+    if (textEl) {
+      const html = textEl.innerHTML;
+      textEl.innerHTML = html.replace(/<mark class="search-highlight">(.*?)<\/mark>/gi, '$1');
+    }
+  });
+}
+
+function scrollToFirstResult() {
+  const first = dom.msgsContainer.querySelector('.search-match');
+  if (first) {
+    first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

@@ -12,11 +12,15 @@ CREATE TABLE IF NOT EXISTS public.messages (
   username    TEXT        NOT NULL,
   content     TEXT        NOT NULL,
   room_id     TEXT        NOT NULL DEFAULT 'general',
+  reactions   JSONB       DEFAULT '{}'::jsonb,  -- { "emoji": [userId1, userId2, ...] }
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Add room_id column to existing tables (safe to run on already-created tables)
 ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS room_id TEXT NOT NULL DEFAULT 'general';
+
+-- Add reactions column to existing tables (safe to run on already-created tables)
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb;
 
 -- Row Level Security
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;

@@ -10,7 +10,7 @@ import { tryRestoreSession, applyAuthIdentity, getOrCreateGuestIdentity,
          initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
 import { renderUsers, setOpenContextMenu } from './users.js';
-import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps } from './chat.js';
+import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate } from './chat.js';
 import { setPChatDeps } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
@@ -23,7 +23,7 @@ setRenderMessage(renderMessage);       /* rooms.js → chat renderer */
 setLoadRoomMessages(connectRoom);      /* rooms.js → supabase room loader */
 
 const supabaseReady = () => !!state.supa;
-setChatDeps(openContextMenu, uploadToStorage, supabaseReady);
+setChatDeps(openContextMenu, uploadToStorage, supabaseReady, renderRoomTabs, broadcast);
 setPChatDeps(supabaseReady);
 setUIDeps(uploadToStorage, supabaseReady);
 
@@ -34,6 +34,7 @@ async function init() {
   initContextMenu(); initCameraSystem(); initCallControls();
   initMobilePanel(); initPanelResize();
   initAuthModal(); initProfileModal(); initSettingsModal();
+  initSearch();
 
   /* 2. Create Supabase client (needed for auth) */
   initSupabaseClient();

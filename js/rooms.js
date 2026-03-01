@@ -14,7 +14,7 @@ export function setLoadRoomMessages(fn) { _loadRoomMessages = fn; }
 /* ── Create a room state entry ── */
 function mkRoom(id) {
   const cfg = AVAILABLE_ROOMS.find(r => r.id === id) || { id, name: id, icon: '💬' };
-  return { id, name: cfg.name, icon: cfg.icon, messages: [], presenceCh: null, dbSub: null, users: {} };
+  return { id, name: cfg.name, icon: cfg.icon, messages: [], presenceCh: null, dbSub: null, users: {}, unreadCount: 0 };
 }
 
 /* ── Join a room (subscribe presence + DB, load messages) ── */
@@ -92,6 +92,8 @@ export function leaveRoom(roomId) {
 export function switchRoom(roomId) {
   if (!state.rooms[roomId]) return;
   state.activeRoom = roomId;
+  /* Reset unread count when switching to this room */
+  state.rooms[roomId].unreadCount = 0;
   renderRoomTabs();
   renderActiveRoomMessages();
   renderUsers();
@@ -123,6 +125,14 @@ export function renderRoomTabs() {
     label.className = 'room-tab-label';
     label.textContent = `${room.icon} ${room.name}`;
     tab.appendChild(label);
+
+    /* Unread badge */
+    if (room.unreadCount > 0 && room.id !== state.activeRoom) {
+      const badge = document.createElement('span');
+      badge.className = 'room-tab-badge';
+      badge.textContent = room.unreadCount > 99 ? '99+' : String(room.unreadCount);
+      tab.appendChild(badge);
+    }
 
     if (room.id !== 'general') {
       const x = document.createElement('button');

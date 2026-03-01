@@ -6,7 +6,7 @@ import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast, playNotificationSound } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js';
-import { addMessage, extractQuote, renderMessage } from './chat.js';
+import { addMessage, extractQuote, renderMessage, handleReactionUpdate } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
          closeCameraWindow, endCall } from './camera.js';
@@ -29,7 +29,7 @@ export async function connectRoom(roomId) {
 
   /* ── 1. Load last 60 messages for this room ── */
   const { data: msgs, error: msgErr } = await state.supa
-    .from('messages').select('*')
+    .from('messages').select('id, user_id, username, content, room_id, reactions, created_at')
     .eq('room_id', roomId)
     .order('created_at', { ascending: true }).limit(60);
 
@@ -41,7 +41,7 @@ export async function connectRoom(roomId) {
       if (!isMine) ensureUser(m.user_id, m.username);
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
       addMessage(
-        { userId: isMine ? 'me' : m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime() },
+        { userId: isMine ? 'me' : m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id },
         roomId
       );
     });
@@ -60,7 +60,7 @@ export async function connectRoom(roomId) {
       if (state.ignoredUsers[String(m.user_id)]) return;
       ensureUser(m.user_id, m.username);
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
-      addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime() }, roomId);
+      addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);
       if (roomId === state.activeRoom) playNotificationSound();
     })
     .subscribe();
@@ -118,6 +118,7 @@ export async function connectSupabase() {
         if (String(payload.to) !== String(state.currentUser?.id)) return;
         if (!dom.vcallWin.hidden) { endCall(false); showToast(`📵 ${payload.fromName} ended the call.`); }
       })
+      .on('broadcast', { event: 'reaction-update' }, ({ payload }) => handleReactionUpdate(payload))
       .subscribe();
 
     showToast('🟢 Connected to NeverVideoChat');

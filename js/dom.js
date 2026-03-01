@@ -14,11 +14,17 @@ export const dom = {
   headerAvatarChip:   $('headerAvatarChip'),
   headerProfileBtn:   $('headerProfileBtn'),
   headerSettingsBtn:  $('headerSettingsBtn'),
+  headerSearchBtn:    $('headerSearchBtn'),
 
   /* Room tabs */
   roomTabsBar:   $('roomTabsBar'),
   roomPickerBtn: $('roomPickerBtn'),
   roomPickerPanel: $('roomPickerPanel'),
+
+  /* Search */
+  searchBar:     $('searchBar'),
+  searchInput:   $('searchInput'),
+  searchCloseBtn: $('searchCloseBtn'),
 
   /* Chat */
   msgsContainer:  $('msgsContainer'),
