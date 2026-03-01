@@ -1648,18 +1648,18 @@ function openContextMenu(uid, anchor) {
   const pendingReq   = !!state.pendingCamRequests[String(uid)];
   const isOffline    = user.online !== true;
   /* Only block on states we actually know about — the receiver manages their own block list */
-  const camBlocked   = alreadyView || pendingReq || isOffline;
+  /* Ignore button label + style — evaluate BEFORE camBlocked so we can use isIgnored */
+  const isIgnored    = !!state.ignoredUsers[String(uid)];
+  const camBlocked   = alreadyView || pendingReq || isOffline || isIgnored;
   dom.ctxCamBtn.disabled      = camBlocked;
   dom.ctxCamBtn.style.opacity = camBlocked ? '0.35' : '1';
 
   const reason = alreadyView ? 'Already viewing their camera'
                : pendingReq  ? 'Request already sent — waiting for reply'
+               : isIgnored   ? 'User is ignored — unignore to interact'
                : isOffline   ? 'User is offline'
                : '';
   dom.ctxCamBtn.title = reason || (user.hasCamera ? 'Request Camera' : 'Request Camera (cam may not be active)');
-
-  /* Ignore button label + style */
-  const isIgnored = !!state.ignoredUsers[String(uid)];
   if (dom.ctxIgnoreBtn) {
     dom.ctxIgnoreBtn.classList.toggle('is-ignored', isIgnored);
     if (dom.ctxIgnoreLabel) dom.ctxIgnoreLabel.textContent = isIgnored ? 'Unignore User' : 'Ignore User';
@@ -1827,13 +1827,18 @@ function refreshViewersPanel(ownUid) {
 }
 
 function revokeViewer(viewerUid) {
-  const uid = String(viewerUid);
+  const uid  = String(viewerUid);
+  const name = state.camViewers[uid] || findUser(uid)?.name || 'User';
+
   if (state.outgoingPCs[uid]) {
     try { state.outgoingPCs[uid].close(); } catch {}
     delete state.outgoingPCs[uid];
   }
   delete state.camViewers[uid];
   broadcast('cam-revoked', uid, {});
+
+  /* Treat kick like a cam-decline: block future requests from this user */
+  addRejectedCam(uid, name);
 }
 
 function closeCameraWindow(uid) {
@@ -2040,10 +2045,10 @@ function handleCamRequest(payload) {
   const fromId   = String(payload.from);
   const fromName = payload.fromName || 'User';
 
-  /* ── Auto-reject if this sender was previously blocked by me ── */
-  if (state.rejectedCamUsers[fromId]) {
+  /* ── Auto-reject if sender is blocked (rejected) or ignored ── */
+  if (state.rejectedCamUsers[fromId] || state.ignoredUsers[fromId]) {
     broadcast('cam-rejected', fromId, { reqType: payload.reqType || 'public' });
-    return; /* silent — don't show dialog, don't show toast */
+    return; /* silent — no dialog, no toast */
   }
 
   if (payload.reqType === 'public') {
