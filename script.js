@@ -329,6 +329,7 @@ function ensureUser(id, name, extra = {}) {
   let u = state.users.find(u => u.id === id);
   if (!u) { u = { id, name, isGuest: true, online: false, hasCamera: false, avatarUrl: null }; state.users.push(u); }
   if (name)                  u.name      = name;
+  if ('username'  in extra)  u.username  = extra.username  || null;
   if ('isGuest'   in extra)  u.isGuest   = extra.isGuest;
   if ('online'    in extra)  u.online    = extra.online;
   if ('hasCamera' in extra)  u.hasCamera = extra.hasCamera;
@@ -994,6 +995,9 @@ function renderUsers() {
     const li = document.createElement('div');
     li.className = 'user-item'; li.setAttribute('role','listitem'); li.dataset.userId = user.id;
 
+    /* Prefer display name (username) over raw nick (name) */
+    const displayName = user.username || user.name;
+
     const av = document.createElement('div');
     av.className = 'user-item-avatar';
     if (user.avatarUrl) {
@@ -1001,9 +1005,10 @@ function renderUsers() {
       av.style.backgroundImage    = `url(${user.avatarUrl})`;
       av.style.backgroundSize     = 'cover';
       av.style.backgroundPosition = 'center';
+      av.style.backgroundColor    = 'transparent';
     } else {
-      av.style.background = avatarColor(user.name);
-      av.textContent = initials(user.name);
+      av.style.backgroundColor = avatarColor(displayName);
+      av.textContent = initials(displayName);
     }
     const dot = document.createElement('span');
     dot.className = `status-dot${user.online ? '' : ' offline'}`;
@@ -1012,7 +1017,7 @@ function renderUsers() {
     const info = document.createElement('div'); info.className = 'user-item-info';
     const nameEl = document.createElement('div');
     nameEl.className = `user-item-name${user.online ? '' : ' offline'}`;
-    nameEl.textContent = user.name;
+    nameEl.textContent = displayName;
     const sub = document.createElement('div');
     sub.className = 'user-item-sub'; sub.textContent = user.online ? 'Online' : 'Offline';
     info.append(nameEl, sub);
@@ -1023,7 +1028,14 @@ function renderUsers() {
       ci.className = 'user-cam-icon'; ci.textContent = '📹'; ci.title = 'Camera on';
       li.appendChild(ci);
     }
-    if (user.isGuest) { const gt = document.createElement('span'); gt.className = 'guest-tag'; gt.textContent = 'Guest'; li.appendChild(gt); }
+    /* Registered badge (✓) — shown for non-guest users */
+    if (!user.isGuest) {
+      const rb = document.createElement('span');
+      rb.className = 'registered-tag'; rb.textContent = '✓'; rb.title = 'Registered user';
+      li.appendChild(rb);
+    } else {
+      const gt = document.createElement('span'); gt.className = 'guest-tag'; gt.textContent = 'Guest'; li.appendChild(gt);
+    }
     if (user.id === state.currentUser?.id) { const yt = document.createElement('span'); yt.className = 'you-tag'; yt.textContent = 'You'; li.appendChild(yt); }
 
     if (user.id !== state.currentUser?.id) {
@@ -2113,6 +2125,7 @@ async function updateOwnPresence() {
   await state.presenceCh.track({
     id:        state.currentUser.id,
     name:      state.currentUser.name,
+    username:  state.currentUser.username || state.currentUser.name,
     isGuest:   state.currentUser.isGuest,
     hasCamera: state.currentUser.hasCamera,
     online:    true,
@@ -2129,7 +2142,7 @@ function syncPresence(presenceState) {
   Object.entries(presenceState).forEach(([uid, presences]) => {
     if (String(uid) === myId) return;
     const info = presences[0];
-    ensureUser(String(uid), info.name, { isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
+    ensureUser(String(uid), info.name, { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
   });
   /* Mark everyone NOT in the current presence state as offline */
   state.users.forEach(u => { u.online = onlineIds.has(String(u.id)); });
@@ -2234,7 +2247,7 @@ async function connectSupabase() {
 
         const info      = newPresences[0];
         const wasOnline = !!state.users.find(u => String(u.id) === uid)?.online;
-        ensureUser(uid, info.name, { isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
+        ensureUser(uid, info.name, { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
         renderUsers(); /* immediately reflect camera-icon change      */
         if (!wasOnline) showToast(`👤 ${info.name} joined the chat`);
       })
