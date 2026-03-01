@@ -95,6 +95,17 @@ export function switchRoom(roomId) {
   renderRoomTabs();
   renderActiveRoomMessages();
   renderUsers();
+  /* Update camera button to reflect whether cam is active in this room */
+  _updateCamBtn();
+}
+
+function _updateCamBtn() {
+  const btn   = document.getElementById('cameraBtnHeader');
+  const label = document.getElementById('cameraBtnLabel');
+  if (!btn || !label) return;
+  const camHere = state.cameraRoom === state.activeRoom;
+  label.textContent = camHere ? 'Camera On' : 'Camera Off';
+  btn.classList.toggle('camera-on', camHere);
 }
 
 /* ── Render the tab bar ── */

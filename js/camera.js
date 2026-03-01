@@ -6,7 +6,7 @@ import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
 import { broadcast, broadcastAll } from './broadcast.js';
-import { findUser, ensureUser, renderUsers, updateOwnPresence } from './users.js';
+import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences } from './users.js';
 import { addRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints } from './storage.js';
 
 const CAM_STEP = 30;
@@ -141,20 +141,23 @@ export function revokeViewer(viewerUid) {
   addRejectedCam(uid, name);  /* kick = block future requests */
 }
 
-export function closeCameraWindow(uid) {
+export async function closeCameraWindow(uid) {
   const cw = state.cameraWindows[uid]; if (!cw) return;
   stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];
   const isOwn = uid === state.currentUser?.id || uid === 'me';
   if (isOwn) {
+    const closedRoom = state.cameraRoom;
     state.localStream?.getTracks().forEach(t => t.stop());
     state.localStream = null;
     state.cameraClosedAt = Date.now();
+    state.cameraRoom = null;
     Object.keys(state.outgoingPCs).forEach(peerId => {
       state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
     });
     state.currentUser.hasCamera = false;
     dom.cameraBtnLabel.textContent = 'Camera Off'; dom.cameraBtnHeader.classList.remove('camera-on');
-    broadcastAll('cam-closed', {}); updateOwnPresence(); renderUsers(); showToast('📹 Camera disabled.');
+    broadcastAll('cam-closed', { room_id: closedRoom });
+    await updateAllRoomPresences(); renderUsers(); showToast('📹 Camera disabled.');
   } else {
     if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
   }
@@ -162,13 +165,20 @@ export function closeCameraWindow(uid) {
 
 export function handleCamClosed(payload) {
   if (payload.from === state.currentUser?.id) return;
-  const uid = payload.from;
-  const cw  = state.cameraWindows[uid];
+  const uid      = payload.from;
+  const inMyRoom = !payload.room_id || payload.room_id === state.activeRoom;
+
+  /* Close the local window if it's open */
+  const cw = state.cameraWindows[uid];
   if (cw) { stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid]; }
   if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
-  const u = state.users.find(u => u.id === uid);
-  if (u) { u.hasCamera = false; renderUsers(); }
-  showToast(`📹 ${payload.fromName} turned off their camera`);
+
+  /* Only clear the cam icon if the camera was in our room */
+  if (inMyRoom) {
+    const u = state.users.find(u => u.id === uid);
+    if (u) { u.hasCamera = false; renderUsers(); }
+    showToast(`📹 ${payload.fromName} turned off their camera`);
+  }
 }
 
 function toggleCamMic(uid) {
@@ -194,9 +204,11 @@ export async function startOwnCamera() {
     if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
     state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
     state.currentUser.hasCamera = true;
+    state.cameraRoom = state.activeRoom;    /* camera is active in THIS room */
     dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
     createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
-    broadcastAll('cam-opened', {}); updateOwnPresence(); renderUsers(); showToast('📹 Camera enabled.');
+    broadcastAll('cam-opened', { room_id: state.cameraRoom });
+    await updateAllRoomPresences(); renderUsers(); showToast('📹 Camera enabled.');
   } catch (err) {
     state.localStream = null;
     showToast(err.name === 'NotAllowedError' ? '🚫 Camera/mic access denied.' : `⚠️ Camera error: ${err.message}`);
@@ -250,7 +262,7 @@ export function requestPublicCamera(targetUid) {
   if (state.cameraWindows[uid]) { showToast(`📹 Already viewing ${target.name}'s camera.`); return; }
   if (state.pendingCamRequests[uid]) { showToast(`⏳ Already waiting for ${target.name}'s reply.`); return; }
   setPendingCamRequest(uid, 'public', target.name);
-  broadcast('cam-req', uid, { reqType: 'public' });
+  broadcast('cam-req', uid, { reqType: 'public', room_id: state.activeRoom });
   showToast(`📹 Camera request sent to ${target.name}…`);
 }
 
@@ -263,6 +275,12 @@ export function handleCamRequest(payload) {
   /* Auto-reject if blocked or ignored */
   if (state.rejectedCamUsers[fromId] || state.ignoredUsers[fromId]) {
     broadcast('cam-rejected', fromId, { reqType: payload.reqType || 'public' });
+    return;
+  }
+
+  /* Auto-reject if the request is for a different room than the active one */
+  if (payload.room_id && payload.room_id !== state.activeRoom) {
+    broadcast('cam-rejected', fromId, { reqType: payload.reqType || 'public', reason: 'wrong-room' });
     return;
   }
 
@@ -303,9 +321,11 @@ export async function sharePublicCameraTo(toUid) {
       if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
       state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
       state.currentUser.hasCamera = true;
+      state.cameraRoom = state.activeRoom;
       dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
       createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
-      broadcastAll('cam-opened', {}); updateOwnPresence();
+      broadcastAll('cam-opened', { room_id: state.cameraRoom });
+      await updateAllRoomPresences();
     }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.outgoingPCs[toUid] = pc;
@@ -450,10 +470,12 @@ export function endCall(notify = true) {
   dom.remotePlaceholder.style.display = '';
   if (state.streamOpenedForCall && state.localStream) {
     if (!state.cameraWindows[state.currentUser.id]) {
+      const closedRoom = state.cameraRoom;
       state.localStream.getTracks().forEach(t => t.stop());
-      state.localStream = null; state.currentUser.hasCamera = false;
+      state.localStream = null; state.currentUser.hasCamera = false; state.cameraRoom = null;
       dom.cameraBtnLabel.textContent = 'Camera Off'; dom.cameraBtnHeader.classList.remove('camera-on');
-      broadcastAll('cam-closed', {}); updateOwnPresence(); renderUsers();
+      broadcastAll('cam-closed', { room_id: closedRoom });
+      updateAllRoomPresences(); renderUsers();
     }
     state.streamOpenedForCall = false;
   }

@@ -24,6 +24,7 @@ export const state = {
   micAnalysers:     {},
   localStream:      null,
   cameraClosedAt:   0,
+  cameraRoom:       null,   /* room where the camera is currently active */
 
   /* WebRTC */
   outgoingPCs:         {},

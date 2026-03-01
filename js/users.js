@@ -103,15 +103,29 @@ export function renderUsers() {
 export async function updateOwnPresence(presenceCh) {
   const ch = presenceCh || (state.rooms[state.activeRoom]?.presenceCh);
   if (!ch) return;
+
+  /* Determine which room this channel belongs to */
+  let roomId = state.activeRoom;
+  for (const [rId, room] of Object.entries(state.rooms)) {
+    if (room.presenceCh === ch) { roomId = rId; break; }
+  }
+
   await ch.track({
     id:        state.currentUser.id,
     name:      state.currentUser.name,
     username:  state.currentUser.username || state.currentUser.name,
     isGuest:   state.currentUser.isGuest,
-    hasCamera: state.currentUser.hasCamera,
+    hasCamera: state.cameraRoom === roomId,   /* true only in the room where cam is active */
     online:    true,
     avatarUrl: state.currentUser.avatarUrl || null,
   });
+}
+
+/* ── Update presence in ALL joined rooms (used after cam toggle) ── */
+export async function updateAllRoomPresences() {
+  for (const room of Object.values(state.rooms)) {
+    if (room.presenceCh) await updateOwnPresence(room.presenceCh);
+  }
 }
 
 /* ── Sync presence state for a room ── */
