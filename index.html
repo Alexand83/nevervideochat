@@ -19,13 +19,9 @@
     <!-- Empty spacer so logo is truly centered with CSS grid -->
     <div class="header-spacer" aria-hidden="true"></div>
 
-    <!-- Logo with SVG fallback -->
+    <!-- Logo SVG inline — no external dependency -->
     <div class="logo-wrap" id="logoWrap">
-      <img id="headerLogo"
-           src="https://rask-arch.github.io/raskvideochat/logo.png"
-           alt="NeverVideoChat logo"
-           class="logo-img">
-      <div id="logoFallback" class="logo-fallback" hidden>
+      <div id="logoFallback" class="logo-fallback">
         <svg class="logo-icon-svg" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect width="44" height="44" rx="10" fill="#1f6feb"/>
           <path d="M8 15a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H10a2 2 0 01-2-2V15z" fill="white"/>

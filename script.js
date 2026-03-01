@@ -209,7 +209,7 @@ const state = {
 const $ = id => document.getElementById(id);
 
 const dom = {
-  headerLogo: $('headerLogo'), logoFallback: $('logoFallback'),
+  logoFallback: $('logoFallback'),
   cameraBtnHeader: $('cameraBtnHeader'), cameraBtnLabel: $('cameraBtnLabel'),
   mobileUsersToggle: $('mobileUsersToggle'), onlineBadge: $('onlineBadge'),
 
@@ -311,20 +311,8 @@ function getOrCreateIdentity() {
 }
 
 /* ================================================================
-   6. LOGO FALLBACK
+   6. LOGO — inline SVG, nothing to load
 ================================================================ */
-(function initLogo() {
-  const img = dom.headerLogo;
-  const fallbacks = [
-    'https://rask-arch.github.io/raskvideochat/logo.svg',
-    'https://rask-arch.github.io/raskvideochat/assets/logo.png',
-  ];
-  let a = 0;
-  img.addEventListener('error', () => {
-    if (a < fallbacks.length) { img.src = fallbacks[a++]; }
-    else { img.hidden = true; dom.logoFallback.hidden = false; }
-  });
-})();
 
 /* ================================================================
    7. SOUND NOTIFICATION
