@@ -300,7 +300,9 @@ const dom = {
   detectDevicesBtn: $('detectDevicesBtn'), detectDevicesHint: $('detectDevicesHint'),
   settingsSaveBtn: $('settingsSaveBtn'),
 
-  /* Rejected cam list */
+  /* Pending / rejected cam lists */
+  pendingCamsSection:  $('pendingCamsSection'),
+  pendingCamsList:     $('pendingCamsList'),
   rejectedCamsSection: $('rejectedCamsSection'),
   rejectedCamsList:    $('rejectedCamsList'),
 };
@@ -348,6 +350,27 @@ function ensureUser(id, name, extra = {}) {
   return u;
 }
 function supabaseReady() { return !!state.supa; }
+
+/* ── Pending cam-request helpers (auto-expire after 60s) ─────────── */
+const _pendingTimers = {};   // { [uid]: timeoutId }
+
+function setPendingCamRequest(uid, type, name) {
+  clearPendingCamRequest(uid);   // cancel any previous timer
+  state.pendingCamRequests[uid] = type;
+  /* Auto-expire: if no reply in 60s, clear the pending state */
+  _pendingTimers[uid] = setTimeout(() => {
+    if (state.pendingCamRequests[uid]) {
+      delete state.pendingCamRequests[uid];
+      delete _pendingTimers[uid];
+      showToast(`⌛ No reply from ${name} — camera request expired.`);
+    }
+  }, 60_000);
+}
+
+function clearPendingCamRequest(uid) {
+  delete state.pendingCamRequests[uid];
+  if (_pendingTimers[uid]) { clearTimeout(_pendingTimers[uid]); delete _pendingTimers[uid]; }
+}
 
 /* ── Rejected-cam list helpers ────────────────────────────────────── */
 function loadRejectedCams() {
@@ -777,8 +800,52 @@ function openSettingsModal() {
   dom.cameraDeviceSelect.value = s.cameraId || '';
   dom.micDeviceSelect.value    = s.micId    || '';
   dom.detectDevicesHint.textContent = 'Click "Detect Devices" to list your cameras and microphones.\nBrowser permission for camera/mic is required.';
+  renderPendingCams();
   renderRejectedCams();
   dom.settingsModal.hidden = false;
+}
+
+/** Render the pending cam requests list (waiting for reply) inside Settings modal */
+function renderPendingCams() {
+  const list = dom.pendingCamsList;
+  if (!list) return;
+  list.innerHTML = '';
+
+  const entries = Object.entries(state.pendingCamRequests);
+
+  if (entries.length === 0) {
+    const empty = document.createElement('p');
+    empty.className   = 'rejected-cams-empty';
+    empty.textContent = 'No pending requests.';
+    list.appendChild(empty);
+    return;
+  }
+
+  entries.forEach(([uid, type]) => {
+    const user = findUser(uid);
+    const name = user?.username || user?.name || uid;
+    const item = document.createElement('div');
+    item.className = 'rejected-cam-item';
+
+    const nameEl = document.createElement('span');
+    nameEl.className   = 'rejected-cam-name';
+    nameEl.textContent = `${name} (${type})`;
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className   = 'rejected-cam-remove-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.background = 'rgba(218,54,51,.18)';
+    cancelBtn.style.color      = 'var(--clr-danger-h)';
+    cancelBtn.style.borderColor= 'var(--clr-danger)';
+    cancelBtn.addEventListener('click', () => {
+      clearPendingCamRequest(uid);
+      renderPendingCams();
+      showToast(`✅ Request to ${name} cancelled.`);
+    });
+
+    item.append(nameEl, cancelBtn);
+    list.appendChild(item);
+  });
 }
 
 /** Render the rejected-cam list inside Settings modal.
@@ -1384,7 +1451,7 @@ function openPrivateChat(uid) {
     if (state.pendingCamRequests[String(uid)]) {
       showToast(`⏳ Already waiting for ${user.name}'s reply.`); return;
     }
-    state.pendingCamRequests[String(uid)] = 'private';
+    setPendingCamRequest(String(uid), 'private', user.name);
     broadcast('cam-req', uid, { reqType: 'private' });
     showToast(`📹 Video call request sent to ${user.name}…`);
   });
@@ -1792,7 +1859,7 @@ function requestPublicCamera(targetUid) {
   if (state.pendingCamRequests[uid]) {
     showToast(`⏳ Already waiting for ${target.name}'s reply.`); return;
   }
-  state.pendingCamRequests[uid] = 'public';
+  setPendingCamRequest(uid, 'public', target.name);
   broadcast('cam-req', uid, { reqType: 'public' });
   showToast(`📹 Camera request sent to ${target.name}…`);
 }
@@ -1864,7 +1931,7 @@ async function acceptPrivateCall(fromUid, fromName) {
 function handleCamAccepted(payload) {
   if (payload.to !== state.currentUser?.id) return;
   /* Clear pending request — accepted */
-  delete state.pendingCamRequests[String(payload.from)];
+  clearPendingCamRequest(String(payload.from));
   if (payload.reqType === 'private') {
     /* We are A (the caller) — B accepted → open our side of vcall and send WebRTC offer */
     startPrivateCall(payload.from);
@@ -1984,7 +2051,7 @@ async function handleWebRTCSignal(payload) {
 function openRemoteCamWindow(uid, stream) {
   const user = findUser(uid);
   /* Clear any pending request now that the stream is actually arriving */
-  delete state.pendingCamRequests[String(uid)];
+  clearPendingCamRequest(String(uid));
   createCameraWindow(uid, stream, user?.name || uid, false);
 }
 
@@ -2358,7 +2425,7 @@ async function connectSupabase() {
           showToast(`👋 ${name} left`);
 
           /* Clear any pending cam/call request towards this user */
-          delete state.pendingCamRequests[uid];
+          clearPendingCamRequest(uid);
 
           if (state.cameraWindows[uid]) closeCameraWindow(uid);
           if (state.activeCallUID === uid && !dom.vcallWin.hidden) {
@@ -2382,7 +2449,7 @@ async function connectSupabase() {
       .on('broadcast', { event:'cam-rejected' }, ({ payload }) => {
         if (String(payload.to) !== String(state.currentUser?.id)) return;
         const fromId = String(payload.from);
-        delete state.pendingCamRequests[fromId];
+        clearPendingCamRequest(fromId);
 
         /* Add to permanent rejected list — user stays blocked until manually unblocked */
         addRejectedCam(fromId, payload.fromName || 'User');
