@@ -383,11 +383,12 @@ async function loginUser(nick, password) {
   const { data: profile } = await state.supa
     .from('profiles').select('*').eq('id', data.user.id).single();
 
+  const displayName = profile?.display_name || profile?.username || nick;
   return {
     userId:    data.user.id,
-    nick:      profile?.display_name || nick,
-    username:  profile?.username     || nick,
-    avatarUrl: profile?.avatar_url   || null,
+    nick:      displayName,
+    username:  profile?.username || nick,
+    avatarUrl: profile?.avatar_url || null,
   };
 }
 
@@ -408,40 +409,74 @@ function clearAuthSession() {
   localStorage.removeItem('nvc_auth_session');
 }
 
-/** Try to restore a previous registered session. Returns user object or null. */
+/** Try to restore a previous registered session. Returns user object or null.
+ *  Strategy:
+ *   1. Try to restore Supabase session from saved tokens (online).
+ *   2. If that fails, try to use cached nvc_identity from localStorage (offline/expired).
+ *   3. If nothing found, return null → guest will be created.
+ */
 async function tryRestoreSession() {
   if (!state.supa) return null;
-  try {
-    const stored = JSON.parse(localStorage.getItem('nvc_auth_session') || 'null');
-    if (!stored?.access_token) return null;
 
-    const { data, error } = await state.supa.auth.setSession({
-      access_token:  stored.access_token,
-      refresh_token: stored.refresh_token,
-    });
-    if (error || !data?.user) { clearAuthSession(); return null; }
+  /* ── Try online session restore ── */
+  const stored = JSON.parse(localStorage.getItem('nvc_auth_session') || 'null');
+  if (stored?.access_token) {
+    try {
+      const { data, error } = await state.supa.auth.setSession({
+        access_token:  stored.access_token,
+        refresh_token: stored.refresh_token,
+      });
 
-    /* Refresh tokens */
-    if (data.session) persistAuthSession(data.session);
+      if (!error && data?.user) {
+        /* Refresh tokens */
+        if (data.session) persistAuthSession(data.session);
 
-    /* Load profile */
-    const { data: profile } = await state.supa
-      .from('profiles').select('*').eq('id', data.user.id).single();
+        /* Load fresh profile */
+        const { data: profile } = await state.supa
+          .from('profiles').select('*').eq('id', data.user.id).single();
 
-    return {
-      id:        data.user.id,
-      name:      profile?.display_name || `User_${data.user.id.slice(0, 6)}`,
-      username:  profile?.username     || null,
-      avatarUrl: profile?.avatar_url   || null,
-      isGuest:   false,
-      online:    true,
-      hasCamera: false,
-    };
-  } catch (e) {
-    console.warn('[Auth] Session restore failed:', e);
-    clearAuthSession();
-    return null;
+        /* display_name takes priority; fall back to username; then cached identity */
+        const cachedId = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
+        const displayName = profile?.display_name
+                         || profile?.username
+                         || cachedId?.name
+                         || `User_${data.user.id.slice(0, 6)}`;
+
+        const user = {
+          id:        data.user.id,
+          name:      displayName,
+          username:  profile?.username || displayName,
+          avatarUrl: profile?.avatar_url || null,
+          isGuest:   false,
+          online:    true,
+          hasCamera: false,
+        };
+        /* Cache identity locally so next restore works even offline */
+        localStorage.setItem('nvc_identity', JSON.stringify(user));
+        return user;
+      }
+
+      /* Token invalid/expired — clear tokens but keep identity cache */
+      console.warn('[Auth] Token invalid, clearing tokens but keeping cached identity.');
+      clearAuthSession();
+
+    } catch (netErr) {
+      console.warn('[Auth] Network error during session restore:', netErr);
+      /* Fall through to cached identity */
+    }
   }
+
+  /* ── Fallback: use cached nvc_identity (offline / token expired) ── */
+  try {
+    const cached = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
+    if (cached?.id && cached?.name && cached.isGuest === false) {
+      console.info('[Auth] Using cached registered identity:', cached.name);
+      showToast('⚠️ Session offline — using cached profile. Re-login for full access.');
+      return { ...cached, online: true, hasCamera: false };
+    }
+  } catch (_) {}
+
+  return null; /* no session → guest will be created */
 }
 
 /* ── Auth modal initialisation ──────────────────────────────── */
@@ -653,7 +688,7 @@ function updateHeaderUser() {
 
     const nameEl = document.createElement('span');
     nameEl.className   = 'header-user-name';
-    nameEl.textContent = u.name;
+    nameEl.textContent = u.username || u.name;   /* prefer display name */
     dom.headerUser.appendChild(nameEl);
 
     const badge = document.createElement('span');
@@ -669,7 +704,7 @@ function updateHeaderUser() {
   }
 
   /* Header profile button: avatar chip */
-  setAvatarDisplay(dom.headerAvatarChip, u.name, u.avatarUrl);
+  setAvatarDisplay(dom.headerAvatarChip, u.username || u.name, u.avatarUrl);
 }
 
 /* ================================================================
