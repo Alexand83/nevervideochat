@@ -300,9 +300,7 @@ const dom = {
   detectDevicesBtn: $('detectDevicesBtn'), detectDevicesHint: $('detectDevicesHint'),
   settingsSaveBtn: $('settingsSaveBtn'),
 
-  /* Pending / rejected cam lists */
-  pendingCamsSection:  $('pendingCamsSection'),
-  pendingCamsList:     $('pendingCamsList'),
+  /* Rejected cam list */
   rejectedCamsSection: $('rejectedCamsSection'),
   rejectedCamsList:    $('rejectedCamsList'),
 };
@@ -800,54 +798,11 @@ function openSettingsModal() {
   dom.cameraDeviceSelect.value = s.cameraId || '';
   dom.micDeviceSelect.value    = s.micId    || '';
   dom.detectDevicesHint.textContent = 'Click "Detect Devices" to list your cameras and microphones.\nBrowser permission for camera/mic is required.';
-  renderPendingCams();
   renderRejectedCams();
   dom.settingsModal.hidden = false;
 }
 
 /** Render the pending cam requests list (waiting for reply) inside Settings modal */
-function renderPendingCams() {
-  const list = dom.pendingCamsList;
-  if (!list) return;
-  list.innerHTML = '';
-
-  const entries = Object.entries(state.pendingCamRequests);
-
-  if (entries.length === 0) {
-    const empty = document.createElement('p');
-    empty.className   = 'rejected-cams-empty';
-    empty.textContent = 'No pending requests.';
-    list.appendChild(empty);
-    return;
-  }
-
-  entries.forEach(([uid, type]) => {
-    const user = findUser(uid);
-    const name = user?.username || user?.name || uid;
-    const item = document.createElement('div');
-    item.className = 'rejected-cam-item';
-
-    const nameEl = document.createElement('span');
-    nameEl.className   = 'rejected-cam-name';
-    nameEl.textContent = `${name} (${type})`;
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className   = 'rejected-cam-remove-btn';
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.background = 'rgba(218,54,51,.18)';
-    cancelBtn.style.color      = 'var(--clr-danger-h)';
-    cancelBtn.style.borderColor= 'var(--clr-danger)';
-    cancelBtn.addEventListener('click', () => {
-      clearPendingCamRequest(uid);
-      renderPendingCams();
-      showToast(`✅ Request to ${name} cancelled.`);
-    });
-
-    item.append(nameEl, cancelBtn);
-    list.appendChild(item);
-  });
-}
-
 /** Render the rejected-cam list inside Settings modal.
  *  The section is ALWAYS visible; shows an empty-state hint when the list is empty. */
 function renderRejectedCams() {
