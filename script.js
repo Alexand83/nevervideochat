@@ -179,11 +179,14 @@ const state = {
   /* WebRTC
      outgoingPCs: B shares their stream to requester A  → { [toUserId]: RTCPeerConnection }
      incomingPCs: A receives stream from B              → { [fromUserId]: RTCPeerConnection }
-     privatePeer: peer for the private vcall-win        */
-  outgoingPCs:   {},
-  incomingPCs:   {},
-  privatePeer:   null,
-  activeCallUID: null,
+     privatePeer: peer for the private vcall-win
+     streamOpenedForCall: true = stream was created for this call only (stop on endCall)
+                          false = stream pre-existed (public cam was already on → keep it) */
+  outgoingPCs:          {},
+  incomingPCs:          {},
+  privatePeer:          null,
+  activeCallUID:        null,
+  streamOpenedForCall:  false,
 
   /* Typing debounce */
   typingTimer: null,
@@ -1088,6 +1091,9 @@ async function acceptPrivateCall(fromUid, fromName) {
   try {
     if (!state.localStream) {
       state.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      state.streamOpenedForCall = true;
+    } else {
+      state.streamOpenedForCall = false;
     }
     const user = findUser(fromUid) || { name: fromName, isGuest: true };
     dom.localVideoEl.srcObject  = state.localStream;
@@ -1227,6 +1233,9 @@ async function startPrivateCall(targetUid) {
   try {
     if (!state.localStream) {
       state.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      state.streamOpenedForCall = true;   // opened just for this call → stop on endCall
+    } else {
+      state.streamOpenedForCall = false;  // pre-existing public cam → keep it after call
     }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.privatePeer = pc; state.activeCallUID = targetUid;
@@ -1268,10 +1277,47 @@ function initCallControls() {
   });
   makeDraggable(dom.vcallWin, dom.vcallDragHandle);
 }
-function endCall() {
-  state.privatePeer?.close(); state.privatePeer = null;
-  dom.vcallWin.hidden = true; dom.remoteVideoEl.srcObject = null;
-  state.activeCallUID = null; showToast('📵 Call ended.');
+/**
+ * End the private video call.
+ * @param {boolean} notify - true = send "call-ended" broadcast to the other party
+ *                           false = call came from the other party's signal (no loop)
+ */
+function endCall(notify = true) {
+  /* Notify the other party so their window closes too */
+  if (notify && state.activeCallUID) {
+    broadcast('call-ended', state.activeCallUID, {});
+  }
+
+  /* Close the WebRTC peer */
+  state.privatePeer?.close();
+  state.privatePeer = null;
+
+  /* Hide the vcall window and clear its video elements */
+  dom.vcallWin.hidden = true;
+  dom.remoteVideoEl.srcObject = null;
+  dom.localVideoEl.srcObject  = null;
+  dom.remotePlaceholder.style.display = '';
+
+  /* If the local stream was opened ONLY for this call (camera wasn't on before),
+     stop all tracks and update UI.  If the public camera was already on, leave it. */
+  if (state.streamOpenedForCall && state.localStream) {
+    const hasPubCamWin = !!state.cameraWindows[state.currentUser.id];
+    if (!hasPubCamWin) {
+      /* No public camera window → kill the stream entirely */
+      state.localStream.getTracks().forEach(t => t.stop());
+      state.localStream = null;
+      state.currentUser.hasCamera = false;
+      dom.cameraBtnLabel.textContent = 'Camera Off';
+      dom.cameraBtnHeader.classList.remove('camera-on');
+      broadcastAll('cam-closed', {});
+      updateOwnPresence();
+      renderUsers();
+    }
+    state.streamOpenedForCall = false;
+  }
+
+  state.activeCallUID = null;
+  showToast('📵 Call ended.');
 }
 
 /* ================================================================
@@ -1452,8 +1498,16 @@ async function connectSupabase() {
       .on('broadcast', { event:'pm'          }, ({ payload }) => handleIncomingPM(payload))
       .on('broadcast', { event:'webrtc'      }, ({ payload }) => handleWebRTCSignal(payload))
       .on('broadcast', { event:'cam-req'     }, ({ payload }) => handleCamRequest(payload))
-      .on('broadcast', { event:'cam-accepted'}, ({ payload }) => handleCamAccepted(payload))
-      .on('broadcast', { event:'cam-closed'  }, ({ payload }) => handleCamClosed(payload))
+      .on('broadcast', { event:'cam-accepted' }, ({ payload }) => handleCamAccepted(payload))
+      .on('broadcast', { event:'cam-closed'   }, ({ payload }) => handleCamClosed(payload))
+      .on('broadcast', { event:'call-ended'   }, ({ payload }) => {
+        /* The other party ended the call — clean up our side */
+        if (String(payload.to) !== String(state.currentUser?.id)) return;
+        if (!dom.vcallWin.hidden) {
+          endCall(false); /* false = don't re-broadcast (avoid loop) */
+          showToast(`📵 ${payload.fromName} ended the call.`);
+        }
+      })
       .subscribe();
 
     showToast('🟢 Connected to NeverVideoChat');
