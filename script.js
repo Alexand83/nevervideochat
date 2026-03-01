@@ -1643,7 +1643,17 @@ async function connectSupabase() {
 
   try {
     /* Init Supabase client */
-    state.supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    /* Tracking-Prevention fix: disable Supabase auth session persistence.
+       We use anonymous access only — no login needed.
+       This stops the SDK from touching third-party localStorage
+       (which Edge/Safari block as "Tracking Prevention").         */
+    state.supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession:      false,
+        autoRefreshToken:    false,
+        detectSessionInUrl:  false,
+      },
+    });
 
     /* ── 1. Load last 60 public messages ── */
     const { data: msgs, error: msgErr } = await state.supa
