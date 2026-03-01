@@ -65,10 +65,11 @@ export async function connectRoom(roomId) {
             .filter(msg => msg.userId === 'me' || msg.userId === state.currentUser.id)
             .find(msg => msg.id.startsWith('m') && msg.id.length < 20);
           if (tempMsg) {
+            const oldId = tempMsg.id;
             tempMsg.id = m.id;
             tempMsg.reactions = m.reactions || {};
-            /* Update DOM */
-            const group = dom.msgsContainer.querySelector(`[data-msg-id="${tempMsg.id}"]`);
+            /* Update DOM - search with old ID before updating */
+            const group = dom.msgsContainer.querySelector(`[data-msg-id="${oldId}"]`);
             if (group) {
               group.dataset.msgId = m.id;
               /* Re-render to show reactions if any */
