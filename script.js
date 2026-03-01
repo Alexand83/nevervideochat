@@ -172,9 +172,13 @@ const state = {
 
   /* Camera windows (public mode)
      { [userId]: { el, stream, isOwn, micEnabled } }          */
-  cameraWindows: {},
-  micAnalysers:  {},   // { [userId]: { ctx, raf } }
-  localStream:   null,
+  cameraWindows:    {},
+  micAnalysers:     {},   // { [userId]: { ctx, raf } }
+  localStream:      null,
+  /* Timestamp (ms) when the own camera was last stopped.
+     Used to enforce a minimum hardware-release delay before getUserMedia
+     is called again (prevents black-screen on Windows/macOS drivers). */
+  cameraClosedAt:   0,
 
   /* WebRTC
      outgoingPCs: B shares their stream to requester A  → { [toUserId]: RTCPeerConnection }
@@ -907,9 +911,13 @@ function createCameraWindow(uid, stream, name, isOwn) {
   state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true };
   const videoEl = $(`cam-vid-${uid}`);
   if (videoEl) {
+    /* BLACK-SCREEN FIX: reset srcObject first to force the video
+       element to fully re-initialize with the new stream.
+       Skipping this can cause black frames when re-opening camera.  */
+    videoEl.srcObject = null;
     videoEl.srcObject = stream;
-    /* BUG-2 FIX: call play() explicitly so browsers that block
-       autoplay audio (especially on mobile) start playback.       */
+    /* Explicit play() so browsers that gate autoplay-audio start
+       playback reliably (especially mobile).                        */
     videoEl.play().catch(() => {});
   }
   win.querySelector('.cam-win-close-btn').addEventListener('click', () => closeCameraWindow(uid));
@@ -935,6 +943,9 @@ function closeCameraWindow(uid) {
        other people's cameras even after turning ours off.           */
     state.localStream?.getTracks().forEach(t => t.stop());
     state.localStream = null;
+    /* Record when we stopped so startOwnCamera can enforce a minimum
+       hardware-release delay to avoid black-screen on re-open.       */
+    state.cameraClosedAt = Date.now();
 
     Object.keys(state.outgoingPCs).forEach(peerId => {
       state.outgoingPCs[peerId]?.close();
@@ -996,13 +1007,29 @@ async function toggleOwnCamera() {
 async function startOwnCamera() {
   if (!navigator.mediaDevices?.getUserMedia) { showToast('⚠️ Camera not supported.'); return; }
   try {
+    /* BLACK-SCREEN FIX: Camera hardware (especially on Windows) needs
+       ~300-500ms after track.stop() before it can be re-acquired.
+       If we closed the camera recently, wait for the driver to release. */
+    const msSinceClosed = Date.now() - state.cameraClosedAt;
+    const MIN_RELEASE_MS = 450;
+    if (msSinceClosed < MIN_RELEASE_MS) {
+      await new Promise(r => setTimeout(r, MIN_RELEASE_MS - msSinceClosed));
+    }
+
     state.localStream = await navigator.mediaDevices.getUserMedia({
       video: { width:{ideal:1280}, height:{ideal:720}, facingMode:'user' }, audio: true,
     });
     state.currentUser.hasCamera = true;
-    dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
+    dom.cameraBtnLabel.textContent = 'Camera On';
+    dom.cameraBtnHeader.classList.add('camera-on');
     createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
-    updateOwnPresence(); renderUsers(); showToast('📹 Camera enabled.');
+
+    /* INSTANT-ICON FIX: use fast Broadcast so other clients update
+       their user-list camera icon immediately (Presence is too slow). */
+    broadcastAll('cam-opened', {});
+    updateOwnPresence();
+    renderUsers();
+    showToast('📹 Camera enabled.');
   } catch (err) {
     state.localStream = null;
     showToast(err.name === 'NotAllowedError' ? '🚫 Camera/mic access denied.' : `⚠️ Camera error: ${err.message}`);
@@ -1163,10 +1190,13 @@ function handleCamAccepted(payload) {
 async function sharePublicCameraTo(toUid) {
   try {
     if (!state.localStream) {
+      const msSinceClosed = Date.now() - state.cameraClosedAt;
+      if (msSinceClosed < 450) await new Promise(r => setTimeout(r, 450 - msSinceClosed));
       state.localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
       state.currentUser.hasCamera = true;
       dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
       createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
+      broadcastAll('cam-opened', {}); /* instant icon update on all clients */
       updateOwnPresence();
     }
     const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -1595,6 +1625,17 @@ async function connectSupabase() {
       .on('broadcast', { event:'webrtc'      }, ({ payload }) => handleWebRTCSignal(payload))
       .on('broadcast', { event:'cam-req'     }, ({ payload }) => handleCamRequest(payload))
       .on('broadcast', { event:'cam-accepted' }, ({ payload }) => handleCamAccepted(payload))
+      .on('broadcast', { event:'cam-opened'   }, ({ payload }) => {
+        /* INSTANT-ICON FIX: camera-open via fast Broadcast so the
+           user-list camera icon updates in <100ms instead of ~1-2s  */
+        if (String(payload.from) === String(state.currentUser?.id)) return;
+        const u = state.users.find(u => String(u.id) === String(payload.from));
+        if (u) { u.hasCamera = true; renderUsers(); }
+        else {
+          ensureUser(String(payload.from), payload.fromName, { hasCamera: true, online: true });
+          renderUsers();
+        }
+      })
       .on('broadcast', { event:'cam-closed'   }, ({ payload }) => handleCamClosed(payload))
       .on('broadcast', { event:'call-ended'   }, ({ payload }) => {
         /* The other party ended the call — clean up our side */
