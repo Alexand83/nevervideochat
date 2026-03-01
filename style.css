@@ -2134,3 +2134,48 @@ a:hover { text-decoration: underline; }
   padding-top: var(--s3);
   border-top: 1px solid var(--border);
 }
+
+/* ── Rejected cam list ─────────────────────────────────────────── */
+.rejected-cams-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s2);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.rejected-cam-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2) var(--s3);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  gap: var(--s3);
+}
+.rejected-cam-name {
+  font-size: var(--fz-sm);
+  color: var(--tx0);
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rejected-cam-remove-btn {
+  font-size: var(--fz-xs);
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(35,134,54,.18);
+  color: var(--clr-success-h);
+  border: 1px solid var(--clr-success);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all var(--tf);
+  flex-shrink: 0;
+}
+.rejected-cam-remove-btn:hover {
+  background: var(--clr-success);
+  color: #fff;
+}

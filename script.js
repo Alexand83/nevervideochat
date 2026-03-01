@@ -201,6 +201,13 @@ const state = {
      until the first is accepted, rejected, or the target disconnects. */
   pendingCamRequests: {},
 
+  /* Users who rejected OUR camera requests.
+     { [uid]: displayName }
+     Persisted to localStorage under 'nvc_rejected_cams'.
+     A user stays in this list until the local user manually removes them
+     from the Settings → "Blocked Camera Requests" panel.              */
+  rejectedCamUsers: {},
+
   /* Presence leave debounce timers
      { [uid]: timeoutId }
      Supabase fires leave+join on every .track() update; we wait 600ms
@@ -337,6 +344,23 @@ function ensureUser(id, name, extra = {}) {
   return u;
 }
 function supabaseReady() { return !!state.supa; }
+
+/* ── Rejected-cam list helpers ────────────────────────────────────── */
+function loadRejectedCams() {
+  try { return JSON.parse(localStorage.getItem('nvc_rejected_cams') || '{}'); }
+  catch { return {}; }
+}
+function saveRejectedCams() {
+  localStorage.setItem('nvc_rejected_cams', JSON.stringify(state.rejectedCamUsers));
+}
+function addRejectedCam(uid, name) {
+  state.rejectedCamUsers[String(uid)] = name || 'User';
+  saveRejectedCams();
+}
+function removeRejectedCam(uid) {
+  delete state.rejectedCamUsers[String(uid)];
+  saveRejectedCams();
+}
 
 /* ================================================================
    4b. AUTH — Register · Login · Logout · Session restore
@@ -749,7 +773,41 @@ function openSettingsModal() {
   dom.cameraDeviceSelect.value = s.cameraId || '';
   dom.micDeviceSelect.value    = s.micId    || '';
   dom.detectDevicesHint.textContent = 'Click "Detect Devices" to list your cameras and microphones.\nBrowser permission for camera/mic is required.';
+  renderRejectedCams();
   dom.settingsModal.hidden = false;
+}
+
+/** Render the rejected-cam list inside Settings modal */
+function renderRejectedCams() {
+  const section = $('rejectedCamsSection');
+  const list    = $('rejectedCamsList');
+  if (!section || !list) return;
+
+  const entries = Object.entries(state.rejectedCamUsers);
+  section.hidden = entries.length === 0;
+  list.innerHTML = '';
+
+  entries.forEach(([uid, name]) => {
+    const item = document.createElement('div');
+    item.className = 'rejected-cam-item';
+
+    const nameEl = document.createElement('span');
+    nameEl.className   = 'rejected-cam-name';
+    nameEl.textContent = name;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className   = 'rejected-cam-remove-btn';
+    removeBtn.textContent = 'Unblock';
+    removeBtn.title       = `Allow ${name} to receive camera requests again`;
+    removeBtn.addEventListener('click', () => {
+      removeRejectedCam(uid);
+      renderRejectedCams();
+      showToast(`✅ ${name} unblocked — you can send camera requests again.`);
+    });
+
+    item.append(nameEl, removeBtn);
+    list.appendChild(item);
+  });
 }
 
 async function populateDeviceSelects() {
@@ -1309,6 +1367,9 @@ function openPrivateChat(uid) {
   popup.querySelector('.pchat-vcall-btn').addEventListener('click', () => {
     if (!supabaseReady()) { showToast('⚠️ Server connection required for video calls.'); return; }
     if (!dom.vcallWin.hidden) { showToast('📹 A video call is already active.'); return; }
+    if (state.rejectedCamUsers[String(uid)]) {
+      showToast(`🚫 ${user.name} rejected your request. Unblock them in Settings → "Blocked Requests".`); return;
+    }
     if (state.pendingCamRequests[String(uid)]) {
       showToast(`⏳ Already waiting for ${user.name}'s reply.`); return;
     }
@@ -1419,12 +1480,14 @@ function openContextMenu(uid, anchor) {
   const camOk        = user.hasCamera && user.online;
   const alreadyView  = !!state.cameraWindows[String(uid)];
   const pendingReq   = !!state.pendingCamRequests[String(uid)];
-  const camBlocked   = !camOk || alreadyView || pendingReq;
+  const camRejected  = !!state.rejectedCamUsers[String(uid)];
+  const camBlocked   = !camOk || alreadyView || pendingReq || camRejected;
   dom.ctxCamBtn.disabled     = camBlocked;
   dom.ctxCamBtn.style.opacity = camBlocked ? '0.4' : '1';
-  dom.ctxCamBtn.title = alreadyView ? 'Already viewing this camera'
-                      : pendingReq  ? 'Request already sent — waiting for reply'
-                      : !camOk      ? 'Camera not available'
+  dom.ctxCamBtn.title = alreadyView  ? 'Already viewing this camera'
+                      : pendingReq   ? 'Request already sent — waiting for reply'
+                      : camRejected  ? 'Rejected — unblock in Settings → "Blocked Requests"'
+                      : !camOk       ? 'Camera not available'
                       : 'Request Camera';
   const r = anchor.getBoundingClientRect();
   dom.ctxMenu.style.top  = `${clamp(r.bottom+4,4,window.innerHeight-200)}px`;
@@ -1709,6 +1772,10 @@ function requestPublicCamera(targetUid) {
   /* Already viewing their camera */
   if (state.cameraWindows[uid]) {
     showToast(`📹 Already viewing ${target.name}'s camera.`); return;
+  }
+  /* Previously rejected — user must unblock from Settings */
+  if (state.rejectedCamUsers[uid]) {
+    showToast(`🚫 ${target.name} rejected your request. Unblock them in Settings → "Blocked Requests".`); return;
   }
   /* Request already sent and pending */
   if (state.pendingCamRequests[uid]) {
@@ -2302,10 +2369,14 @@ async function connectSupabase() {
       .on('broadcast', { event:'cam-req'     }, ({ payload }) => handleCamRequest(payload))
       .on('broadcast', { event:'cam-accepted' }, ({ payload }) => handleCamAccepted(payload))
       .on('broadcast', { event:'cam-rejected' }, ({ payload }) => {
-        /* The target rejected our request — clear pending so we can try again */
         if (String(payload.to) !== String(state.currentUser?.id)) return;
-        delete state.pendingCamRequests[String(payload.from)];
-        showToast(`❌ ${payload.fromName} rejected the camera request.`);
+        const fromId = String(payload.from);
+        delete state.pendingCamRequests[fromId];
+
+        /* Add to permanent rejected list — user stays blocked until manually unblocked */
+        addRejectedCam(fromId, payload.fromName || 'User');
+
+        showToast(`🚫 ${payload.fromName} rejected your request. Go to Settings to unblock.`);
       })
       .on('broadcast', { event:'cam-opened'   }, ({ payload }) => {
         /* INSTANT-ICON FIX: camera-open via fast Broadcast so the
@@ -2385,6 +2456,9 @@ async function init() {
 
 /** Called after a user identity has been established (auth or guest) */
 async function finishInit() {
+  /* Load persisted rejected-cam list */
+  state.rejectedCamUsers = loadRejectedCams();
+
   renderUsers();
   updateHeaderUser();
   connectSupabase().catch(err => console.error('[NVC]', err));
