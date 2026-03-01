@@ -77,6 +77,7 @@ export async function connectRoom(roomId) {
                 renderMessage(tempMsg);
               }
             }
+          }
         }
         return; /* already rendered optimistically */
       }
