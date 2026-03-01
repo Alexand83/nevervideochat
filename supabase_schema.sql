@@ -33,38 +33,47 @@ CREATE INDEX IF NOT EXISTS messages_created_at_idx
   ON public.messages (created_at ASC);
 
 -- ── Abilita Realtime sulla tabella messages ────────────────────
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+-- (ignora se la tabella è già nella publication)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename  = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+  END IF;
+END $$;
 
 -- ================================================================
---  STORAGE — bucket "chat-media" per immagini e vocali
+--  STORAGE — bucket "chat-media"
 --
---  PRIMA di eseguire questo blocco:
---  Storage → New Bucket → Name: chat-media → Public: ✅ ON
---  (se il bucket esiste già, la INSERT fa ON CONFLICT e aggiorna)
+--  ⚠️  NON eseguire via SQL — fallo dalla Dashboard:
+--
+--  1. Supabase Dashboard → Storage → New Bucket
+--     • Name:   chat-media
+--     • Public: ✅  ON  (spunta "Make bucket public")
+--     → Save
+--
+--  2. Clic sul bucket "chat-media" → Policies → New policy
+--     Crea queste tre policy (usa "Custom policy"):
+--
+--     ┌─ Policy 1 ──────────────────────────────────────────┐
+--     │ Name:       Public read chat-media                  │
+--     │ Operation:  SELECT                                  │
+--     │ USING:      bucket_id = 'chat-media'                │
+--     └─────────────────────────────────────────────────────┘
+--
+--     ┌─ Policy 2 ──────────────────────────────────────────┐
+--     │ Name:       Public upload chat-media                │
+--     │ Operation:  INSERT                                  │
+--     │ WITH CHECK: bucket_id = 'chat-media'                │
+--     └─────────────────────────────────────────────────────┘
+--
+--     ┌─ Policy 3 ──────────────────────────────────────────┐
+--     │ Name:       Owner delete chat-media                 │
+--     │ Operation:  DELETE                                  │
+--     │ USING:      bucket_id = 'chat-media'                │
+--     └─────────────────────────────────────────────────────┘
 -- ================================================================
-
-INSERT INTO storage.buckets (id, name, public)
-  VALUES ('chat-media', 'chat-media', true)
-  ON CONFLICT (id) DO UPDATE SET public = true;
-
--- Abilita RLS sul bucket
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Public read chat-media"   ON storage.objects;
-DROP POLICY IF EXISTS "Public upload chat-media" ON storage.objects;
-DROP POLICY IF EXISTS "Owner delete chat-media"  ON storage.objects;
-
--- Lettura pubblica: chiunque può ascoltare/vedere i file
-CREATE POLICY "Public read chat-media"
-  ON storage.objects FOR SELECT
-  USING ( bucket_id = 'chat-media' );
-
--- Upload anonimo: chiunque può caricare (anon key sufficiente)
-CREATE POLICY "Public upload chat-media"
-  ON storage.objects FOR INSERT
-  WITH CHECK ( bucket_id = 'chat-media' );
-
--- Delete facoltativo (chi ha caricato può eliminare)
-CREATE POLICY "Owner delete chat-media"
-  ON storage.objects FOR DELETE
-  USING ( bucket_id = 'chat-media' );
