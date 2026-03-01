@@ -778,7 +778,28 @@ a:hover { text-decoration: underline; }
 }
 .emoji-cell:hover { background: var(--bg-hover); transform: scale(1.2); }
 
-/* ─── 8. USERS PANEL ─── */
+/* ─── 8. USERS PANEL + RESIZE HANDLE ─── */
+
+/* Vertical drag bar between chat area and users panel */
+.panel-resize-handle {
+  width: 5px;
+  flex-shrink: 0;
+  background: transparent;
+  cursor: col-resize;
+  position: relative;
+  transition: background 0.15s;
+  z-index: 10;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle.is-resizing {
+  background: var(--accent);
+  opacity: 0.5;
+}
+/* Hide on mobile — panel becomes a drawer */
+@media (max-width: 768px) {
+  .panel-resize-handle { display: none; }
+}
+
 .users-panel {
   width: var(--panel-w);
   flex-shrink: 0;
@@ -787,6 +808,9 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Allow JS to override width via inline style */
+  min-width: 160px;
+  max-width: 480px;
 }
 
 .panel-hdr {

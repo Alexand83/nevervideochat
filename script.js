@@ -195,6 +195,12 @@ const state = {
   /* Typing debounce */
   typingTimer: null,
 
+  /* Pending camera / call requests sent BY this user
+     { [targetUid]: 'public' | 'private' }
+     Prevents spam: a second request to the same user is blocked
+     until the first is accepted, rejected, or the target disconnects. */
+  pendingCamRequests: {},
+
   /* Presence leave debounce timers
      { [uid]: timeoutId }
      Supabase fires leave+join on every .track() update; we wait 600ms
@@ -729,6 +735,10 @@ function openPrivateChat(uid) {
   popup.querySelector('.pchat-close-btn').addEventListener('click', () => closePChat(uid));
   popup.querySelector('.pchat-vcall-btn').addEventListener('click', () => {
     if (!supabaseReady()) { showToast('⚠️ Server connection required for video calls.'); return; }
+    if (state.pendingCamRequests[String(uid)]) {
+      showToast(`⏳ Already waiting for ${user.name}'s reply — request already sent.`); return;
+    }
+    state.pendingCamRequests[String(uid)] = 'private';
     broadcast('cam-req', uid, { reqType: 'private' });
     showToast(`📹 Video call request sent to ${user.name}…`);
   });
@@ -960,15 +970,21 @@ function closeCameraWindow(uid) {
     updateOwnPresence(); renderUsers(); showToast('📹 Camera disabled.');
   } else {
     /* ── Remote camera ────────────────────────────────────────────
+       The LOCAL user closed their viewer window (pressed ✕).
        Close only the INCOMING PC (we were receiving from them).
        Never touch outgoingPCs[uid]: we might still be sending our
-       own stream to them — closing it would freeze THEIR view of us. */
+       own stream to them — closing it would freeze THEIR view of us.
+
+       ICON-FIX: do NOT set u.hasCamera = false here!
+       The remote user's camera may still be running — we just chose
+       to close our viewing window.  hasCamera is only cleared by:
+         • handleCamClosed  (user truly turned off their camera)
+         • presence-leave   (user disconnected)                      */
     if (state.incomingPCs[uid]) {
       state.incomingPCs[uid].close();
       delete state.incomingPCs[uid];
     }
-    const u = state.users.find(u => String(u.id) === String(uid));
-    if (u) { u.hasCamera = false; renderUsers(); }
+    /* No renderUsers() needed — hasCamera state is unchanged.      */
   }
 }
 /** Someone else turned off their camera — destroy our window for them */
@@ -1106,10 +1122,16 @@ function broadcastAll(event, extra = {}) {
 
 /* ── Public camera request ─────────────────────────────────────── */
 function requestPublicCamera(targetUid) {
-  const target = findUser(targetUid);
+  const uid = String(targetUid);
+  const target = findUser(uid);
   if (!target?.hasCamera || !target.online) { showToast(`${target?.name || 'User'} camera is not enabled.`); return; }
   if (!supabaseReady()) { showToast('⚠️ Server connection required for camera requests.'); return; }
-  broadcast('cam-req', targetUid, { reqType: 'public' });
+  /* Prevent duplicate requests */
+  if (state.pendingCamRequests[uid]) {
+    showToast(`⏳ Already waiting for ${target.name}'s reply — request already sent.`); return;
+  }
+  state.pendingCamRequests[uid] = 'public';
+  broadcast('cam-req', uid, { reqType: 'public' });
   showToast(`📹 Camera request sent to ${target.name}…`);
 }
 
@@ -1179,6 +1201,8 @@ async function acceptPrivateCall(fromUid, fromName) {
  */
 function handleCamAccepted(payload) {
   if (payload.to !== state.currentUser?.id) return;
+  /* Clear pending request — accepted */
+  delete state.pendingCamRequests[String(payload.from)];
   if (payload.reqType === 'private') {
     /* We are A (the caller) — B accepted → open our side of vcall and send WebRTC offer */
     startPrivateCall(payload.from);
@@ -1399,6 +1423,52 @@ function endCall(notify = true) {
 /* ================================================================
    19. MOBILE PANEL TOGGLE
 ================================================================ */
+/* ── Users-panel horizontal resize (desktop) ──────────────────── */
+function initPanelResize() {
+  const handle = document.getElementById('panelResizeHandle');
+  const panel  = dom.usersPanel;
+  if (!handle || !panel) return;
+
+  /* Restore saved width */
+  const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
+  if (savedW && savedW >= 160 && savedW <= 480) panel.style.width = savedW + 'px';
+
+  let dragging = false, startX = 0, startW = 0;
+
+  function onStart(e) {
+    dragging = true;
+    startX   = e.touches ? e.touches[0].clientX : e.clientX;
+    startW   = panel.getBoundingClientRect().width;
+    handle.classList.add('is-resizing');
+    document.body.style.cursor    = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  }
+  function onMove(e) {
+    if (!dragging) return;
+    const x    = e.touches ? e.touches[0].clientX : e.clientX;
+    const diff = startX - x;           /* drag left = panel wider */
+    const newW = Math.min(480, Math.max(160, startW + diff));
+    panel.style.width = newW + 'px';
+  }
+  function onEnd() {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('is-resizing');
+    document.body.style.cursor     = '';
+    document.body.style.userSelect = '';
+    /* Persist preferred width */
+    localStorage.setItem('nvc_panel_w', parseInt(panel.style.width, 10));
+  }
+
+  handle.addEventListener('mousedown',  onStart);
+  handle.addEventListener('touchstart', onStart, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup',   onEnd);
+  document.addEventListener('touchend',  onEnd);
+}
+
 function initMobilePanel() {
   const open  = () => { dom.usersPanel.classList.add('open'); dom.panelOverlay.classList.add('show'); dom.mobileUsersToggle.setAttribute('aria-expanded','true'); };
   const close = () => { dom.usersPanel.classList.remove('open'); dom.panelOverlay.classList.remove('show'); dom.mobileUsersToggle.setAttribute('aria-expanded','false'); };
@@ -1606,6 +1676,9 @@ async function connectSupabase() {
           if (uu) { uu.online = false; renderUsers(); }
           showToast(`👋 ${name} left`);
 
+          /* Clear any pending cam/call request towards this user */
+          delete state.pendingCamRequests[uid];
+
           if (state.cameraWindows[uid]) closeCameraWindow(uid);
           if (state.activeCallUID === uid && !dom.vcallWin.hidden) {
             endCall(false);
@@ -1625,6 +1698,12 @@ async function connectSupabase() {
       .on('broadcast', { event:'webrtc'      }, ({ payload }) => handleWebRTCSignal(payload))
       .on('broadcast', { event:'cam-req'     }, ({ payload }) => handleCamRequest(payload))
       .on('broadcast', { event:'cam-accepted' }, ({ payload }) => handleCamAccepted(payload))
+      .on('broadcast', { event:'cam-rejected' }, ({ payload }) => {
+        /* The target rejected our request — clear pending so we can try again */
+        if (String(payload.to) !== String(state.currentUser?.id)) return;
+        delete state.pendingCamRequests[String(payload.from)];
+        showToast(`❌ ${payload.fromName} rejected the camera request.`);
+      })
       .on('broadcast', { event:'cam-opened'   }, ({ payload }) => {
         /* INSTANT-ICON FIX: camera-open via fast Broadcast so the
            user-list camera icon updates in <100ms instead of ~1-2s  */
@@ -1671,6 +1750,7 @@ async function init() {
   initCameraSystem();
   initCallControls();
   initMobilePanel();
+  initPanelResize();
 
   /* Connect to Supabase (non-blocking) */
   connectSupabase().catch(err => console.error(err));
