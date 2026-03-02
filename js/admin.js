@@ -4,7 +4,7 @@
 import { state }          from './state.js';
 import { dom }            from './dom.js';
 import { showToast, escHtml } from './utils.js';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { broadcast }      from './broadcast.js';
 
 let currentUserRole = null;
 
@@ -38,8 +38,9 @@ export function initAdminPanel() {
   if (!dom.adminModal) return;
 
   /* Admin button click */
-  dom.headerAdminBtn?.addEventListener('click', () => {
-    if (checkAdminAccess()) {
+  dom.headerAdminBtn?.addEventListener('click', async () => {
+    const hasAccess = await checkAdminAccess();
+    if (hasAccess) {
       openAdminPanel();
     } else {
       showToast('🚫 Admin access required.');
@@ -262,23 +263,64 @@ async function loadUsers() {
 
 async function kickUser(userId, userName) {
   if (!confirm(`Kick ${userName}?`)) return;
+  if (!state.supa) return;
+  
+  /* Broadcast kick event */
+  broadcast('user-kicked', userId, { reason: 'Kicked by admin' });
   showToast(`👢 Kicked ${userName}`);
-  // TODO: Implement kick via broadcast
+  loadUsers();
 }
 
 async function muteUser(userId, userName) {
   const duration = prompt(`Mute ${userName} for how many minutes? (0 = permanent)`);
   if (duration === null) return;
   const mins = parseInt(duration) || 0;
-  // TODO: Implement mute
-  showToast(`🔇 Muted ${userName} ${mins > 0 ? `for ${mins} minutes` : 'permanently'}`);
+  if (!state.supa) return;
+  
+  try {
+    const expiresAt = mins > 0 ? new Date(Date.now() + mins * 60 * 1000).toISOString() : null;
+    const { error } = await state.supa.from('muted_users').upsert({
+      user_id: userId,
+      muted_by: state.currentUser.id,
+      expires_at: expiresAt,
+    }, { onConflict: 'user_id' });
+    
+    if (error) throw error;
+    
+    /* Broadcast mute event */
+    broadcast('user-muted', userId, { duration: mins });
+    showToast(`🔇 Muted ${userName} ${mins > 0 ? `for ${mins} minutes` : 'permanently'}`);
+    loadUsers();
+  } catch (err) {
+    console.error('[Admin] Mute error:', err);
+    showToast('⚠️ Failed to mute user.');
+  }
 }
 
 async function banUser(userId, userName) {
   const reason = prompt(`Ban ${userName}. Reason:`);
   if (reason === null) return;
-  // TODO: Implement ban
-  showToast(`🚫 Banned ${userName}`);
+  if (!state.supa) return;
+  
+  try {
+    const { error } = await state.supa.from('banned_users').upsert({
+      user_id: userId,
+      username: userName,
+      reason: reason || 'Banned by admin',
+      banned_by: state.currentUser.id,
+    }, { onConflict: 'user_id' });
+    
+    if (error) throw error;
+    
+    /* Broadcast ban event */
+    broadcast('user-banned', userId, { reason: reason || 'Banned by admin' });
+    showToast(`🚫 Banned ${userName}`);
+    loadUsers();
+    loadBannedUsers();
+  } catch (err) {
+    console.error('[Admin] Ban error:', err);
+    showToast('⚠️ Failed to ban user.');
+  }
 }
 
 /* ── Banned Users ── */
