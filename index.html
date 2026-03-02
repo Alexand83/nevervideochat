@@ -772,9 +772,113 @@
   </div>
 </div>
 
+<!-- Kick User Modal -->
+<div class="nvc-modal-backdrop" id="kickModal" role="dialog" aria-modal="true" hidden>
+  <div class="nvc-modal action-modal">
+    <div class="nvc-modal-hdr">
+      <h2>👢 Kick User</h2>
+      <button class="nvc-modal-close-btn" id="kickModalClose">✕</button>
+    </div>
+    <div class="action-modal-content">
+      <p class="action-modal-user" id="kickModalUserName">User Name</p>
+      <p class="action-modal-subtitle">Remove this user from the room temporarily</p>
+      
+      <label class="settings-label" for="kickDuration">Duration (minutes)</label>
+      <input type="number" id="kickDuration" class="settings-input" min="1" value="5" placeholder="5">
+      <p class="settings-hint">How long before they can rejoin? (minimum 1 minute)</p>
+      
+      <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="radio" name="kickScope" id="kickScopeRoom" value="room" checked>
+        <span>This room only</span>
+      </label>
+      <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="radio" name="kickScope" id="kickScopeGlobal" value="global">
+        <span>All rooms (global kick)</span>
+      </label>
+      <p class="settings-hint">Choose whether to kick from this room only or from all rooms</p>
+      
+      <div class="settings-actions">
+        <button type="button" class="auth-btn-primary action-btn-danger" id="kickConfirmBtn">👢 Kick User</button>
+        <button type="button" class="auth-btn-ghost" id="kickCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mute User Modal -->
+<div class="nvc-modal-backdrop" id="muteModal" role="dialog" aria-modal="true" hidden>
+  <div class="nvc-modal action-modal">
+    <div class="nvc-modal-hdr">
+      <h2>🔇 Mute User</h2>
+      <button class="nvc-modal-close-btn" id="muteModalClose">✕</button>
+    </div>
+    <div class="action-modal-content">
+      <p class="action-modal-user" id="muteModalUserName">User Name</p>
+      <p class="action-modal-subtitle">Prevent this user from sending messages and using camera</p>
+      
+      <label class="settings-label" for="muteDuration">Duration (minutes)</label>
+      <input type="number" id="muteDuration" class="settings-input" min="0" value="0" placeholder="0 = permanent">
+      <p class="settings-hint">How long to mute? (0 = permanent mute)</p>
+      
+      <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="radio" name="muteScope" id="muteScopeRoom" value="room" checked>
+        <span>This room only</span>
+      </label>
+      <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="radio" name="muteScope" id="muteScopeGlobal" value="global">
+        <span>All rooms (global mute)</span>
+      </label>
+      <p class="settings-hint">Choose whether to mute in this room only or globally</p>
+      
+      <div class="settings-actions">
+        <button type="button" class="auth-btn-primary action-btn-warning" id="muteConfirmBtn">🔇 Mute User</button>
+        <button type="button" class="auth-btn-ghost" id="muteCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ban User Modal -->
+<div class="nvc-modal-backdrop" id="banModal" role="dialog" aria-modal="true" hidden>
+  <div class="nvc-modal action-modal">
+    <div class="nvc-modal-hdr">
+      <h2>🚫 Ban User</h2>
+      <button class="nvc-modal-close-btn" id="banModalClose">✕</button>
+    </div>
+    <div class="action-modal-content">
+      <p class="action-modal-user" id="banModalUserName">User Name</p>
+      <p class="action-modal-subtitle">Permanently or temporarily ban this user from all rooms</p>
+      
+      <label class="settings-label" for="banReason">Reason</label>
+      <textarea id="banReason" class="settings-input" rows="3" placeholder="Enter reason for ban (optional)"></textarea>
+      <p class="settings-hint">Provide a reason for the ban (optional but recommended)</p>
+      
+      <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="radio" name="banType" id="banTypePermanent" value="permanent" checked>
+        <span>Permanent ban</span>
+      </label>
+      <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="radio" name="banType" id="banTypeTemporary" value="temporary">
+        <span>Temporary ban</span>
+      </label>
+      
+      <div id="banTemporaryOptions" style="display: none;">
+        <label class="settings-label" for="banDays">Duration (days)</label>
+        <input type="number" id="banDays" class="settings-input" min="1" value="7" placeholder="7">
+        <p class="settings-hint">How many days until the ban expires?</p>
+      </div>
+      
+      <div class="settings-actions">
+        <button type="button" class="auth-btn-primary action-btn-danger" id="banConfirmBtn">🚫 Ban User</button>
+        <button type="button" class="auth-btn-ghost" id="banCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="js/main.js?v=20260304"></script>
+<script type="module" src="js/main.js?v=20260305"></script>
 </body>
 </html>

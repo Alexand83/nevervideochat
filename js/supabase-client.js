@@ -132,25 +132,49 @@ export async function connectSupabase() {
       .on('broadcast', { event: 'reaction-update' }, ({ payload }) => handleReactionUpdate(payload))
       .on('broadcast', { event: 'user-kicked' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
-        if (String(targetId) === String(state.currentUser?.id)) {
+        const isCurrentUser = String(targetId) === String(state.currentUser?.id);
+        
+        /* Close all cameras for the kicked user */
+        const { closeAllCamerasForUser } = await import('./camera.js');
+        if (isCurrentUser || state.cameraWindows[targetId]) {
+          await closeAllCamerasForUser(targetId);
+        }
+        
+        if (isCurrentUser) {
           const roomId = payload.room_id;
           /* Add to kicked cache */
           if (!state.kickedUsers[targetId]) state.kickedUsers[targetId] = {};
-          state.kickedUsers[targetId][roomId] = payload.expires_at;
-          
-          /* If in that room, leave it */
-          if (state.activeRoom === roomId) {
-            const { leaveRoom } = await import('./rooms.js');
-            const { renderRoomTabs } = await import('./rooms.js');
-            await leaveRoom(roomId);
-            renderRoomTabs();
-            showToast(`👢 You have been kicked from this room until ${new Date(payload.expires_at).toLocaleTimeString()}.`);
+          if (payload.is_global) {
+            /* Global kick: add to all rooms */
+            for (const roomId of Object.keys(state.rooms)) {
+              state.kickedUsers[targetId][roomId] = payload.expires_at;
+            }
+            showToast(`👢 You have been kicked from all rooms until ${new Date(payload.expires_at).toLocaleTimeString()}.`);
+            setTimeout(() => location.reload(), 2000);
+          } else {
+            state.kickedUsers[targetId][roomId] = payload.expires_at;
+            /* If in that room, leave it */
+            if (state.activeRoom === roomId) {
+              const { leaveRoom } = await import('./rooms.js');
+              const { renderRoomTabs } = await import('./rooms.js');
+              await leaveRoom(roomId);
+              renderRoomTabs();
+              showToast(`👢 You have been kicked from this room until ${new Date(payload.expires_at).toLocaleTimeString()}.`);
+            }
           }
         }
       })
-      .on('broadcast', { event: 'user-banned' }, ({ payload }) => {
+      .on('broadcast', { event: 'user-banned' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
-        if (String(targetId) === String(state.currentUser?.id)) {
+        const isCurrentUser = String(targetId) === String(state.currentUser?.id);
+        
+        /* Close all cameras for the banned user */
+        const { closeAllCamerasForUser } = await import('./camera.js');
+        if (isCurrentUser || state.cameraWindows[targetId]) {
+          await closeAllCamerasForUser(targetId);
+        }
+        
+        if (isCurrentUser) {
           /* Add to banned cache */
           state.bannedUsers[targetId] = { expires_at: payload.expires_at };
           showToast('🚫 You have been banned. Reason: ' + (payload.reason || 'No reason provided'));
@@ -159,16 +183,18 @@ export async function connectSupabase() {
       })
       .on('broadcast', { event: 'user-muted' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
-        if (String(targetId) === String(state.currentUser?.id)) {
+        const isCurrentUser = String(targetId) === String(state.currentUser?.id);
+        
+        /* Close all cameras for the muted user */
+        const { closeAllCamerasForUser } = await import('./camera.js');
+        if (isCurrentUser || state.cameraWindows[targetId]) {
+          await closeAllCamerasForUser(targetId);
+        }
+        
+        if (isCurrentUser) {
           const roomId = payload.room_id || null;
           /* Add to muted cache */
           state.mutedUsers[targetId] = { room_id: roomId, expires_at: payload.expires_at };
-          
-          /* Close camera if active */
-          if (state.localStream) {
-            const { closeOwnCamera } = await import('./camera.js');
-            await closeOwnCamera();
-          }
           
           /* Re-render users to show muted indicator */
           const { renderUsers } = await import('./users.js');

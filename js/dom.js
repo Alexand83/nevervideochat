@@ -163,4 +163,28 @@ export const dom = {
   roomEditModalClose:  $('roomEditModalClose'),
   roomEditForm:        $('roomEditForm'),
   roomEditCancelBtn:   $('roomEditCancelBtn'),
+  
+  /* Action modals (kick/ban/mute) */
+  kickModal:           $('kickModal'),
+  kickModalClose:      $('kickModalClose'),
+  kickModalUserName:   $('kickModalUserName'),
+  kickConfirmBtn:      $('kickConfirmBtn'),
+  kickCancelBtn:       $('kickCancelBtn'),
+  
+  muteModal:           $('muteModal'),
+  muteModalClose:      $('muteModalClose'),
+  muteModalUserName:   $('muteModalUserName'),
+  muteConfirmBtn:      $('muteConfirmBtn'),
+  muteCancelBtn:       $('muteCancelBtn'),
+  
+  banModal:            $('banModal'),
+  banModalClose:       $('banModalClose'),
+  banModalUserName:    $('banModalUserName'),
+  banConfirmBtn:       $('banConfirmBtn'),
+  banCancelBtn:        $('banCancelBtn'),
+  banReason:           $('banReason'),
+  banTypePermanent:    $('banTypePermanent'),
+  banTypeTemporary:    $('banTypeTemporary'),
+  banTemporaryOptions: $('banTemporaryOptions'),
+  banDays:             $('banDays'),
 };

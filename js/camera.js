@@ -147,6 +147,31 @@ export async function closeOwnCamera() {
   await closeCameraWindow(state.currentUser?.id);
 }
 
+/* ── Close all cameras for a user (their own + cameras they are watching) ── */
+export async function closeAllCamerasForUser(userId) {
+  const isCurrentUser = String(userId) === String(state.currentUser?.id);
+  
+  if (isCurrentUser) {
+    /* Close user's own camera if active */
+    if (state.localStream) {
+      await closeOwnCamera();
+    }
+    
+    /* Close all cameras the user is watching (all camera windows except their own) */
+    const cameraWindowIds = Object.keys(state.cameraWindows);
+    for (const uid of cameraWindowIds) {
+      if (String(uid) !== String(state.currentUser?.id)) {
+        await closeCameraWindow(uid);
+      }
+    }
+  } else {
+    /* Close the user's camera if we are watching it */
+    if (state.cameraWindows[userId]) {
+      await closeCameraWindow(userId);
+    }
+  }
+}
+
 export async function closeCameraWindow(uid) {
   const cw = state.cameraWindows[uid]; if (!cw) return;
   stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];

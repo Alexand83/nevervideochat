@@ -8,7 +8,7 @@ import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js'
 import { findUser }          from './users.js';
 import { addIgnoredUser, removeIgnoredUser } from './storage.js';
 import { broadcast }         from './broadcast.js';
-import { closeCameraWindow, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js';
+import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js';
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
@@ -288,88 +288,202 @@ export function initContextMenu() {
     }
   });
   /* Admin actions */
-  dom.ctxKickBtn?.addEventListener('click', async () => {
+  dom.ctxKickBtn?.addEventListener('click', () => {
     const uid = state.contextTargetUID;
     const user = findUser(uid);
     closeCtxMenu();
     if (!uid || !user) return;
-    if (await handleKickUser(uid, user.name || user.username)) {
-      showToast(`👢 Kicked ${user.name || user.username}`);
-    }
+    openKickModal(uid, user.name || user.username);
   });
   
-  dom.ctxMuteBtn?.addEventListener('click', async () => {
+  dom.ctxMuteBtn?.addEventListener('click', () => {
     const uid = state.contextTargetUID;
     const user = findUser(uid);
     closeCtxMenu();
     if (!uid || !user) return;
-    const duration = prompt(`Mute ${user.name || user.username} for how many minutes? (0 = permanent)`);
-    if (duration === null) return;
-    const mins = parseInt(duration) || 0;
-    if (await handleMuteUser(uid, user.name || user.username, mins)) {
-      showToast(`🔇 Muted ${user.name || user.username} ${mins > 0 ? `for ${mins} minutes` : 'permanently'}`);
-    }
+    openMuteModal(uid, user.name || user.username);
   });
   
-  dom.ctxBanBtn?.addEventListener('click', async () => {
+  dom.ctxBanBtn?.addEventListener('click', () => {
     const uid = state.contextTargetUID;
     const user = findUser(uid);
     closeCtxMenu();
     if (!uid || !user) return;
-    const reason = prompt(`Ban ${user.name || user.username}. Reason:`);
-    if (reason === null) return;
-    if (await handleBanUser(uid, user.name || user.username, reason)) {
-      showToast(`🚫 Banned ${user.name || user.username}`);
-    }
+    openBanModal(uid, user.name || user.username);
   });
   
   dom.ctxOverlay.addEventListener('click', closeCtxMenu);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtxMenu(); });
 }
 
+/* ── Modal functions ── */
+function openKickModal(userId, userName) {
+  dom.kickModalUserName.textContent = userName;
+  dom.kickModal.hidden = false;
+  dom.kickDuration.value = '5';
+  dom.kickScopeRoom.checked = true;
+  
+  const handleConfirm = async () => {
+    const mins = parseInt(dom.kickDuration.value) || 0;
+    if (mins <= 0) {
+      showToast('⚠️ Please enter a valid number of minutes (minimum 1).');
+      return;
+    }
+    const isGlobal = dom.kickScopeGlobal.checked;
+    closeKickModal();
+    if (await handleKickUser(userId, userName, mins, isGlobal)) {
+      showToast(`👢 Kicked ${userName} ${isGlobal ? 'from all rooms' : 'from this room'}`);
+    }
+  };
+  
+  const handleCancel = () => {
+    closeKickModal();
+  };
+  
+  dom.kickConfirmBtn.onclick = handleConfirm;
+  dom.kickCancelBtn.onclick = handleCancel;
+  dom.kickModalClose.onclick = handleCancel;
+  dom.kickModal.onclick = (e) => { if (e.target === dom.kickModal) handleCancel(); };
+  document.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape') { handleCancel(); document.removeEventListener('keydown', escHandler); }
+  });
+}
+
+function closeKickModal() {
+  dom.kickModal.hidden = true;
+}
+
+function openMuteModal(userId, userName) {
+  dom.muteModalUserName.textContent = userName;
+  dom.muteModal.hidden = false;
+  dom.muteDuration.value = '0';
+  dom.muteScopeRoom.checked = true;
+  
+  const handleConfirm = async () => {
+    const mins = parseInt(dom.muteDuration.value) || 0;
+    const isGlobal = dom.muteScopeGlobal.checked;
+    closeMuteModal();
+    if (await handleMuteUser(userId, userName, mins, isGlobal)) {
+      showToast(`🔇 Muted ${userName} ${isGlobal ? 'globally' : 'in this room'} ${mins > 0 ? `for ${mins} minutes` : 'permanently'}`);
+    }
+  };
+  
+  const handleCancel = () => {
+    closeMuteModal();
+  };
+  
+  dom.muteConfirmBtn.onclick = handleConfirm;
+  dom.muteCancelBtn.onclick = handleCancel;
+  dom.muteModalClose.onclick = handleCancel;
+  dom.muteModal.onclick = (e) => { if (e.target === dom.muteModal) handleCancel(); };
+  document.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape') { handleCancel(); document.removeEventListener('keydown', escHandler); }
+  });
+}
+
+function closeMuteModal() {
+  dom.muteModal.hidden = true;
+}
+
+function openBanModal(userId, userName) {
+  dom.banModalUserName.textContent = userName;
+  dom.banModal.hidden = false;
+  dom.banReason.value = '';
+  dom.banTypePermanent.checked = true;
+  dom.banTemporaryOptions.style.display = 'none';
+  
+  dom.banTypePermanent.onchange = () => {
+    dom.banTemporaryOptions.style.display = 'none';
+  };
+  dom.banTypeTemporary.onchange = () => {
+    dom.banTemporaryOptions.style.display = 'block';
+  };
+  
+  const handleConfirm = async () => {
+    const reason = dom.banReason.value.trim();
+    const isPermanent = dom.banTypePermanent.checked;
+    let expiresAt = null;
+    if (!isPermanent) {
+      const days = parseInt(dom.banDays.value) || 0;
+      if (days <= 0) {
+        showToast('⚠️ Please enter a valid number of days (minimum 1).');
+        return;
+      }
+      expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+    }
+    closeBanModal();
+    if (await handleBanUser(userId, userName, reason, expiresAt)) {
+      showToast(`🚫 Banned ${userName} ${isPermanent ? 'permanently' : `for ${dom.banDays.value} days`}`);
+    }
+  };
+  
+  const handleCancel = () => {
+    closeBanModal();
+  };
+  
+  dom.banConfirmBtn.onclick = handleConfirm;
+  dom.banCancelBtn.onclick = handleCancel;
+  dom.banModalClose.onclick = handleCancel;
+  dom.banModal.onclick = (e) => { if (e.target === dom.banModal) handleCancel(); };
+  document.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape') { handleCancel(); document.removeEventListener('keydown', escHandler); }
+  });
+}
+
+function closeBanModal() {
+  dom.banModal.hidden = true;
+}
+
 /* ── Admin action handlers ── */
-async function handleKickUser(userId, userName) {
+async function handleKickUser(userId, userName, minutes, isGlobal) {
   if (!state.supa) return false;
-  const minutes = prompt(`Kick ${userName} from this room for how many minutes?`);
-  if (minutes === null) return false;
-  const mins = parseInt(minutes) || 0;
-  if (mins <= 0) {
-    showToast('⚠️ Please enter a valid number of minutes.');
-    return false;
-  }
+  const mins = minutes || 5;
   
   try {
     const expiresAt = new Date(Date.now() + mins * 60 * 1000).toISOString();
-    const { error } = await state.supa.from('kicked_users').upsert({
-      user_id: userId,
-      room_id: state.activeRoom,
-      kicked_by: state.currentUser.id,
-      expires_at: expiresAt,
-    }, { onConflict: 'user_id,room_id' });
-    if (error) throw error;
+    const roomId = isGlobal ? null : state.activeRoom;
     
-    /* Broadcast kick event - user must leave this room */
-    broadcast('user-kicked', userId, { room_id: state.activeRoom, expires_at: expiresAt });
+    if (isGlobal) {
+      /* Global kick: kick from all rooms */
+      const { data: rooms } = await state.supa.from('rooms').select('id');
+      if (rooms) {
+        for (const room of rooms) {
+          await state.supa.from('kicked_users').upsert({
+            user_id: userId,
+            room_id: String(room.id),
+            kicked_by: state.currentUser.id,
+            expires_at: expiresAt,
+          }, { onConflict: 'user_id,room_id' });
+        }
+      }
+    } else {
+      /* Room-specific kick */
+      const { error } = await state.supa.from('kicked_users').upsert({
+        user_id: userId,
+        room_id: state.activeRoom,
+        kicked_by: state.currentUser.id,
+        expires_at: expiresAt,
+      }, { onConflict: 'user_id,room_id' });
+      if (error) throw error;
+    }
     
-    /* If kicked user is in this room, force them to leave */
+    /* Close all cameras for the user */
+    await closeAllCamerasForUser(userId);
+    
+    /* Broadcast kick event */
+    broadcast('user-kicked', userId, { room_id: roomId, expires_at: expiresAt, is_global: isGlobal });
+    
+    /* If kicked user is current user, handle it */
     if (String(userId) === String(state.currentUser?.id)) {
-      showToast(`👢 You have been kicked from this room for ${mins} minutes.`);
-      /* Leave the room */
-      if (state.rooms[state.activeRoom]) {
-        const room = state.rooms[state.activeRoom];
-        if (room.presenceCh) {
-          await room.presenceCh.untrack();
-          await state.supa.removeChannel(room.presenceCh);
-        }
-        delete state.rooms[state.activeRoom];
-        /* Switch to another room if available */
-        const otherRooms = Object.keys(state.rooms).filter(r => r !== state.activeRoom);
-        if (otherRooms.length > 0) {
-          state.activeRoom = otherRooms[0];
-        } else {
-          /* Join general if available */
-          await joinRoom('general');
-        }
+      if (isGlobal) {
+        showToast(`👢 You have been kicked from all rooms for ${mins} minutes.`);
+        setTimeout(() => location.reload(), 2000);
+      } else {
+        showToast(`👢 You have been kicked from this room for ${mins} minutes.`);
+        const { leaveRoom } = await import('./rooms.js');
+        const { renderRoomTabs } = await import('./rooms.js');
+        await leaveRoom(state.activeRoom);
+        renderRoomTabs();
       }
     }
     return true;
@@ -380,12 +494,9 @@ async function handleKickUser(userId, userName) {
   }
 }
 
-async function handleMuteUser(userId, userName, minutes) {
+async function handleMuteUser(userId, userName, minutes, isGlobal) {
   if (!state.supa) return false;
-  
-  /* Ask for scope: room or global */
-  const scope = confirm(`Mute ${userName} globally (all rooms)?\n\nOK = Global\nCancel = This room only`);
-  const roomId = scope ? null : state.activeRoom;
+  const roomId = isGlobal ? null : state.activeRoom;
   
   try {
     const expiresAt = minutes > 0 ? new Date(Date.now() + minutes * 60 * 1000).toISOString() : null;
@@ -397,13 +508,8 @@ async function handleMuteUser(userId, userName, minutes) {
     }, { onConflict: 'user_id,room_id' });
     if (error) throw error;
     
-    /* If muted user has camera active, close it */
-    if (String(userId) === String(state.currentUser?.id) && state.localStream) {
-      const { closeOwnCamera } = await import('./camera.js');
-      await closeOwnCamera();
-    } else if (state.cameraWindows?.[userId]) {
-      await closeCameraWindow(userId);
-    }
+    /* Close all cameras for the user */
+    await closeAllCamerasForUser(userId);
     
     /* Broadcast mute event */
     broadcast('user-muted', userId, { room_id: roomId, duration: minutes });
@@ -420,22 +526,8 @@ async function handleMuteUser(userId, userName, minutes) {
   }
 }
 
-async function handleBanUser(userId, userName, reason) {
+async function handleBanUser(userId, userName, reason, expiresAt) {
   if (!state.supa) return false;
-  
-  /* Ask for expiration: permanent or temporary */
-  const isPermanent = confirm(`Ban ${userName} permanently?\n\nOK = Permanent\nCancel = Temporary (you'll set expiration)`);
-  let expiresAt = null;
-  if (!isPermanent) {
-    const days = prompt('Ban for how many days?');
-    if (days === null) return false;
-    const daysNum = parseInt(days) || 0;
-    if (daysNum <= 0) {
-      showToast('⚠️ Please enter a valid number of days.');
-      return false;
-    }
-    expiresAt = new Date(Date.now() + daysNum * 24 * 60 * 60 * 1000).toISOString();
-  }
   
   try {
     const { error } = await state.supa.from('banned_users').upsert({
@@ -446,6 +538,9 @@ async function handleBanUser(userId, userName, reason) {
       expires_at: expiresAt,
     }, { onConflict: 'user_id' });
     if (error) throw error;
+    
+    /* Close all cameras for the user */
+    await closeAllCamerasForUser(userId);
     
     /* Broadcast ban event - user must leave ALL rooms */
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin/mod', expires_at: expiresAt });
