@@ -211,10 +211,51 @@ export function openContextMenu(uid, anchor) {
     dom.ctxIgnoreBtn.title  = isIgnored ? 'Stop ignoring this user' : 'Hide messages and revoke cam access';
   }
 
+  /* Show/hide admin actions based on permissions */
+  if (dom.ctxAdminActions) {
+    checkAndShowAdminActions(uid).then(hasPerms => {
+      dom.ctxAdminActions.hidden = !hasPerms;
+    });
+  }
+
   const r = anchor.getBoundingClientRect();
   dom.ctxMenu.style.top  = `${clamp(r.bottom + 4, 4, window.innerHeight - 200)}px`;
   dom.ctxMenu.style.left = `${clamp(r.left, 4, window.innerWidth - 210)}px`;
   dom.ctxMenu.hidden = false; dom.ctxOverlay.hidden = false;
+}
+
+/* ── Check if current user has admin/mod permissions ── */
+async function checkAndShowAdminActions(targetUid) {
+  if (!state.supa || !state.currentUser) return false;
+  if (String(targetUid) === String(state.currentUser?.id)) return false; /* Can't admin yourself */
+  
+  try {
+    const { data, error } = await state.supa
+      .from('profiles')
+      .select('role, custom_role_id')
+      .eq('id', state.currentUser.id)
+      .single();
+    if (error || !data) return false;
+    
+    const role = data.role;
+    if (role === 'owner' || role === 'admin') return true;
+    if (role === 'moderator') return true;
+    
+    /* Check custom role permissions */
+    if (data.custom_role_id) {
+      const { data: customRole } = await state.supa
+        .from('custom_roles')
+        .select('permissions')
+        .eq('id', data.custom_role_id)
+        .single();
+      if (customRole?.permissions) {
+        return customRole.permissions.can_kick || customRole.permissions.can_ban || customRole.permissions.can_mute;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 export function closeCtxMenu() { dom.ctxMenu.hidden = true; dom.ctxOverlay.hidden = true; state.contextTargetUID = null; }
@@ -245,8 +286,95 @@ export function initContextMenu() {
       showToast(`🔇 ${name} ignored — messages and cam access blocked.`);
     }
   });
+  /* Admin actions */
+  dom.ctxKickBtn?.addEventListener('click', async () => {
+    const uid = state.contextTargetUID;
+    const user = findUser(uid);
+    closeCtxMenu();
+    if (!uid || !user) return;
+    if (await handleKickUser(uid, user.name || user.username)) {
+      showToast(`👢 Kicked ${user.name || user.username}`);
+    }
+  });
+  
+  dom.ctxMuteBtn?.addEventListener('click', async () => {
+    const uid = state.contextTargetUID;
+    const user = findUser(uid);
+    closeCtxMenu();
+    if (!uid || !user) return;
+    const duration = prompt(`Mute ${user.name || user.username} for how many minutes? (0 = permanent)`);
+    if (duration === null) return;
+    const mins = parseInt(duration) || 0;
+    if (await handleMuteUser(uid, user.name || user.username, mins)) {
+      showToast(`🔇 Muted ${user.name || user.username} ${mins > 0 ? `for ${mins} minutes` : 'permanently'}`);
+    }
+  });
+  
+  dom.ctxBanBtn?.addEventListener('click', async () => {
+    const uid = state.contextTargetUID;
+    const user = findUser(uid);
+    closeCtxMenu();
+    if (!uid || !user) return;
+    const reason = prompt(`Ban ${user.name || user.username}. Reason:`);
+    if (reason === null) return;
+    if (await handleBanUser(uid, user.name || user.username, reason)) {
+      showToast(`🚫 Banned ${user.name || user.username}`);
+    }
+  });
+  
   dom.ctxOverlay.addEventListener('click', closeCtxMenu);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtxMenu(); });
+}
+
+/* ── Admin action handlers (reuse from admin.js) ── */
+async function handleKickUser(userId, userName) {
+  if (!state.supa) return false;
+  try {
+    broadcast('user-kicked', userId, { reason: 'Kicked by admin/mod' });
+    return true;
+  } catch (err) {
+    console.error('[UI] Kick error:', err);
+    showToast('⚠️ Failed to kick user.');
+    return false;
+  }
+}
+
+async function handleMuteUser(userId, userName, minutes) {
+  if (!state.supa) return false;
+  try {
+    const expiresAt = minutes > 0 ? new Date(Date.now() + minutes * 60 * 1000).toISOString() : null;
+    const { error } = await state.supa.from('muted_users').upsert({
+      user_id: userId,
+      muted_by: state.currentUser.id,
+      expires_at: expiresAt,
+    }, { onConflict: 'user_id' });
+    if (error) throw error;
+    broadcast('user-muted', userId, { duration: minutes });
+    return true;
+  } catch (err) {
+    console.error('[UI] Mute error:', err);
+    showToast('⚠️ Failed to mute user.');
+    return false;
+  }
+}
+
+async function handleBanUser(userId, userName, reason) {
+  if (!state.supa) return false;
+  try {
+    const { error } = await state.supa.from('banned_users').upsert({
+      user_id: userId,
+      username: userName,
+      reason: reason || 'Banned by admin/mod',
+      banned_by: state.currentUser.id,
+    }, { onConflict: 'user_id' });
+    if (error) throw error;
+    broadcast('user-banned', userId, { reason: reason || 'Banned by admin/mod' });
+    return true;
+  } catch (err) {
+    console.error('[UI] Ban error:', err);
+    showToast('⚠️ Failed to ban user.');
+    return false;
+  }
 }
 
 /* ── Panel resize (desktop) ────────────────────────────────────── */

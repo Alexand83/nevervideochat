@@ -1,7 +1,7 @@
 /* ================================================================
    rooms.js  — multi-room tabs, join/leave, per-room presence+chat
 ================================================================ */
-import { AVAILABLE_ROOMS } from './config.js';
+import { DEFAULT_ROOM_ID } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast }       from './utils.js';
@@ -11,10 +11,34 @@ import { syncPresence, updateOwnPresence, renderUsers } from './users.js';
 let _loadRoomMessages = null;  // (roomId) => Promise<void>
 export function setLoadRoomMessages(fn) { _loadRoomMessages = fn; }
 
+/* ── Available rooms cache (loaded from DB) ── */
+let availableRoomsCache = [];
+
+/* ── Load rooms from database ── */
+export async function loadRoomsFromDB() {
+  if (!state.supa) return;
+  try {
+    const { data, error } = await state.supa
+      .from('rooms')
+      .select('*')
+      .eq('is_open', true)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    availableRoomsCache = data || [];
+  } catch (err) {
+    console.error('[Rooms] Load error:', err);
+    availableRoomsCache = [];
+  }
+}
+
+/* ── Get available rooms (from cache or DB) ── */
+export function getAvailableRooms() {
+  return availableRoomsCache;
+}
+
 /* ── Create a room state entry ── */
-function mkRoom(id) {
-  const cfg = AVAILABLE_ROOMS.find(r => r.id === id) || { id, name: id, icon: '💬' };
-  return { id, name: cfg.name, icon: cfg.icon, messages: [], presenceCh: null, dbSub: null, users: {}, unreadCount: 0 };
+function mkRoom(id, name = null, icon = '💬') {
+  return { id, name: name || id, icon, messages: [], presenceCh: null, dbSub: null, users: {}, unreadCount: 0 };
 }
 
 /* ── Join a room (subscribe presence + DB, load messages) ── */
@@ -25,7 +49,9 @@ export async function joinRoom(roomId) {
   }
   if (!state.supa) return;
 
-  state.rooms[roomId] = mkRoom(roomId);
+  /* Load room info from DB if available */
+  const roomInfo = availableRoomsCache.find(r => r.id === roomId);
+  state.rooms[roomId] = mkRoom(roomId, roomInfo?.name, roomInfo?.icon);
 
   /* Presence channel for this room */
   const presenceCh = state.supa.channel(`presence:room-${roomId}`, {
@@ -174,11 +200,18 @@ function renderRoomPicker() {
   const panel = dom.roomPickerPanel;
   if (!panel) return;
   panel.innerHTML = '<div class="room-picker-title">Join a room</div>';
-  AVAILABLE_ROOMS.forEach(cfg => {
+  
+  const rooms = getAvailableRooms();
+  if (rooms.length === 0) {
+    panel.innerHTML += '<div class="room-picker-item"><span>No rooms available</span></div>';
+    return;
+  }
+  
+  rooms.forEach(room => {
     const row = document.createElement('div');
     row.className = 'room-picker-item';
-    const alreadyIn = !!state.rooms[cfg.id];
-    row.innerHTML = `<span>${cfg.icon} ${cfg.name}</span>`;
+    const alreadyIn = !!state.rooms[room.id];
+    row.innerHTML = `<span>${room.icon || '💬'} ${room.name}</span>`;
     if (alreadyIn) {
       const badge = document.createElement('span');
       badge.className = 'room-picker-joined'; badge.textContent = '✓ Joined';
@@ -186,7 +219,7 @@ function renderRoomPicker() {
     } else {
       const btn = document.createElement('button');
       btn.className = 'room-picker-join-btn'; btn.textContent = 'Join';
-      btn.addEventListener('click', () => { closeRoomPicker(); joinRoom(cfg.id); });
+      btn.addEventListener('click', () => { closeRoomPicker(); joinRoom(room.id); });
       row.appendChild(btn);
     }
     panel.appendChild(row);
@@ -215,7 +248,8 @@ export function renderActiveRoomMessages() {
 let _renderMessage = null;
 export function setRenderMessage(fn) { _renderMessage = fn; }
 
-/* ── Init: join the default room ── */
+/* ── Init: load rooms from DB and join default ── */
 export async function initRooms() {
-  await joinRoom('general');
+  await loadRoomsFromDB();
+  await joinRoom(DEFAULT_ROOM_ID);
 }

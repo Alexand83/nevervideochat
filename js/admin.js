@@ -70,6 +70,11 @@ export function initAdminPanel() {
     openBlockIpModal();
   });
 
+  /* Create role button */
+  dom.adminCreateRoleBtn?.addEventListener('click', () => {
+    openRoleEditModal();
+  });
+
   /* Room edit modal */
   dom.roomEditModalClose?.addEventListener('click', () => {
     dom.roomEditModal.hidden = true;
@@ -87,11 +92,13 @@ function switchAdminTab(tabName) {
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
   document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
-  document.getElementById(`adminTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`)?.classList.add('active');
+  const tabId = tabName.charAt(0).toUpperCase() + tabName.slice(1);
+  document.getElementById(`adminTab${tabId}`)?.classList.add('active');
   
   /* Load tab data */
   if (tabName === 'rooms') loadRooms();
   else if (tabName === 'users') loadUsers();
+  else if (tabName === 'roles') loadCustomRoles();
   else if (tabName === 'banned') loadBannedUsers();
   else if (tabName === 'ips') loadBannedIPs();
 }

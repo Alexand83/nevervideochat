@@ -85,6 +85,34 @@ CREATE POLICY "Admin manage rooms" ON public.rooms FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
 );
 
+-- ── Crea stanza "general" di default ─────────────────────────
+INSERT INTO public.rooms (id, name, icon, is_open, created_by)
+VALUES ('general', 'General', '💬', true, 'system')
+ON CONFLICT (id) DO NOTHING;
+
+-- ── Tabella ruoli/gruppi personalizzati ──────────────────────
+CREATE TABLE IF NOT EXISTS public.custom_roles (
+  id          TEXT        PRIMARY KEY,  -- 'moderator', 'vip', etc.
+  name        TEXT        NOT NULL,
+  color       TEXT        DEFAULT '#8b949e',  -- Badge color
+  permissions JSONB       DEFAULT '{}'::jsonb,  -- { "can_ban": true, "can_mute": true, "can_kick": true, "can_delete_messages": false }
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS for custom_roles
+ALTER TABLE public.custom_roles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read custom_roles" ON public.custom_roles;
+DROP POLICY IF EXISTS "Admin manage custom_roles" ON public.custom_roles;
+
+CREATE POLICY "Public read custom_roles" ON public.custom_roles FOR SELECT USING (true);
+CREATE POLICY "Admin manage custom_roles" ON public.custom_roles FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
+);
+
+-- ── Aggiungi colonna custom_role_id a profiles ────────────────
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS custom_role_id TEXT REFERENCES public.custom_roles(id) ON DELETE SET NULL;
+
 -- ── Tabella utenti bannati ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.banned_users (
   id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,

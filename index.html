@@ -425,6 +425,31 @@
     </svg>
     <span class="ctx-ignore-label" id="ctxIgnoreLabel">Ignore User</span>
   </button>
+  <!-- Admin/Mod actions (only visible if user has permissions) -->
+  <div class="ctx-admin-actions" id="ctxAdminActions" hidden>
+    <hr class="ctx-hr">
+    <button class="ctx-item ctx-admin-item" id="ctxKickBtn" role="menuitem">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
+      Kick User
+    </button>
+    <button class="ctx-item ctx-admin-item" id="ctxMuteBtn" role="menuitem">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 5L6 9H2v6h4l5 4V5zM19 9l-6 6M13 9l6 6"/>
+      </svg>
+      Mute User
+    </button>
+    <button class="ctx-item ctx-admin-item ctx-admin-danger" id="ctxBanBtn" role="menuitem">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+      </svg>
+      Ban User
+    </button>
+  </div>
 </div>
 <div class="ctx-overlay" id="ctxOverlay" hidden aria-hidden="true"></div>
 
@@ -666,6 +691,17 @@
       <div class="admin-section">
         <h3 class="admin-section-title">Online Users</h3>
         <div id="adminUsersList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Roles Management Tab -->
+    <div class="admin-tab-content" id="adminTabRoles" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Custom Roles & Groups</h3>
+        <button class="auth-btn-primary" id="adminCreateRoleBtn">➕ Create Role</button>
+        <div id="adminRolesList" class="admin-list">
           <!-- Filled by JS -->
         </div>
       </div>

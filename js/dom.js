@@ -100,6 +100,10 @@ export const dom = {
   ctxCamBtn:    $('ctxCamBtn'),
   ctxOverlay:   $('ctxOverlay'),
   ctxIgnoreBtn: $('ctxIgnoreBtn'),
+  ctxAdminActions: $('ctxAdminActions'),
+  ctxKickBtn:   $('ctxKickBtn'),
+  ctxMuteBtn:   $('ctxMuteBtn'),
+  ctxBanBtn:    $('ctxBanBtn'),
 
   /* Auth modal */
   authModal:          $('authModal'),
@@ -151,8 +155,10 @@ export const dom = {
   adminUsersList:      $('adminUsersList'),
   adminBannedList:     $('adminBannedList'),
   adminIpsList:        $('adminIpsList'),
+  adminRolesList:      $('adminRolesList'),
   adminCreateRoomBtn:  $('adminCreateRoomBtn'),
   adminBlockIpBtn:     $('adminBlockIpBtn'),
+  adminCreateRoleBtn:  $('adminCreateRoleBtn'),
   roomEditModal:       $('roomEditModal'),
   roomEditModalClose:  $('roomEditModalClose'),
   roomEditForm:        $('roomEditForm'),

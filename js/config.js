@@ -5,13 +5,8 @@ export const SUPABASE_URL      = 'https://kybarxjynjxpagxijpti.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_0HLInJsBCt5kZCVW9yifcg_1TGxHMCm';
 export const AUTH_EMAIL_DOMAIN = 'nvc.local';
 
-export const AVAILABLE_ROOMS = [
-  { id: 'general', name: 'General',    icon: '💬' },
-  { id: 'tech',    name: 'Tech',        icon: '💻' },
-  { id: 'gaming',  name: 'Gaming',      icon: '🎮' },
-  { id: 'music',   name: 'Music',       icon: '🎵' },
-  { id: 'random',  name: 'Random',      icon: '🎲' },
-];
+// Rooms are now loaded from database (see rooms.js loadRoomsFromDB)
+export const DEFAULT_ROOM_ID = 'general';
 
 export const AVATAR_COLORS = [
   '#1f6feb','#388bfd','#a371f7','#da3633','#d29922',
