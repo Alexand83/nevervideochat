@@ -74,40 +74,40 @@ export async function joinRoom(roomId) {
 
   presenceCh
     .on('presence', { event: 'sync' }, () => {
-      syncPresence(presenceCh.presenceState(), roomId);
+      syncPresence(presenceCh.presenceState(), roomIdStr);
     })
     .on('presence', { event: 'join' }, ({ key, newPresences }) => {
       const uid = String(key);
       if (uid === String(state.currentUser.id)) return;
       const info = newPresences[0];
-      if (!state.rooms[roomId]) return;
-      state.rooms[roomId].users[uid] = {
+      if (!state.rooms[roomIdStr]) return;
+      state.rooms[roomIdStr].users[uid] = {
         id: uid, name: info.name, username: info.username || null,
         isGuest: info.isGuest, online: true,
         hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null,
       };
-      if (roomId === state.activeRoom) {
+      if (roomIdStr === String(state.activeRoom)) {
         renderUsers();
-        showToast(`👤 ${info.name} joined #${state.rooms[roomId].name}`);
+        showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
       }
     })
     .on('presence', { event: 'leave' }, ({ key }) => {
       const uid = String(key);
-      if (!state.rooms[roomId]) return;
-      delete state.rooms[roomId].users[uid];
-      if (roomId === state.activeRoom) renderUsers();
+      if (!state.rooms[roomIdStr]) return;
+      delete state.rooms[roomIdStr].users[uid];
+      if (roomIdStr === String(state.activeRoom)) renderUsers();
     })
     .subscribe(async status => {
       if (status === 'SUBSCRIBED') await updateOwnPresence(presenceCh);
     });
 
-  state.rooms[roomId].presenceCh = presenceCh;
+  state.rooms[roomIdStr].presenceCh = presenceCh;
 
   /* Load messages & subscribe to DB changes */
-  if (_loadRoomMessages) await _loadRoomMessages(roomId);
+  if (_loadRoomMessages) await _loadRoomMessages(roomIdStr);
 
   renderRoomTabs();
-  switchRoom(roomId);
+  switchRoom(roomIdStr);
 }
 
 /* ── Leave a room ── */
