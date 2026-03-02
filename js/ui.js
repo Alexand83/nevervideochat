@@ -12,6 +12,7 @@ import { closeCameraWindow, revokeViewer, refreshViewersPanel, requestPublicCame
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
+import { joinRoom } from './rooms.js';
 
 /* Forward ref for uploadToStorage (set by main.js) */
 let _uploadToStorage = null;
@@ -326,11 +327,51 @@ export function initContextMenu() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCtxMenu(); });
 }
 
-/* ── Admin action handlers (reuse from admin.js) ── */
+/* ── Admin action handlers ── */
 async function handleKickUser(userId, userName) {
   if (!state.supa) return false;
+  const minutes = prompt(`Kick ${userName} from this room for how many minutes?`);
+  if (minutes === null) return false;
+  const mins = parseInt(minutes) || 0;
+  if (mins <= 0) {
+    showToast('⚠️ Please enter a valid number of minutes.');
+    return false;
+  }
+  
   try {
-    broadcast('user-kicked', userId, { reason: 'Kicked by admin/mod' });
+    const expiresAt = new Date(Date.now() + mins * 60 * 1000).toISOString();
+    const { error } = await state.supa.from('kicked_users').upsert({
+      user_id: userId,
+      room_id: state.activeRoom,
+      kicked_by: state.currentUser.id,
+      expires_at: expiresAt,
+    }, { onConflict: 'user_id,room_id' });
+    if (error) throw error;
+    
+    /* Broadcast kick event - user must leave this room */
+    broadcast('user-kicked', userId, { room_id: state.activeRoom, expires_at: expiresAt });
+    
+    /* If kicked user is in this room, force them to leave */
+    if (String(userId) === String(state.currentUser?.id)) {
+      showToast(`👢 You have been kicked from this room for ${mins} minutes.`);
+      /* Leave the room */
+      if (state.rooms[state.activeRoom]) {
+        const room = state.rooms[state.activeRoom];
+        if (room.presenceCh) {
+          await room.presenceCh.untrack();
+          await state.supa.removeChannel(room.presenceCh);
+        }
+        delete state.rooms[state.activeRoom];
+        /* Switch to another room if available */
+        const otherRooms = Object.keys(state.rooms).filter(r => r !== state.activeRoom);
+        if (otherRooms.length > 0) {
+          state.activeRoom = otherRooms[0];
+        } else {
+          /* Join general if available */
+          await joinRoom('general');
+        }
+      }
+    }
     return true;
   } catch (err) {
     console.error('[UI] Kick error:', err);
@@ -341,15 +382,33 @@ async function handleKickUser(userId, userName) {
 
 async function handleMuteUser(userId, userName, minutes) {
   if (!state.supa) return false;
+  
+  /* Ask for scope: room or global */
+  const scope = confirm(`Mute ${userName} globally (all rooms)?\n\nOK = Global\nCancel = This room only`);
+  const roomId = scope ? null : state.activeRoom;
+  
   try {
     const expiresAt = minutes > 0 ? new Date(Date.now() + minutes * 60 * 1000).toISOString() : null;
     const { error } = await state.supa.from('muted_users').upsert({
       user_id: userId,
+      room_id: roomId,  -- NULL = global, TEXT = room-specific
       muted_by: state.currentUser.id,
       expires_at: expiresAt,
-    }, { onConflict: 'user_id' });
+    }, { onConflict: 'user_id,room_id' });
     if (error) throw error;
-    broadcast('user-muted', userId, { duration: minutes });
+    
+    /* If muted user has camera active, close it */
+    if (state.cameraWindows?.[userId]) {
+      await closeCameraWindow(userId);
+    }
+    
+    /* Broadcast mute event */
+    broadcast('user-muted', userId, { room_id: roomId, duration: minutes });
+    
+    if (String(userId) === String(state.currentUser?.id)) {
+      const scopeText = roomId ? 'in this room' : 'globally';
+      showToast(`🔇 You have been muted ${scopeText} ${minutes > 0 ? `for ${minutes} minutes` : 'permanently'}.`);
+    }
     return true;
   } catch (err) {
     console.error('[UI] Mute error:', err);
@@ -360,15 +419,39 @@ async function handleMuteUser(userId, userName, minutes) {
 
 async function handleBanUser(userId, userName, reason) {
   if (!state.supa) return false;
+  
+  /* Ask for expiration: permanent or temporary */
+  const isPermanent = confirm(`Ban ${userName} permanently?\n\nOK = Permanent\nCancel = Temporary (you'll set expiration)`);
+  let expiresAt = null;
+  if (!isPermanent) {
+    const days = prompt('Ban for how many days?');
+    if (days === null) return false;
+    const daysNum = parseInt(days) || 0;
+    if (daysNum <= 0) {
+      showToast('⚠️ Please enter a valid number of days.');
+      return false;
+    }
+    expiresAt = new Date(Date.now() + daysNum * 24 * 60 * 60 * 1000).toISOString();
+  }
+  
   try {
     const { error } = await state.supa.from('banned_users').upsert({
       user_id: userId,
       username: userName,
       reason: reason || 'Banned by admin/mod',
       banned_by: state.currentUser.id,
+      expires_at: expiresAt,
     }, { onConflict: 'user_id' });
     if (error) throw error;
-    broadcast('user-banned', userId, { reason: reason || 'Banned by admin/mod' });
+    
+    /* Broadcast ban event - user must leave ALL rooms */
+    broadcast('user-banned', userId, { reason: reason || 'Banned by admin/mod', expires_at: expiresAt });
+    
+    /* If banned user is current user, force disconnect */
+    if (String(userId) === String(state.currentUser?.id)) {
+      showToast(`🚫 You have been banned. Reason: ${reason || 'No reason provided'}`);
+      setTimeout(() => location.reload(), 2000);
+    }
     return true;
   } catch (err) {
     console.error('[UI] Ban error:', err);

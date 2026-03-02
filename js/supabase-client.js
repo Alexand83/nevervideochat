@@ -131,22 +131,47 @@ export async function connectSupabase() {
       })
       .on('broadcast', { event: 'reaction-update' }, ({ payload }) => handleReactionUpdate(payload))
       .on('broadcast', { event: 'user-kicked' }, ({ payload }) => {
-        if (String(payload.to) === String(state.currentUser?.id)) {
-          showToast('👢 You have been kicked by an admin.');
-          /* Force disconnect/reload */
-          setTimeout(() => location.reload(), 2000);
+        const targetId = payload.to || payload.user_id;
+        if (String(targetId) === String(state.currentUser?.id)) {
+          const roomId = payload.room_id;
+          /* Add to kicked cache */
+          if (!state.kickedUsers[targetId]) state.kickedUsers[targetId] = {};
+          state.kickedUsers[targetId][roomId] = payload.expires_at;
+          
+          /* If in that room, leave it */
+          if (state.activeRoom === roomId) {
+            showToast(`👢 You have been kicked from this room until ${new Date(payload.expires_at).toLocaleTimeString()}.`);
+            /* Leave the room */
+            const { leaveRoom } = await import('./rooms.js');
+            await leaveRoom(roomId);
+          }
         }
       })
       .on('broadcast', { event: 'user-banned' }, ({ payload }) => {
-        if (String(payload.to) === String(state.currentUser?.id)) {
+        const targetId = payload.to || payload.user_id;
+        if (String(targetId) === String(state.currentUser?.id)) {
+          /* Add to banned cache */
+          state.bannedUsers[targetId] = { expires_at: payload.expires_at };
           showToast('🚫 You have been banned. Reason: ' + (payload.reason || 'No reason provided'));
           setTimeout(() => location.reload(), 2000);
         }
       })
       .on('broadcast', { event: 'user-muted' }, ({ payload }) => {
-        if (String(payload.to) === String(state.currentUser?.id)) {
+        const targetId = payload.to || payload.user_id;
+        if (String(targetId) === String(state.currentUser?.id)) {
+          const roomId = payload.room_id || null;
+          /* Add to muted cache */
+          state.mutedUsers[targetId] = { room_id: roomId, expires_at: payload.expires_at };
+          
+          /* Close camera if active */
+          if (state.localStream) {
+            const { closeOwnCamera } = await import('./camera.js');
+            await closeOwnCamera();
+          }
+          
+          const scope = roomId ? 'in this room' : 'globally';
           const duration = payload.duration > 0 ? ` for ${payload.duration} minutes` : ' permanently';
-          showToast('🔇 You have been muted' + duration);
+          showToast(`🔇 You have been muted ${scope}${duration}.`);
         }
       })
       .subscribe();

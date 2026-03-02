@@ -48,6 +48,20 @@ export async function joinRoom(roomId) {
     return;
   }
   if (!state.supa) return;
+  
+  /* Check if user is banned */
+  const { checkIsBanned } = await import('./users.js');
+  if (checkIsBanned(state.currentUser?.id)) {
+    showToast('🚫 You are banned and cannot join rooms.');
+    return;
+  }
+  
+  /* Check if user is kicked from this room */
+  const { checkIsKicked } = await import('./users.js');
+  if (checkIsKicked(state.currentUser?.id, roomId)) {
+    showToast(`👢 You have been kicked from this room.`);
+    return;
+  }
 
   /* Load room info from DB if available */
   const roomInfo = availableRoomsCache.find(r => r.id === roomId);

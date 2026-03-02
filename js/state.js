@@ -41,6 +41,11 @@ export const state = {
   rejectedCamUsers:   {},
   ignoredUsers:       {},
 
+  /* Muted/Kicked/Banned users cache (loaded from DB) */
+  mutedUsers:         {},  /* { userId: { room_id: null|string, expires_at: string|null } } */
+  kickedUsers:        {},  /* { userId: { [roomId]: expires_at } } */
+  bannedUsers:        {},  /* { userId: { expires_at: string|null } } */
+
   /* Quote reply context */
   replyTo: null,
 

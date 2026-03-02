@@ -97,11 +97,77 @@ export function renderUsers() {
     if (user.id === state.currentUser?.id) {
       const yt = document.createElement('span'); yt.className = 'you-tag'; yt.textContent = 'You'; li.appendChild(yt);
     }
+    
+    /* Show muted indicator */
+    const isMuted = checkIsMuted(user.id, roomId);
+    if (isMuted) {
+      const muteTag = document.createElement('span');
+      muteTag.className = 'muted-tag'; muteTag.textContent = '🔇 Muted';
+      muteTag.title = isMuted.global ? 'Muted globally' : `Muted in ${roomId}`;
+      li.appendChild(muteTag);
+    }
+    
     if (user.id !== state.currentUser?.id && _openContextMenu) {
       li.addEventListener('click', e => { e.stopPropagation(); _openContextMenu(user.id, li); });
     }
     dom.usersList.appendChild(li);
   });
+}
+
+/* ── Check if user is muted (in this room or globally) ── */
+export function checkIsMuted(userId, roomId) {
+  const mute = state.mutedUsers[String(userId)];
+  if (!mute) return null;
+  
+  /* Check if expired */
+  if (mute.expires_at && new Date(mute.expires_at) < new Date()) {
+    delete state.mutedUsers[String(userId)];
+    return null;
+  }
+  
+  /* Global mute applies everywhere */
+  if (mute.room_id === null) {
+    return { global: true, room_id: null };
+  }
+  
+  /* Room-specific mute only applies to that room */
+  if (mute.room_id === roomId) {
+    return { global: false, room_id: roomId };
+  }
+  
+  return null;
+}
+
+/* ── Check if user is kicked from this room ── */
+export function checkIsKicked(userId, roomId) {
+  const kicked = state.kickedUsers[String(userId)];
+  if (!kicked || !kicked[roomId]) return false;
+  
+  const expiresAt = kicked[roomId];
+  if (new Date(expiresAt) < new Date()) {
+    /* Expired, remove from cache */
+    delete kicked[roomId];
+    if (Object.keys(kicked).length === 0) {
+      delete state.kickedUsers[String(userId)];
+    }
+    return false;
+  }
+  
+  return true;
+}
+
+/* ── Check if user is banned ── */
+export function checkIsBanned(userId) {
+  const ban = state.bannedUsers[String(userId)];
+  if (!ban) return false;
+  
+  /* Check if expired */
+  if (ban.expires_at && new Date(ban.expires_at) < new Date()) {
+    delete state.bannedUsers[String(userId)];
+    return false;
+  }
+  
+  return true;
 }
 
 /* ── Own presence track ── */

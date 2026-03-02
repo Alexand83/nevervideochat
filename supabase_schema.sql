@@ -113,7 +113,7 @@ CREATE POLICY "Admin manage custom_roles" ON public.custom_roles FOR ALL USING (
 -- ── Aggiungi colonna custom_role_id a profiles ────────────────
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS custom_role_id TEXT REFERENCES public.custom_roles(id) ON DELETE SET NULL;
 
--- ── Tabella utenti bannati ────────────────────────────────────
+-- ── Tabella utenti bannati (global ban - da tutte le stanze) ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.banned_users (
   id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id     TEXT        NOT NULL,
@@ -123,6 +123,17 @@ CREATE TABLE IF NOT EXISTS public.banned_users (
   banned_at   TIMESTAMPTZ DEFAULT NOW(),
   expires_at  TIMESTAMPTZ,  -- NULL = permanent ban
   UNIQUE(user_id)
+);
+
+-- ── Tabella utenti kickati (per stanza, temporaneo) ────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.kicked_users (
+  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id     TEXT        NOT NULL,
+  room_id     TEXT        NOT NULL,
+  kicked_by   TEXT        NOT NULL,
+  kicked_at   TIMESTAMPTZ DEFAULT NOW(),
+  expires_at  TIMESTAMPTZ NOT NULL,  -- Quando può rientrare (obbligatorio)
+  UNIQUE(user_id, room_id)
 );
 
 -- RLS for banned_users
@@ -160,10 +171,11 @@ CREATE POLICY "Admin manage banned ips" ON public.banned_ips FOR ALL USING (
 CREATE TABLE IF NOT EXISTS public.muted_users (
   id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id     TEXT        NOT NULL,
+  room_id     TEXT        NULL,  -- NULL = global mute (tutte le stanze), TEXT = mute solo in quella stanza
   muted_by    TEXT        NOT NULL,
   muted_at    TIMESTAMPTZ DEFAULT NOW(),
   expires_at  TIMESTAMPTZ,  -- NULL = permanent mute
-  UNIQUE(user_id)
+  UNIQUE(user_id, room_id)  -- Un utente può essere mutato globalmente O per stanza
 );
 
 -- RLS for muted_users
@@ -179,7 +191,11 @@ CREATE POLICY "Admin manage muted users" ON public.muted_users FOR ALL USING (
 CREATE INDEX IF NOT EXISTS profiles_role_idx ON public.profiles (role);
 CREATE INDEX IF NOT EXISTS banned_users_user_id_idx ON public.banned_users (user_id);
 CREATE INDEX IF NOT EXISTS banned_users_expires_at_idx ON public.banned_users (expires_at);
+CREATE INDEX IF NOT EXISTS kicked_users_user_id_idx ON public.kicked_users (user_id);
+CREATE INDEX IF NOT EXISTS kicked_users_room_id_idx ON public.kicked_users (room_id);
+CREATE INDEX IF NOT EXISTS kicked_users_expires_at_idx ON public.kicked_users (expires_at);
 CREATE INDEX IF NOT EXISTS muted_users_user_id_idx ON public.muted_users (user_id);
+CREATE INDEX IF NOT EXISTS muted_users_room_id_idx ON public.muted_users (room_id);
 CREATE INDEX IF NOT EXISTS muted_users_expires_at_idx ON public.muted_users (expires_at);
 
 -- ── Funzione per verificare se un IP è bannato ────────────────

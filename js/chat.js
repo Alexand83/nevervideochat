@@ -206,6 +206,24 @@ export function clearReplyTo() {
 
 /* ── Send a public message ── */
 export async function sendMessage() {
+  /* Check if current user can send messages (not muted/banned) */
+  if (!state.currentUser) return;
+  
+  /* Check if banned */
+  const { checkIsBanned } = await import('./users.js');
+  if (checkIsBanned(state.currentUser.id)) {
+    showToast('🚫 You are banned and cannot send messages.');
+    return;
+  }
+  
+  /* Check if muted (global or in this room) */
+  const { checkIsMuted } = await import('./users.js');
+  const mute = checkIsMuted(state.currentUser.id, state.activeRoom);
+  if (mute) {
+    const scope = mute.global ? 'globally' : `in this room`;
+    showToast(`🔇 You are muted ${scope} and cannot send messages.`);
+    return;
+  }
   let html = dom.msgInput.innerHTML.trim().replace(/^(<br\s*\/?>)+|(<br\s*\/?>)+$/gi, '').trim();
   const hasText  = html.length > 0 && html !== '<br>';
   const hasImage = !!state.pendingImage;

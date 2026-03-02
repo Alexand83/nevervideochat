@@ -81,6 +81,11 @@ export async function finishInit() {
   /* Reply cancel button */
   dom.replyPreviewCancel?.addEventListener('click', clearReplyTo);
 
+  /* Load mute/kick/ban status for current user */
+  if (state.supa && state.currentUser) {
+    await loadUserRestrictions(state.currentUser.id);
+  }
+
   /* Init room system (joins general room, subscribes presence + DB) */
   await initRooms();
 
@@ -89,6 +94,48 @@ export async function finishInit() {
   updateAdminButton(); /* Check admin access and show/hide button */
   connectSupabase().catch(err => console.error('[NVC]', err));
   dom.msgInput?.focus();
+}
+
+/* ── Load mute/kick/ban status for current user ── */
+async function loadUserRestrictions(userId) {
+  if (!state.supa) return;
+  try {
+    /* Load muted users */
+    const { data: muted, error: muteErr } = await state.supa
+      .from('muted_users')
+      .select('*')
+      .eq('user_id', userId);
+    if (!muteErr && muted) {
+      muted.forEach(m => {
+        if (!state.mutedUsers[userId]) state.mutedUsers[userId] = {};
+        state.mutedUsers[userId] = { room_id: m.room_id, expires_at: m.expires_at };
+      });
+    }
+    
+    /* Load kicked users */
+    const { data: kicked, error: kickErr } = await state.supa
+      .from('kicked_users')
+      .select('*')
+      .eq('user_id', userId);
+    if (!kickErr && kicked) {
+      state.kickedUsers[userId] = {};
+      kicked.forEach(k => {
+        state.kickedUsers[userId][k.room_id] = k.expires_at;
+      });
+    }
+    
+    /* Load banned users */
+    const { data: banned, error: banErr } = await state.supa
+      .from('banned_users')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    if (!banErr && banned) {
+      state.bannedUsers[userId] = { expires_at: banned.expires_at };
+    }
+  } catch (err) {
+    console.error('[Main] Load restrictions error:', err);
+  }
 }
 
 /* Close room picker when clicking outside */
