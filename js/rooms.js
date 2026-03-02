@@ -43,8 +43,9 @@ function mkRoom(id, name = null, icon = '💬') {
 
 /* ── Join a room (subscribe presence + DB, load messages) ── */
 export async function joinRoom(roomId) {
-  if (state.rooms[roomId]) {
-    switchRoom(roomId);
+  const roomIdStr = String(roomId);
+  if (state.rooms[roomIdStr]) {
+    switchRoom(roomIdStr);
     return;
   }
   if (!state.supa) return;
@@ -58,14 +59,14 @@ export async function joinRoom(roomId) {
   
   /* Check if user is kicked from this room */
   const { checkIsKicked } = await import('./users.js');
-  if (checkIsKicked(state.currentUser?.id, roomId)) {
+  if (checkIsKicked(state.currentUser?.id, roomIdStr)) {
     showToast(`👢 You have been kicked from this room.`);
     return;
   }
 
   /* Load room info from DB if available */
-  const roomInfo = availableRoomsCache.find(r => String(r.id) === String(roomId));
-  state.rooms[String(roomId)] = mkRoom(roomId, roomInfo?.name, roomInfo?.icon);
+  const roomInfo = availableRoomsCache.find(r => String(r.id) === roomIdStr);
+  state.rooms[roomIdStr] = mkRoom(roomIdStr, roomInfo?.name, roomInfo?.icon);
 
   /* Presence channel for this room */
   const presenceCh = state.supa.channel(`presence:room-${roomIdStr}`, {
