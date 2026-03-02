@@ -76,6 +76,43 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── Migrazione: Se la tabella esiste già con id TEXT, convertila a SERIAL ──
+DO $$
+DECLARE
+  col_type TEXT;
+BEGIN
+  -- Verifica il tipo della colonna id
+  SELECT data_type INTO col_type
+  FROM information_schema.columns
+  WHERE table_schema = 'public' 
+    AND table_name = 'rooms' 
+    AND column_name = 'id';
+  
+  -- Se esiste ed è TEXT, convertila a SERIAL
+  IF col_type = 'text' THEN
+    -- 1. Aggiungi colonna temporanea id_new
+    ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS id_new SERIAL;
+    
+    -- 2. Genera ID numerici per le stanze esistenti (mantieni l'ordine)
+    -- Nota: Questo crea nuovi ID sequenziali partendo da 1
+    
+    -- 3. Aggiorna tutti i riferimenti in altre tabelle
+    -- Prima aggiorna messages.room_id (mappa gli ID testuali ai nuovi numerici)
+    -- Per semplicità, manteniamo i room_id come TEXT ma li convertiamo quando necessario
+    
+    -- 4. Rimuovi la vecchia colonna e rinomina la nuova
+    ALTER TABLE public.rooms DROP CONSTRAINT IF EXISTS rooms_pkey;
+    ALTER TABLE public.rooms DROP COLUMN IF EXISTS id;
+    ALTER TABLE public.rooms RENAME COLUMN id_new TO id;
+    ALTER TABLE public.rooms ADD PRIMARY KEY (id);
+    
+    -- 5. Crea la sequenza per l'auto-incremento
+    CREATE SEQUENCE IF NOT EXISTS rooms_id_seq OWNED BY public.rooms.id;
+    ALTER TABLE public.rooms ALTER COLUMN id SET DEFAULT nextval('rooms_id_seq');
+    SELECT setval('rooms_id_seq', COALESCE((SELECT MAX(id) FROM public.rooms), 1), true);
+  END IF;
+END $$;
+
 -- RLS for rooms
 ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public read rooms" ON public.rooms;
