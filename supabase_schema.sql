@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS public.rooms (
 DO $$
 DECLARE
   col_type TEXT;
+  row_count INTEGER;
+  max_id_val INTEGER;
 BEGIN
   -- Verifica il tipo della colonna id
   SELECT data_type INTO col_type
@@ -88,28 +90,59 @@ BEGIN
     AND table_name = 'rooms' 
     AND column_name = 'id';
   
-  -- Se esiste ed è TEXT, convertila a SERIAL
+  -- Se esiste ed è TEXT, convertila a INTEGER (SERIAL)
   IF col_type = 'text' THEN
-    -- 1. Aggiungi colonna temporanea id_new
-    ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS id_new SERIAL;
+    -- Conta le righe esistenti
+    SELECT COUNT(*) INTO row_count FROM public.rooms;
     
-    -- 2. Genera ID numerici per le stanze esistenti (mantieni l'ordine)
-    -- Nota: Questo crea nuovi ID sequenziali partendo da 1
-    
-    -- 3. Aggiorna tutti i riferimenti in altre tabelle
-    -- Prima aggiorna messages.room_id (mappa gli ID testuali ai nuovi numerici)
-    -- Per semplicità, manteniamo i room_id come TEXT ma li convertiamo quando necessario
-    
-    -- 4. Rimuovi la vecchia colonna e rinomina la nuova
-    ALTER TABLE public.rooms DROP CONSTRAINT IF EXISTS rooms_pkey;
-    ALTER TABLE public.rooms DROP COLUMN IF EXISTS id;
-    ALTER TABLE public.rooms RENAME COLUMN id_new TO id;
-    ALTER TABLE public.rooms ADD PRIMARY KEY (id);
-    
-    -- 5. Crea la sequenza per l'auto-incremento
-    CREATE SEQUENCE IF NOT EXISTS rooms_id_seq OWNED BY public.rooms.id;
-    ALTER TABLE public.rooms ALTER COLUMN id SET DEFAULT nextval('rooms_id_seq');
-    SELECT setval('rooms_id_seq', COALESCE((SELECT MAX(id) FROM public.rooms), 1), true);
+    -- Se ci sono dati, dobbiamo fare una migrazione più complessa
+    IF row_count > 0 THEN
+      -- 1. Aggiungi colonna temporanea id_new INTEGER
+      ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS id_new INTEGER;
+      
+      -- 2. Popola id_new con valori sequenziali basati sull'ordine di creazione
+      WITH numbered AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY created_at) as new_id
+        FROM public.rooms
+      )
+      UPDATE public.rooms r
+      SET id_new = n.new_id
+      FROM numbered n
+      WHERE r.id = n.id;
+      
+      -- 3. Ottieni il valore massimo per la sequenza
+      SELECT COALESCE(MAX(id_new), 0) INTO max_id_val FROM public.rooms;
+      
+      -- 4. Crea sequenza e imposta il prossimo valore
+      DROP SEQUENCE IF EXISTS rooms_id_seq;
+      EXECUTE format('CREATE SEQUENCE rooms_id_seq START WITH %s', max_id_val + 1);
+      
+      -- 5. Rimuovi constraint e colonna vecchia
+      ALTER TABLE public.rooms DROP CONSTRAINT IF EXISTS rooms_pkey;
+      ALTER TABLE public.rooms DROP COLUMN id;
+      
+      -- 6. Rinomina id_new a id e imposta come PRIMARY KEY
+      ALTER TABLE public.rooms RENAME COLUMN id_new TO id;
+      ALTER TABLE public.rooms ALTER COLUMN id SET NOT NULL;
+      ALTER TABLE public.rooms ADD PRIMARY KEY (id);
+      
+      -- 7. Collega la sequenza alla colonna
+      ALTER TABLE public.rooms ALTER COLUMN id SET DEFAULT nextval('rooms_id_seq');
+      ALTER SEQUENCE rooms_id_seq OWNED BY public.rooms.id;
+    ELSE
+      -- Se non ci sono dati, è più semplice: elimina e ricrea
+      DROP TABLE IF EXISTS public.rooms CASCADE;
+      CREATE TABLE public.rooms (
+        id          SERIAL      PRIMARY KEY,
+        name        TEXT        NOT NULL,
+        icon        TEXT        DEFAULT '💬',
+        is_open     BOOLEAN     DEFAULT true,
+        password    TEXT,
+        created_by  TEXT        NOT NULL,
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+      );
+    END IF;
   END IF;
 END $$;
 
