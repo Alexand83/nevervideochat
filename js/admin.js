@@ -13,13 +13,13 @@ export async function checkAdminAccess() {
   if (!state.supa || !state.currentUser) return false;
   try {
     const { data, error } = await state.supa
-      .from('users')
+      .from('profiles')
       .select('role')
       .eq('id', state.currentUser.id)
       .single();
     if (error || !data) return false;
-    currentUserRole = data.role;
-    return data.role === 'owner' || data.role === 'admin';
+    currentUserRole = data.role || 'user';
+    return currentUserRole === 'owner' || currentUserRole === 'admin';
   } catch {
     return false;
   }

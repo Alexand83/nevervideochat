@@ -57,25 +57,12 @@ BEGIN
   END IF;
 END $$;
 
--- ── Tabella utenti con ruoli ──────────────────────────────────
-CREATE TABLE IF NOT EXISTS public.users (
-  id          TEXT        PRIMARY KEY,  -- user_id from auth or guest ID
-  username    TEXT        NOT NULL,
-  email       TEXT,
-  role        TEXT        NOT NULL DEFAULT 'user',  -- 'owner', 'admin', 'moderator', 'user'
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Add role column to existing users (safe to run on already-created tables)
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-
--- RLS for users
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Public read users" ON public.users;
-CREATE POLICY "Public read users" ON public.users FOR SELECT USING (true);
+-- ── Aggiungi colonna role a profiles (già esistente) ───────────
+-- La tabella profiles esiste già (vedi supabase_profiles.sql)
+-- Aggiungiamo solo la colonna role per i permessi admin
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- ── Tabella stanze (gestite da admin) ─────────────────────────
 CREATE TABLE IF NOT EXISTS public.rooms (
@@ -95,7 +82,7 @@ DROP POLICY IF EXISTS "Public read rooms" ON public.rooms;
 DROP POLICY IF EXISTS "Admin manage rooms" ON public.rooms;
 CREATE POLICY "Public read rooms" ON public.rooms FOR SELECT USING (true);
 CREATE POLICY "Admin manage rooms" ON public.rooms FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
 );
 
 -- ── Tabella utenti bannati ────────────────────────────────────
@@ -116,7 +103,7 @@ DROP POLICY IF EXISTS "Public read banned users" ON public.banned_users;
 DROP POLICY IF EXISTS "Admin manage banned users" ON public.banned_users;
 CREATE POLICY "Public read banned users" ON public.banned_users FOR SELECT USING (true);
 CREATE POLICY "Admin manage banned users" ON public.banned_users FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid()::text AND role IN ('owner', 'admin', 'moderator'))
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin', 'moderator'))
 );
 
 -- ── Tabella IP bannati ────────────────────────────────────────
@@ -135,10 +122,10 @@ ALTER TABLE public.banned_ips ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Admin read banned ips" ON public.banned_ips;
 DROP POLICY IF EXISTS "Admin manage banned ips" ON public.banned_ips;
 CREATE POLICY "Admin read banned ips" ON public.banned_ips FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
 );
 CREATE POLICY "Admin manage banned ips" ON public.banned_ips FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
 );
 
 -- ── Tabella utenti silenziati (muted) ─────────────────────────
@@ -157,11 +144,11 @@ DROP POLICY IF EXISTS "Public read muted users" ON public.muted_users;
 DROP POLICY IF EXISTS "Admin manage muted users" ON public.muted_users;
 CREATE POLICY "Public read muted users" ON public.muted_users FOR SELECT USING (true);
 CREATE POLICY "Admin manage muted users" ON public.muted_users FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid()::text AND role IN ('owner', 'admin', 'moderator'))
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin', 'moderator'))
 );
 
 -- ── Indici ────────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS users_role_idx ON public.users (role);
+CREATE INDEX IF NOT EXISTS profiles_role_idx ON public.profiles (role);
 CREATE INDEX IF NOT EXISTS banned_users_user_id_idx ON public.banned_users (user_id);
 CREATE INDEX IF NOT EXISTS banned_users_expires_at_idx ON public.banned_users (expires_at);
 CREATE INDEX IF NOT EXISTS muted_users_user_id_idx ON public.muted_users (user_id);
