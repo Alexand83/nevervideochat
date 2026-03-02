@@ -178,6 +178,31 @@ CREATE TABLE IF NOT EXISTS public.muted_users (
   UNIQUE(user_id, room_id)  -- Un utente può essere mutato globalmente O per stanza
 );
 
+-- Add room_id column to existing muted_users table (safe to run on already-created tables)
+ALTER TABLE public.muted_users ADD COLUMN IF NOT EXISTS room_id TEXT NULL;
+
+-- Drop old unique constraint if exists and recreate with room_id
+DO $$
+BEGIN
+  -- Drop old unique constraint on user_id if it exists
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'muted_users_user_id_key' 
+    AND conrelid = 'public.muted_users'::regclass
+  ) THEN
+    ALTER TABLE public.muted_users DROP CONSTRAINT muted_users_user_id_key;
+  END IF;
+  
+  -- Add new unique constraint on (user_id, room_id) if it doesn't exist
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'muted_users_user_id_room_id_key' 
+    AND conrelid = 'public.muted_users'::regclass
+  ) THEN
+    ALTER TABLE public.muted_users ADD CONSTRAINT muted_users_user_id_room_id_key UNIQUE (user_id, room_id);
+  END IF;
+END $$;
+
 -- RLS for muted_users
 ALTER TABLE public.muted_users ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public read muted users" ON public.muted_users;
