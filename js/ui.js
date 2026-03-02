@@ -391,7 +391,7 @@ async function handleMuteUser(userId, userName, minutes) {
     const expiresAt = minutes > 0 ? new Date(Date.now() + minutes * 60 * 1000).toISOString() : null;
     const { error } = await state.supa.from('muted_users').upsert({
       user_id: userId,
-      room_id: roomId,  -- NULL = global, TEXT = room-specific
+      room_id: roomId,  /* NULL = global, TEXT = room-specific */
       muted_by: state.currentUser.id,
       expires_at: expiresAt,
     }, { onConflict: 'user_id,room_id' });
