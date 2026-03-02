@@ -2832,3 +2832,64 @@ a:hover { text-decoration: underline; }
   padding: var(--s4);
   font-size: var(--fz-sm);
 }
+/* ── Action Modals (Kick/Ban/Mute) ───────────────────────────────────── */
+.action-modal {
+  max-width: 480px;
+}
+
+.action-modal-content {
+  padding: 20px 24px 24px;
+}
+
+.action-modal-user {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--tx0);
+  margin: 0 0 4px;
+  text-align: center;
+}
+
+.action-modal-subtitle {
+  font-size: 13px;
+  color: var(--tx1);
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+.action-btn-danger {
+  background: var(--clr-danger) !important;
+  color: white !important;
+}
+
+.action-btn-danger:hover {
+  background: var(--clr-danger-h) !important;
+}
+
+.action-btn-warning {
+  background: #d29922 !important;
+  color: white !important;
+}
+
+.action-btn-warning:hover {
+  background: #e3b341 !important;
+}
+
+/* Radio button styling for scope selection */
+.action-modal-content input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.action-modal-content label[style*="display: flex"] {
+  padding: 8px 12px;
+  border-radius: var(--r2);
+  transition: background var(--tf);
+  margin-bottom: 4px;
+}
+
+.action-modal-content label[style*="display: flex"]:hover {
+  background: var(--bg-hover);
+}
