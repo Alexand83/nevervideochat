@@ -129,7 +129,7 @@ async function loadUserRestrictions(userId) {
       .from('banned_users')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     if (!banErr && banned) {
       state.bannedUsers[userId] = { expires_at: banned.expires_at };
     }
