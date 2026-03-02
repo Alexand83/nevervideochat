@@ -129,7 +129,7 @@ async function loadRooms() {
           <span class="admin-item-icon">${room.icon || '💬'}</span>
           <div>
             <strong>${escHtml(room.name)}</strong>
-            <span class="admin-item-id">ID: ${escHtml(room.id)}</span>
+            <span class="admin-item-id">ID: ${escHtml(String(room.id))}</span>
           </div>
         </div>
         <div class="admin-item-meta">
@@ -157,19 +157,29 @@ function openRoomEditModal(room = null) {
   if (!dom.roomEditModal) return;
   const form = dom.roomEditForm;
   const title = document.getElementById('roomEditModalTitle');
+  const idInput = document.getElementById('roomEditId');
   
   if (room) {
     title.textContent = 'Edit Room';
-    document.getElementById('roomEditId').value = room.id;
-    document.getElementById('roomEditId').disabled = true;
+    if (idInput) {
+      idInput.value = room.id;
+      idInput.disabled = true;
+      idInput.parentElement.style.display = 'block'; // Mostra il campo ID in edit
+    }
     document.getElementById('roomEditName').value = room.name;
     document.getElementById('roomEditIcon').value = room.icon || '';
     document.getElementById('roomEditIsOpen').checked = room.is_open;
     document.getElementById('roomEditPassword').value = '';
+    document.getElementById('roomEditPassword').placeholder = 'Leave empty to keep current password';
   } else {
-    title.textContent = 'Create Room';
+    title.textContent = 'Create New Room';
     form.reset();
-    document.getElementById('roomEditId').disabled = false;
+    if (idInput) {
+      idInput.value = '';
+      idInput.disabled = true; // ID è auto-generato
+      idInput.parentElement.style.display = 'none'; // Nascondi il campo ID in creazione
+    }
+    document.getElementById('roomEditPassword').placeholder = 'Leave empty for no password';
   }
   dom.roomEditModal.hidden = false;
 }
@@ -177,20 +187,20 @@ function openRoomEditModal(room = null) {
 async function saveRoom() {
   if (!state.supa) return;
   const form = dom.roomEditForm;
-  const id = document.getElementById('roomEditId').value.trim();
+  const idInput = document.getElementById('roomEditId');
+  const id = idInput ? parseInt(idInput.value.trim()) : null;
   const name = document.getElementById('roomEditName').value.trim();
   const icon = document.getElementById('roomEditIcon').value.trim() || '💬';
   const isOpen = document.getElementById('roomEditIsOpen').checked;
   const password = document.getElementById('roomEditPassword').value.trim();
   
-  if (!id || !name) {
-    showToast('⚠️ Room ID and Name are required.');
+  if (!name) {
+    showToast('⚠️ Room Name is required.');
     return;
   }
   
   try {
     const roomData = {
-      id,
       name,
       icon,
       is_open: isOpen,
@@ -198,15 +208,27 @@ async function saveRoom() {
       password: password ? await hashPassword(password) : null,
     };
     
-    const { error } = await state.supa
+    // Se è un edit, aggiungi l'ID
+    if (id && !isNaN(id)) {
+      roomData.id = id;
+    }
+    
+    const { data, error } = await state.supa
       .from('rooms')
-      .upsert(roomData, { onConflict: 'id' });
+      .upsert(roomData, { onConflict: id ? 'id' : undefined })
+      .select()
+      .single();
     
     if (error) throw error;
     
     showToast('✅ Room saved!');
     dom.roomEditModal.hidden = true;
     loadRooms();
+    
+    // Ricarica le stanze disponibili e aggiorna i tab
+    const { loadRoomsFromDB, renderRoomTabs } = await import('./rooms.js');
+    await loadRoomsFromDB();
+    renderRoomTabs();
   } catch (err) {
     console.error('[Admin] Save room error:', err);
     showToast('⚠️ Failed to save room.');

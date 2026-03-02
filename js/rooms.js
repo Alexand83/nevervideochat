@@ -38,7 +38,7 @@ export function getAvailableRooms() {
 
 /* ── Create a room state entry ── */
 function mkRoom(id, name = null, icon = '💬') {
-  return { id, name: name || id, icon, messages: [], presenceCh: null, dbSub: null, users: {}, unreadCount: 0 };
+  return { id: String(id), name: name || String(id), icon, messages: [], presenceCh: null, dbSub: null, users: {}, unreadCount: 0 };
 }
 
 /* ── Join a room (subscribe presence + DB, load messages) ── */
@@ -64,8 +64,8 @@ export async function joinRoom(roomId) {
   }
 
   /* Load room info from DB if available */
-  const roomInfo = availableRoomsCache.find(r => r.id === roomId);
-  state.rooms[roomId] = mkRoom(roomId, roomInfo?.name, roomInfo?.icon);
+  const roomInfo = availableRoomsCache.find(r => String(r.id) === String(roomId));
+  state.rooms[String(roomId)] = mkRoom(roomId, roomInfo?.name, roomInfo?.icon);
 
   /* Presence channel for this room */
   const presenceCh = state.supa.channel(`presence:room-${roomId}`, {
@@ -130,8 +130,9 @@ export function leaveRoom(roomId) {
 
 /* ── Switch active room (no network activity, just UI) ── */
 export function switchRoom(roomId) {
-  if (!state.rooms[roomId]) return;
-  state.activeRoom = roomId;
+  const roomIdStr = String(roomId);
+  if (!state.rooms[roomIdStr]) return;
+  state.activeRoom = roomIdStr;
   /* Reset unread count when switching to this room */
   state.rooms[roomId].unreadCount = 0;
   renderRoomTabs();
@@ -265,5 +266,14 @@ export function setRenderMessage(fn) { _renderMessage = fn; }
 /* ── Init: load rooms from DB and join default ── */
 export async function initRooms() {
   await loadRoomsFromDB();
-  await joinRoom(DEFAULT_ROOM_ID);
+  // Cerca la stanza "General" per ID o nome
+  const generalRoom = availableRoomsCache.find(r => r.name === 'General' || String(r.id) === '1');
+  if (generalRoom) {
+    await joinRoom(String(generalRoom.id));
+  } else {
+    // Fallback: prova a unire la prima stanza disponibile
+    if (availableRoomsCache.length > 0) {
+      await joinRoom(String(availableRoomsCache[0].id));
+    }
+  }
 }

@@ -66,7 +66,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFA
 
 -- ── Tabella stanze (gestite da admin) ─────────────────────────
 CREATE TABLE IF NOT EXISTS public.rooms (
-  id          TEXT        PRIMARY KEY,
+  id          SERIAL      PRIMARY KEY,
   name        TEXT        NOT NULL,
   icon        TEXT        DEFAULT '💬',
   is_open     BOOLEAN     DEFAULT true,
@@ -86,9 +86,15 @@ CREATE POLICY "Admin manage rooms" ON public.rooms FOR ALL USING (
 );
 
 -- ── Crea stanza "general" di default ─────────────────────────
-INSERT INTO public.rooms (id, name, icon, is_open, created_by)
-VALUES ('general', 'General', '💬', true, 'system')
-ON CONFLICT (id) DO NOTHING;
+-- Note: Se la tabella è nuova, inserisce general con id=1
+-- Se esiste già, usa INSERT ... ON CONFLICT per evitare duplicati
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.rooms WHERE name = 'General' AND created_by = 'system') THEN
+    INSERT INTO public.rooms (name, icon, is_open, created_by)
+    VALUES ('General', '💬', true, 'system');
+  END IF;
+END $$;
 
 -- ── Tabella ruoli/gruppi personalizzati ──────────────────────
 CREATE TABLE IF NOT EXISTS public.custom_roles (

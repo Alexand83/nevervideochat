@@ -739,24 +739,33 @@
       <button class="nvc-modal-close-btn" id="roomEditModalClose">✕</button>
     </div>
     <form id="roomEditForm">
-      <label class="settings-label" for="roomEditId">Room ID</label>
-      <input type="text" id="roomEditId" class="settings-input" required pattern="[a-z0-9-]+" placeholder="tech">
+      <div id="roomEditIdContainer" style="display: none;">
+        <label class="settings-label" for="roomEditId">Room ID (auto-generated)</label>
+        <input type="number" id="roomEditId" class="settings-input" readonly disabled>
+      </div>
       
-      <label class="settings-label" for="roomEditName">Room Name</label>
-      <input type="text" id="roomEditName" class="settings-input" required placeholder="Tech">
+      <label class="settings-label" for="roomEditName">
+        Room Name <span style="color: var(--clr-danger-h);">*</span>
+      </label>
+      <input type="text" id="roomEditName" class="settings-input" required placeholder="e.g., Tech, Gaming, Music" autofocus>
+      <p class="settings-hint">Choose a descriptive name for your room</p>
       
       <label class="settings-label" for="roomEditIcon">Icon (emoji)</label>
-      <input type="text" id="roomEditIcon" class="settings-input" maxlength="2" placeholder="💻">
+      <input type="text" id="roomEditIcon" class="settings-input" maxlength="2" placeholder="💻" style="font-size: 20px; text-align: center;">
+      <p class="settings-hint">Pick an emoji to represent this room (optional, defaults to 💬)</p>
       
-      <label class="settings-label">
-        <input type="checkbox" id="roomEditIsOpen"> Room is open (public)
+      <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="checkbox" id="roomEditIsOpen" checked> 
+        <span>Room is open (public)</span>
       </label>
+      <p class="settings-hint">Open rooms are visible to everyone. Closed rooms are hidden from the room picker.</p>
       
-      <label class="settings-label" for="roomEditPassword">Password (optional)</label>
+      <label class="settings-label" for="roomEditPassword">Password Protection (optional)</label>
       <input type="password" id="roomEditPassword" class="settings-input" placeholder="Leave empty for no password">
+      <p class="settings-hint">If set, users will need to enter this password to join the room</p>
       
       <div class="settings-actions">
-        <button type="submit" class="auth-btn-primary">Save</button>
+        <button type="submit" class="auth-btn-primary">💾 Save Room</button>
         <button type="button" class="auth-btn-ghost" id="roomEditCancelBtn">Cancel</button>
       </div>
     </form>
