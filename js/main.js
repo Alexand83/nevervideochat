@@ -18,6 +18,7 @@ import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initPanelResize, initMobilePanel, setUIDeps } from './ui.js';
 import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
+import { showToast } from './utils.js';
 
 /* ── Wire cross-module forward references ── */
 setOpenContextMenu(openContextMenu);   /* users.js → context menu */

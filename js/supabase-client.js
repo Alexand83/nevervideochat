@@ -130,7 +130,7 @@ export async function connectSupabase() {
         if (!dom.vcallWin.hidden) { endCall(false); showToast(`📵 ${payload.fromName} ended the call.`); }
       })
       .on('broadcast', { event: 'reaction-update' }, ({ payload }) => handleReactionUpdate(payload))
-      .on('broadcast', { event: 'user-kicked' }, ({ payload }) => {
+      .on('broadcast', { event: 'user-kicked' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
         if (String(targetId) === String(state.currentUser?.id)) {
           const roomId = payload.room_id;
@@ -140,10 +140,11 @@ export async function connectSupabase() {
           
           /* If in that room, leave it */
           if (state.activeRoom === roomId) {
-            showToast(`👢 You have been kicked from this room until ${new Date(payload.expires_at).toLocaleTimeString()}.`);
-            /* Leave the room */
             const { leaveRoom } = await import('./rooms.js');
+            const { renderRoomTabs } = await import('./rooms.js');
             await leaveRoom(roomId);
+            renderRoomTabs();
+            showToast(`👢 You have been kicked from this room until ${new Date(payload.expires_at).toLocaleTimeString()}.`);
           }
         }
       })
@@ -156,7 +157,7 @@ export async function connectSupabase() {
           setTimeout(() => location.reload(), 2000);
         }
       })
-      .on('broadcast', { event: 'user-muted' }, ({ payload }) => {
+      .on('broadcast', { event: 'user-muted' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
         if (String(targetId) === String(state.currentUser?.id)) {
           const roomId = payload.room_id || null;
@@ -168,6 +169,10 @@ export async function connectSupabase() {
             const { closeOwnCamera } = await import('./camera.js');
             await closeOwnCamera();
           }
+          
+          /* Re-render users to show muted indicator */
+          const { renderUsers } = await import('./users.js');
+          renderUsers();
           
           const scope = roomId ? 'in this room' : 'globally';
           const duration = payload.duration > 0 ? ` for ${payload.duration} minutes` : ' permanently';

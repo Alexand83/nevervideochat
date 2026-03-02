@@ -398,7 +398,10 @@ async function handleMuteUser(userId, userName, minutes) {
     if (error) throw error;
     
     /* If muted user has camera active, close it */
-    if (state.cameraWindows?.[userId]) {
+    if (String(userId) === String(state.currentUser?.id) && state.localStream) {
+      const { closeOwnCamera } = await import('./camera.js');
+      await closeOwnCamera();
+    } else if (state.cameraWindows?.[userId]) {
       await closeCameraWindow(userId);
     }
     

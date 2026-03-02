@@ -141,6 +141,12 @@ export function revokeViewer(viewerUid) {
   addRejectedCam(uid, name);  /* kick = block future requests */
 }
 
+/* ── Close own camera (called when muted) ── */
+export async function closeOwnCamera() {
+  if (!state.localStream) return;
+  await closeCameraWindow(state.currentUser?.id);
+}
+
 export async function closeCameraWindow(uid) {
   const cw = state.cameraWindows[uid]; if (!cw) return;
   stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];
