@@ -130,6 +130,25 @@ export async function connectSupabase() {
         if (!dom.vcallWin.hidden) { endCall(false); showToast(`📵 ${payload.fromName} ended the call.`); }
       })
       .on('broadcast', { event: 'reaction-update' }, ({ payload }) => handleReactionUpdate(payload))
+      .on('broadcast', { event: 'user-kicked' }, ({ payload }) => {
+        if (String(payload.to) === String(state.currentUser?.id)) {
+          showToast('👢 You have been kicked by an admin.');
+          /* Force disconnect/reload */
+          setTimeout(() => location.reload(), 2000);
+        }
+      })
+      .on('broadcast', { event: 'user-banned' }, ({ payload }) => {
+        if (String(payload.to) === String(state.currentUser?.id)) {
+          showToast('🚫 You have been banned. Reason: ' + (payload.reason || 'No reason provided'));
+          setTimeout(() => location.reload(), 2000);
+        }
+      })
+      .on('broadcast', { event: 'user-muted' }, ({ payload }) => {
+        if (String(payload.to) === String(state.currentUser?.id)) {
+          const duration = payload.duration > 0 ? ` for ${payload.duration} minutes` : ' permanently';
+          showToast('🔇 You have been muted' + duration);
+        }
+      })
       .subscribe();
 
     showToast('🟢 Connected to NeverVideoChat');
