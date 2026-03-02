@@ -16,6 +16,7 @@ import { initCameraSystem, initCallControls } from './camera.js';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initContextMenu, openContextMenu,
          initPanelResize, initMobilePanel, setUIDeps } from './ui.js';
+import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
 
 /* ── Wire cross-module forward references ── */
@@ -36,6 +37,7 @@ async function init() {
   initMobilePanel(); initPanelResize();
   initAuthModal(); initProfileModal(); initSettingsModal();
   initSearch();
+  initAdminPanel();
 
   /* 2. Create Supabase client (needed for auth) */
   initSupabaseClient();
@@ -84,6 +86,7 @@ export async function finishInit() {
 
   renderUsers();
   updateHeaderUser();
+  updateAdminButton(); /* Check admin access and show/hide button */
   connectSupabase().catch(err => console.error('[NVC]', err));
   dom.msgInput?.focus();
 }

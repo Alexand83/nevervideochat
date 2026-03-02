@@ -142,4 +142,19 @@ export const dom = {
   rejectedCamsList:    $('rejectedCamsList'),
   ignoredUsersSection: $('ignoredUsersSection'),
   ignoredUsersList:    $('ignoredUsersList'),
+
+  /* Admin panel */
+  headerAdminBtn:      $('headerAdminBtn'),
+  adminModal:          $('adminModal'),
+  adminModalClose:     $('adminModalClose'),
+  adminRoomsList:      $('adminRoomsList'),
+  adminUsersList:      $('adminUsersList'),
+  adminBannedList:     $('adminBannedList'),
+  adminIpsList:        $('adminIpsList'),
+  adminCreateRoomBtn:  $('adminCreateRoomBtn'),
+  adminBlockIpBtn:     $('adminBlockIpBtn'),
+  roomEditModal:       $('roomEditModal'),
+  roomEditModalClose:  $('roomEditModalClose'),
+  roomEditForm:        $('roomEditForm'),
+  roomEditCancelBtn:   $('roomEditCancelBtn'),
 };

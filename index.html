@@ -630,6 +630,104 @@
 </div>
 
 
+<!-- ================================================================
+     ADMIN PANEL MODAL
+================================================================ -->
+<div class="nvc-modal-backdrop" id="adminModal" role="dialog" aria-modal="true"
+     aria-labelledby="adminModalTitle" hidden>
+  <div class="nvc-modal admin-modal">
+
+    <div class="nvc-modal-hdr">
+      <h2 id="adminModalTitle">🔐 Admin Panel</h2>
+      <button class="nvc-modal-close-btn" id="adminModalClose" aria-label="Close admin panel">✕</button>
+    </div>
+
+    <!-- Admin tabs -->
+    <div class="admin-tabs" role="tablist">
+      <button class="admin-tab active" data-tab="rooms" role="tab">🏠 Rooms</button>
+      <button class="admin-tab" data-tab="users" role="tab">👥 Users</button>
+      <button class="admin-tab" data-tab="banned" role="tab">🚫 Banned</button>
+      <button class="admin-tab" data-tab="ips" role="tab">🌐 IP Blocks</button>
+    </div>
+
+    <!-- Rooms Management Tab -->
+    <div class="admin-tab-content active" id="adminTabRooms" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Manage Rooms</h3>
+        <button class="auth-btn-primary" id="adminCreateRoomBtn">➕ Create Room</button>
+        <div id="adminRoomsList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Users Management Tab -->
+    <div class="admin-tab-content" id="adminTabUsers" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Online Users</h3>
+        <div id="adminUsersList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Banned Users Tab -->
+    <div class="admin-tab-content" id="adminTabBanned" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Banned Users</h3>
+        <div id="adminBannedList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- IP Blocks Tab -->
+    <div class="admin-tab-content" id="adminTabIps" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Blocked IPs</h3>
+        <button class="auth-btn-primary" id="adminBlockIpBtn">➕ Block IP</button>
+        <div id="adminIpsList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Room Create/Edit Modal -->
+<div class="nvc-modal-backdrop" id="roomEditModal" role="dialog" aria-modal="true" hidden>
+  <div class="nvc-modal">
+    <div class="nvc-modal-hdr">
+      <h2 id="roomEditModalTitle">Create Room</h2>
+      <button class="nvc-modal-close-btn" id="roomEditModalClose">✕</button>
+    </div>
+    <form id="roomEditForm">
+      <label class="settings-label" for="roomEditId">Room ID</label>
+      <input type="text" id="roomEditId" class="settings-input" required pattern="[a-z0-9-]+" placeholder="tech">
+      
+      <label class="settings-label" for="roomEditName">Room Name</label>
+      <input type="text" id="roomEditName" class="settings-input" required placeholder="Tech">
+      
+      <label class="settings-label" for="roomEditIcon">Icon (emoji)</label>
+      <input type="text" id="roomEditIcon" class="settings-input" maxlength="2" placeholder="💻">
+      
+      <label class="settings-label">
+        <input type="checkbox" id="roomEditIsOpen"> Room is open (public)
+      </label>
+      
+      <label class="settings-label" for="roomEditPassword">Password (optional)</label>
+      <input type="password" id="roomEditPassword" class="settings-input" placeholder="Leave empty for no password">
+      
+      <div class="settings-actions">
+        <button type="submit" class="auth-btn-primary">Save</button>
+        <button type="button" class="auth-btn-ghost" id="roomEditCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
 <!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module" src="js/main.js?v=20260303"></script>
