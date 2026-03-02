@@ -68,7 +68,7 @@ export async function joinRoom(roomId) {
   state.rooms[String(roomId)] = mkRoom(roomId, roomInfo?.name, roomInfo?.icon);
 
   /* Presence channel for this room */
-  const presenceCh = state.supa.channel(`presence:room-${roomId}`, {
+  const presenceCh = state.supa.channel(`presence:room-${roomIdStr}`, {
     config: { presence: { key: state.currentUser.id } },
   });
 
@@ -146,7 +146,7 @@ function _updateCamBtn() {
   const btn   = document.getElementById('cameraBtnHeader');
   const label = document.getElementById('cameraBtnLabel');
   if (!btn || !label) return;
-  const camHere = state.cameraRoom === state.activeRoom;
+  const camHere = String(state.cameraRoom) === String(state.activeRoom);
   label.textContent = camHere ? 'Camera On' : 'Camera Off';
   btn.classList.toggle('camera-on', camHere);
 }
@@ -158,9 +158,10 @@ export function renderRoomTabs() {
   bar.innerHTML = '';
 
   Object.values(state.rooms).forEach(room => {
+    const roomIdStr = String(room.id);
     const tab = document.createElement('button');
-    tab.className = `room-tab${room.id === state.activeRoom ? ' active' : ''}`;
-    tab.dataset.roomId = room.id;
+    tab.className = `room-tab${roomIdStr === String(state.activeRoom) ? ' active' : ''}`;
+    tab.dataset.roomId = roomIdStr;
 
     const label = document.createElement('span');
     label.className = 'room-tab-label';
@@ -168,23 +169,24 @@ export function renderRoomTabs() {
     tab.appendChild(label);
 
     /* Unread badge */
-    if (room.unreadCount > 0 && room.id !== state.activeRoom) {
+    if (room.unreadCount > 0 && roomIdStr !== String(state.activeRoom)) {
       const badge = document.createElement('span');
       badge.className = 'room-tab-badge';
       badge.textContent = room.unreadCount > 99 ? '99+' : String(room.unreadCount);
       tab.appendChild(badge);
     }
 
-    if (room.id !== 'general') {
+    // Allow leaving all rooms except General (by name, not ID)
+    if (room.name !== 'General') {
       const x = document.createElement('button');
       x.className = 'room-tab-close';
       x.title = `Leave #${room.name}`;
       x.textContent = '✕';
-      x.addEventListener('click', e => { e.stopPropagation(); leaveRoom(room.id); });
+      x.addEventListener('click', e => { e.stopPropagation(); leaveRoom(roomIdStr); });
       tab.appendChild(x);
     }
 
-    tab.addEventListener('click', () => switchRoom(room.id));
+    tab.addEventListener('click', () => switchRoom(roomIdStr));
     bar.appendChild(tab);
   });
 
@@ -225,7 +227,8 @@ function renderRoomPicker() {
   rooms.forEach(room => {
     const row = document.createElement('div');
     row.className = 'room-picker-item';
-    const alreadyIn = !!state.rooms[room.id];
+    const roomIdStr = String(room.id);
+    const alreadyIn = !!state.rooms[roomIdStr];
     row.innerHTML = `<span>${room.icon || '💬'} ${room.name}</span>`;
     if (alreadyIn) {
       const badge = document.createElement('span');
@@ -234,7 +237,7 @@ function renderRoomPicker() {
     } else {
       const btn = document.createElement('button');
       btn.className = 'room-picker-join-btn'; btn.textContent = 'Join';
-      btn.addEventListener('click', () => { closeRoomPicker(); joinRoom(room.id); });
+      btn.addEventListener('click', () => { closeRoomPicker(); joinRoom(roomIdStr); });
       row.appendChild(btn);
     }
     panel.appendChild(row);
