@@ -181,10 +181,12 @@ CREATE TABLE IF NOT EXISTS public.muted_users (
 -- Add room_id column to existing muted_users table (safe to run on already-created tables)
 ALTER TABLE public.muted_users ADD COLUMN IF NOT EXISTS room_id TEXT NULL;
 
--- Drop old unique constraint if exists and recreate with room_id
+-- Migrate existing data: set room_id to NULL for existing records (they become global mutes)
+UPDATE public.muted_users SET room_id = NULL WHERE room_id IS NULL;
+
+-- Drop old unique constraint on user_id if it exists
 DO $$
 BEGIN
-  -- Drop old unique constraint on user_id if it exists
   IF EXISTS (
     SELECT 1 FROM pg_constraint 
     WHERE conname = 'muted_users_user_id_key' 
@@ -192,13 +194,25 @@ BEGIN
   ) THEN
     ALTER TABLE public.muted_users DROP CONSTRAINT muted_users_user_id_key;
   END IF;
-  
-  -- Add new unique constraint on (user_id, room_id) if it doesn't exist
+END $$;
+
+-- Add new unique constraint on (user_id, room_id) if it doesn't exist
+-- Note: This allows one global mute (room_id = NULL) and multiple room-specific mutes per user
+DO $$
+BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint 
     WHERE conname = 'muted_users_user_id_room_id_key' 
     AND conrelid = 'public.muted_users'::regclass
   ) THEN
+    -- First, handle any duplicates by keeping only one
+    DELETE FROM public.muted_users a
+    USING public.muted_users b
+    WHERE a.id < b.id 
+      AND a.user_id = b.user_id 
+      AND (a.room_id = b.room_id OR (a.room_id IS NULL AND b.room_id IS NULL));
+    
+    -- Now add the constraint
     ALTER TABLE public.muted_users ADD CONSTRAINT muted_users_user_id_room_id_key UNIQUE (user_id, room_id);
   END IF;
 END $$;
