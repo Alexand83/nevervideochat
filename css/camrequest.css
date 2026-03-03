@@ -1,0 +1,48 @@
+/* ─── 12. CAMERA REQUEST OVERLAY ─── */
+.cam-req-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn .2s ease;
+}
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+
+.cam-req-card {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: var(--r4);
+  padding: var(--s6) var(--s6) var(--s5);
+  text-align: center;
+  max-width: 350px;
+  width: 92%;
+  box-shadow: var(--sh-xl);
+  animation: slideUpIn .22s ease;
+}
+@keyframes slideUpIn {
+  from { opacity:0; transform:translateY(18px) scale(.97); }
+  to   { opacity:1; transform:translateY(0)    scale(1);   }
+}
+
+.cam-req-emoji  { font-size: 46px; margin-bottom: var(--s3); }
+.cam-req-title  { font-size: var(--fz-lg); font-weight: 700; color: var(--tx0); margin-bottom: var(--s2); }
+.cam-req-body   { font-size: var(--fz-base); color: var(--tx1); margin-bottom: var(--s5); line-height: 1.55; }
+
+.cam-req-btns   { display: flex; gap: var(--s3); }
+.cam-action-btn {
+  flex: 1;
+  padding: 10px var(--s5);
+  border-radius: var(--r2);
+  font-size: var(--fz-base);
+  font-weight: 600;
+  transition: all var(--tf);
+}
+.accept-cam-btn { background: var(--clr-success); color: #fff; }
+.accept-cam-btn:hover { background: var(--clr-success-h); }
+.reject-cam-btn { background: var(--bg3); color: var(--tx1); border: 1px solid var(--border); }
+.reject-cam-btn:hover { background: var(--clr-danger); color: #fff; border-color: transparent; }

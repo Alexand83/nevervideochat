@@ -1,0 +1,146 @@
+/* ─── 9. PRIVATE CHAT POPUPS ─── */
+.private-chat-cont {
+  position: fixed;
+  bottom: 64px;
+  right: var(--s4);
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: var(--s3);
+  z-index: 500;
+  pointer-events: none;
+}
+
+.pchat-popup {
+  width: 310px;
+  height: 400px;
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: all;
+  animation: popIn .2s ease;
+  position: relative; /* for dragging */
+}
+
+.pchat-hdr {
+  padding: 8px var(--s3);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+  touch-action: none;
+}
+.pchat-hdr:active { cursor: grabbing; }
+
+.pchat-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  touch-action: none;
+}
+.pchat-avatar {
+  width: 26px; height: 26px;
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.pchat-uname { font-size: var(--fz-sm); font-weight: 600; color: var(--tx0); }
+.pchat-online-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--clr-online);
+  flex-shrink: 0;
+}
+
+.pchat-ctrls { display: flex; gap: 2px; }
+.pchat-ctrl-btn {
+  width: 24px; height: 24px;
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--tx1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition: all var(--tf);
+}
+.pchat-ctrl-btn:hover { background: var(--bg-hover); color: var(--tx0); }
+.pchat-vcall-btn { color: var(--accent) !important; }
+.pchat-vcall-btn:hover { background: var(--accent) !important; color: #fff !important; }
+
+.pchat-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  touch-action: none;
+}
+
+.pchat-msg { display: flex; flex-direction: column; gap: 2px; }
+.pchat-msg.own { align-items: flex-end; }
+
+.pchat-bubble {
+  max-width: 78%;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r4);
+  font-size: var(--fz-sm);
+  line-height: 1.45;
+  word-break: break-word;
+  background: var(--bubble-other);
+  border: 1px solid var(--border-subtle);
+}
+.pchat-msg.own .pchat-bubble { background: var(--bubble-own); border-color: transparent; }
+
+.pchat-time { font-size: 10px; color: var(--tx2); padding: 0 var(--s2); }
+
+.pchat-input-row {
+  padding: 8px var(--s3);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: var(--s2);
+  touch-action: none;
+  align-items: center;
+  flex-shrink: 0;
+}
+.pchat-input {
+  flex: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 7px var(--s3);
+  font-size: var(--fz-sm);
+  color: var(--tx0);
+  transition: border-color var(--tf);
+  outline: none;
+}
+.pchat-input:focus   { border-color: var(--accent); }
+.pchat-input::placeholder { color: var(--tx2); }
+
+.pchat-send-btn {
+  width: 30px; height: 30px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--tf);
+}
+.pchat-send-btn:hover { background: var(--accent-h); }
+.pchat-send-btn svg { width: 13px; height: 13px; }

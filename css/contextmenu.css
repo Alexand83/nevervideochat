@@ -1,0 +1,76 @@
+/* ─── 14. CONTEXT MENU ─── */
+.ctx-menu {
+  position: fixed;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-lg);
+  z-index: 400;
+  min-width: 190px;
+  padding: var(--s2);
+  animation: popIn .12s ease;
+}
+.ctx-user-hdr {
+  padding: 5px var(--s3);
+  font-size: var(--fz-xs);
+  font-weight: 700;
+  color: var(--tx2);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.ctx-hr { border: none; border-top: 1px solid var(--border-subtle); margin: var(--s1) 0; }
+.ctx-item {
+  width: 100%;
+  padding: 7px var(--s3);
+  border-radius: var(--r1);
+  font-size: var(--fz-sm);
+  color: var(--tx0);
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  touch-action: none;
+  text-align: left;
+  transition: background var(--tf);
+}
+.ctx-item:hover { background: var(--bg-hover); }
+.ctx-item.ctx-cam-item:hover { background: var(--accent-dim); color: var(--accent-h); }
+
+/* Cam button: enabled = always accent-coloured so it's never confused with disabled */
+.ctx-item.ctx-cam-item:not(:disabled) {
+  color: var(--accent-h);
+}
+.ctx-item.ctx-cam-item:not(:disabled) svg { stroke: var(--accent-h); }
+
+/* Disabled buttons in context menu */
+.ctx-item:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  color: var(--tx2);
+}
+
+.ctx-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 399;
+}
+
+/* ─── Context menu: Ignore button ─── */
+.ctx-item.ctx-ignore-item { color: var(--clr-danger-h); }
+.ctx-item.ctx-ignore-item svg { stroke: var(--clr-danger-h); }
+.ctx-item.ctx-ignore-item:hover { background: rgba(218,54,51,.12); }
+.ctx-item.ctx-ignore-item.is-ignored { color: var(--tx1); }
+.ctx-item.ctx-ignore-item.is-ignored svg { stroke: var(--tx1); }
+.ctx-item.ctx-ignore-item.is-ignored:hover { background: var(--bg-hover); }
+
+/* Admin actions in context menu */
+.ctx-admin-actions {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--s1);
+  padding-top: var(--s1);
+}
+.ctx-admin-actions .ctx-item {
+  color: var(--clr-danger-h);
+}
+.ctx-admin-actions .ctx-item:hover {
+  background: rgba(218,54,51,.12);
+}

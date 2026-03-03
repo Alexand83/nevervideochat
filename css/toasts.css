@@ -1,0 +1,28 @@
+/* ─── 11. TOAST MESSAGES ─── */
+.toast-cont {
+  position: fixed;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  touch-action: none;
+  z-index: 800;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 7px var(--s4);
+  font-size: var(--fz-sm);
+  color: var(--tx0);
+  box-shadow: var(--sh-md);
+  white-space: nowrap;
+  animation: toastIn .2s ease, toastOut .3s ease 2.7s forwards;
+}
+@keyframes toastIn  { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes toastOut { from { opacity:1; transform:translateY(0);    } to { opacity:0; transform:translateY(-8px); } }

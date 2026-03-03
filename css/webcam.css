@@ -1,0 +1,271 @@
+/* ─── 16. CAMERA WINDOWS (multi-window system) ─────────────────────
+   Each camera stream (own or remote) gets an independent
+   draggable + resizable floating window.
+   Private video calls use .vcall-win (PiP).
+─────────────────────────────────────────────────────────────────── */
+.cam-window {
+  position: fixed;
+  width: 300px;
+  height: 280px;
+  min-width: 200px;
+  min-height: 190px;
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: var(--r4);
+  box-shadow: var(--sh-xl);
+  z-index: 650;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUpIn .2s ease;
+}
+
+/* ── Header (drag handle) ── */
+.cam-win-hdr {
+  padding: 8px var(--s3);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+  gap: var(--s2);
+  touch-action: none;
+}
+.cam-win-hdr:active { cursor: grabbing; }
+
+.cam-win-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  touch-action: none;
+  min-width: 0;
+}
+
+.cam-win-avatar {
+  width: 22px; height: 22px;
+  border-radius: var(--r-pill);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+}
+
+.cam-win-name {
+  font-size: var(--fz-sm);
+  font-weight: 600;
+  color: var(--tx0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cam-win-you-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent-dim);
+  color: var(--accent-h);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.cam-win-close-btn {
+  width: 24px; height: 24px;
+  border-radius: var(--r1);
+  color: var(--tx1);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--tf);
+  flex-shrink: 0;
+}
+.cam-win-close-btn:hover { background: var(--clr-danger); color: #fff; }
+
+/* ── Video area ── */
+.cam-win-video-wrap {
+  flex: 1;
+  position: relative;
+  background: #000;
+  overflow: hidden;
+  min-height: 0;
+}
+.cam-win-video-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ── Controls footer ── */
+.cam-win-footer {
+  padding: 7px var(--s3);
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-shrink: 0;
+}
+/* Remote camera footer: just a "Live" badge, centred */
+.cam-win-footer-remote { justify-content: center; }
+.cam-win-live-badge {
+  font-size: var(--fz-xs);
+  font-weight: 700;
+  color: var(--clr-danger);
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+/* ── Mic toggle button (own camera) ── */
+.cam-ctrl-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  touch-action: none;
+  padding: 5px var(--s3);
+  border-radius: var(--r2);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--tx0);
+  font-size: var(--fz-xs);
+  font-weight: 600;
+  transition: all var(--tf);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cam-ctrl-btn:hover { background: var(--bg-hover); }
+.cam-ctrl-btn.mic-muted {
+  background: rgba(218,54,51,.12);
+  border-color: var(--clr-danger);
+  color: var(--clr-danger);
+}
+
+/* ── Mic level meter ── */
+.mic-meter-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.mic-meter-bar-wrap { width: 100%; }
+.mic-meter-bar {
+  height: 6px;
+  background: var(--bg3);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.mic-meter-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg,
+    var(--clr-success) 0%,
+    #7bc96f 55%,
+    #f9c513 78%,
+    var(--clr-danger) 100%);
+  background-size: 200% 100%;
+  border-radius: var(--r-pill);
+  transition: width .07s linear;
+}
+.mic-meter-lbl { font-size: 10px; color: var(--tx2); }
+
+/* ── Resize handle — bottom-right grip ── */
+.cam-resize-handle {
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 32px; height: 32px;
+  cursor: se-resize;
+  background-image: linear-gradient(
+    135deg,
+    transparent 0%, transparent 40%,
+    var(--tx2) 40%, var(--tx2) 50%,
+    transparent 50%, transparent 63%,
+    var(--tx2) 63%, var(--tx2) 73%,
+    transparent 73%
+  );
+  opacity: .45;
+  border-radius: 0 0 var(--r4) 0;
+  transition: opacity var(--tf);
+  touch-action: none;
+}
+.cam-resize-handle:hover { opacity: 1; }
+
+/* ─── Cam viewers panel (on own cam window) ─── */
+.cam-viewers-btn {
+  position: absolute;
+  top: 8px;
+  right: 36px;
+  background: rgba(0,0,0,.55);
+  color: #fff;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  z-index: 5;
+  transition: background var(--tf);
+}
+.cam-viewers-btn:hover { background: rgba(0,0,0,.8); }
+.cam-viewers-panel {
+  position: absolute;
+  top: 34px;
+  right: 8px;
+  min-width: 180px;
+  max-width: 240px;
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: var(--s2);
+  z-index: 10;
+  box-shadow: var(--sh-lg);
+}
+.cam-viewers-title {
+  font-size: var(--fz-xs);
+  color: var(--tx2);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: var(--s2);
+  font-weight: 600;
+}
+.cam-viewer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-radius: var(--r1);
+  font-size: var(--fz-xs);
+  gap: var(--s2);
+  touch-action: none;
+}
+.cam-viewer-item:hover { background: var(--bg-hover); }
+.cam-viewer-name { color: var(--tx0); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cam-viewer-kick {
+  background: none;
+  color: var(--clr-danger-h);
+  font-size: 13px;
+  padding: 1px 5px;
+  border-radius: var(--r1);
+  flex-shrink: 0;
+  transition: background var(--tf);
+}
+.cam-viewer-kick:hover { background: rgba(218,54,51,.15); }
+.cam-viewers-empty { color: var(--tx2); font-size: var(--fz-xs); padding: 4px 6px; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  .cam-window {
+    width: calc(100vw - 32px);
+    right: 16px !important;
+    bottom: 68px !important;
+  }
+  .cam-resize-handle {
+    width: 44px;
+    height: 44px;
+  }
+}
