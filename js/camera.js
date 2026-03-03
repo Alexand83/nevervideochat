@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260436 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260437 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -650,6 +650,36 @@ export async function handleWebRTCSignal(payload) {
          ICE candidate buffering below handles the case where candidates arrive
          before setRemoteDescription is called. */
       
+      /* Guard: if guest's camera is only active in an Events room, and we're not in that Events room,
+         reject the offer — don't create a floating window in the wrong room */
+      const availableRooms = getAvailableRooms();
+      const eventsRooms = availableRooms.filter(r => r.max_cams && r.max_cams >= 1 && r.max_cams <= 8);
+      const guestHasCamInEventsOnly = eventsRooms.some(eventsRoom => {
+        const roomIdStr = String(eventsRoom.id);
+        const room = state.rooms[roomIdStr];
+        const guestInRoom = room?.users[from];
+        return guestInRoom?.hasCamera === true;
+      }) && !Object.values(state.rooms).some(room => {
+        const guestInRoom = room.users[from];
+        const isEventsRoom = eventsRooms.some(er => String(er.id) === String(room.id));
+        return guestInRoom?.hasCamera === true && !isEventsRoom; /* has cam in non-Events room */
+      });
+      
+      if (guestHasCamInEventsOnly) {
+        const guestEventsRoom = eventsRooms.find(eventsRoom => {
+          const roomIdStr = String(eventsRoom.id);
+          const room = state.rooms[roomIdStr];
+          return room?.users[from]?.hasCamera === true;
+        });
+        const guestEventsRoomId = guestEventsRoom ? String(guestEventsRoom.id) : null;
+        const isInGuestEventsRoom = guestEventsRoomId && String(state.activeRoom) === guestEventsRoomId;
+        
+        if (!isInGuestEventsRoom) {
+          console.log('[WebRTC] Rejecting offer from', from, '— guest has camera only in Events room', guestEventsRoomId, 'but we are in room', state.activeRoom);
+          return; /* Don't create PC — guest's cam is for Events room only */
+        }
+      }
+      
       console.log('[WebRTC] Creating new incoming peer connection for', from);
       const pc = new RTCPeerConnection(ICE_SERVERS);
       pc._createdInRoom = state.activeRoom; /* Track room at creation — used to discard stale streams */
@@ -691,6 +721,38 @@ export async function handleWebRTCSignal(payload) {
           try { pc.close(); } catch {}
           if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
           return;
+        }
+        
+        /* Guard: if guest's camera is only active in an Events room, and we're not in that Events room,
+           discard the stream — don't open a floating window in the wrong room */
+        const availableRooms = getAvailableRooms();
+        const eventsRooms = availableRooms.filter(r => r.max_cams && r.max_cams >= 1 && r.max_cams <= 8);
+        const guestHasCamInEventsOnly = eventsRooms.some(eventsRoom => {
+          const roomIdStr = String(eventsRoom.id);
+          const room = state.rooms[roomIdStr];
+          const guestInRoom = room?.users[from];
+          return guestInRoom?.hasCamera === true;
+        }) && !Object.values(state.rooms).some(room => {
+          const guestInRoom = room.users[from];
+          const isEventsRoom = eventsRooms.some(er => String(er.id) === String(room.id));
+          return guestInRoom?.hasCamera === true && !isEventsRoom; /* has cam in non-Events room */
+        });
+        
+        if (guestHasCamInEventsOnly) {
+          const guestEventsRoom = eventsRooms.find(eventsRoom => {
+            const roomIdStr = String(eventsRoom.id);
+            const room = state.rooms[roomIdStr];
+            return room?.users[from]?.hasCamera === true;
+          });
+          const guestEventsRoomId = guestEventsRoom ? String(guestEventsRoom.id) : null;
+          const isInGuestEventsRoom = guestEventsRoomId && String(state.activeRoom) === guestEventsRoomId;
+          
+          if (!isInGuestEventsRoom) {
+            console.log('[WebRTC] Discarding stream from', from, '— guest has camera only in Events room', guestEventsRoomId, 'but we are in room', state.activeRoom);
+            try { pc.close(); } catch {}
+            if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+            return;
+          }
         }
         
         /* Open window immediately — insertCameraIntoEventsGrid handles stream readiness */
@@ -1111,7 +1173,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260436] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260437] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
