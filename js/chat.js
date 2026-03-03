@@ -363,8 +363,10 @@ async function toggleReaction(msgId, emoji) {
   /* Update local state */
   msg.reactions = reactions;
   
-  /* Update DB - only if msgId is a UUID (from DB), not a temp ID */
-  if (msgId.startsWith('m') && msgId.length < 20) {
+  /* Update DB - only if msgId is a real UUID (from DB), not a temp client-side ID.
+     Temp IDs look like "m1772539177000.0233..." — a UUID is 8-4-4-4-12 hex chars. */
+  const isRealUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msgId);
+  if (!isRealUUID) {
     console.warn('[NVC] toggleReaction: skipping DB update for temp ID', { msgId });
   } else {
     const { error } = await state.supa.from('messages')
