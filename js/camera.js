@@ -749,14 +749,12 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   label.title = `Click to view ${name}'s profile`;
   
   /* Add context menu on click */
-  label.addEventListener('click', async (e) => {
+  label.addEventListener('click', (e) => {
     e.stopPropagation();
-    const { openContextMenu } = await import('./ui.js');
-    state.contextTargetUID = uid;
-    const user = findUser(uid);
-    if (user) {
-      openContextMenu(e.clientX, e.clientY, uid, user);
-    }
+    e.preventDefault();
+    import('./ui.js').then(({ openContextMenu }) => {
+      openContextMenu(uid, label);
+    });
   });
   
   targetSlot.appendChild(video);
