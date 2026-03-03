@@ -12,7 +12,7 @@ import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewers
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
-import { joinRoom } from './rooms.js';
+import { joinRoom, getAvailableRooms } from './rooms.js';
 
 /* Forward ref for uploadToStorage (set by main.js) */
 let _uploadToStorage = null;
@@ -228,7 +228,6 @@ export function openContextMenu(uid, anchor) {
   const hasCameraActive = targetInRoom?.hasCamera || (user.hasCamera && user.online);
   
   /* Check if we're in Events room - hide camera request button */
-  const { getAvailableRooms } = await import('./rooms.js');
   const availableRooms = getAvailableRooms();
   const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
   const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
