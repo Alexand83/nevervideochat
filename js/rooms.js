@@ -162,23 +162,8 @@ export function switchRoom(roomId) {
   /* Update camera button to reflect whether cam is active in this room */
   _updateCamBtn();
   
-  /* Events room: automatically request cameras from users who have them open */
-  if (maxCams && maxCams >= 1 && maxCams <= 8) {
-    const room = state.rooms[roomIdStr];
-    if (room) {
-      /* Request cameras from all users who have them open in this room */
-      setTimeout(async () => {
-        const { requestPublicCamera } = await import('./camera.js');
-        Object.values(room.users).forEach(user => {
-          if (user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)) {
-            if (!state.cameraWindows[user.id]) {
-              requestPublicCamera(user.id);
-            }
-          }
-        });
-      }, 500); /* Small delay to ensure room is fully set up */
-    }
-  }
+  /* Events room: cameras are automatically shared when opened, no request needed */
+  /* The cam-opened broadcast handler will trigger automatic connection */
 }
 
 function _updateCamBtn() {
@@ -341,15 +326,26 @@ function clearEventsCamGrid() {
 }
 
 export function updateEventsCamGrid() {
-  if (!dom.eventsCamGrid || dom.eventsCamGrid.hidden) return;
+  if (!dom.eventsCamGrid) return;
   
   const roomData = availableRoomsCache.find(r => String(r.id) === String(state.activeRoom));
   const maxCams = roomData?.max_cams;
-  if (!maxCams) return;
+  if (!maxCams) {
+    dom.eventsCamGrid.hidden = true;
+    return;
+  }
   
   /* Count only slots that have an actual video (real cameras) */
   const slots = Array.from(dom.eventsCamGrid.querySelectorAll('.events-cam-slot'));
   const numCams = slots.filter(s => s.querySelector('video')).length;
+  
+  /* Show grid only when there are active cameras */
+  if (numCams === 0) {
+    dom.eventsCamGrid.hidden = true;
+    return;
+  }
+  
+  dom.eventsCamGrid.hidden = false;
   
   /* Autoresize grid columns based on number of ACTUAL cameras present in DOM */
   /* Balanced layout: 1 cam = 1 col (max-width), 2-3 cam = 2 cols, 4+ cam = 4 cols */

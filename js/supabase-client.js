@@ -132,12 +132,9 @@ export async function connectSupabase() {
           const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
           
           if (isEventsRoom) {
-            /* Automatically accept and show camera in Events room */
-            const { requestPublicCamera } = await import('./camera.js');
-            /* Small delay to ensure user is ready */
-            setTimeout(() => {
-              requestPublicCamera(fromId);
-            }, 200);
+            /* Events room: directly connect to camera if it's already open */
+            /* The camera owner will automatically share when they open it */
+            /* We just need to wait for the WebRTC offer */
           }
           
           /* Update events cam grid */
@@ -224,10 +221,13 @@ export async function connectSupabase() {
         const targetId = payload.to || payload.user_id;
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
-        /* Close all cameras for the muted user */
-        const { closeAllCamerasForUser } = await import('./camera.js');
-        if (isCurrentUser || state.cameraWindows[targetId]) {
+        /* Close all cameras for the muted user - always close if we're viewing their cam */
+        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js');
+        if (isCurrentUser) {
           await closeAllCamerasForUser(targetId);
+        } else if (state.cameraWindows[targetId]) {
+          /* Close their camera window (works for both floating and Events grid) */
+          await closeCameraWindow(targetId);
         }
         
         const roomId = payload.room_id || null;

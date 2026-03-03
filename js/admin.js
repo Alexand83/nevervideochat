@@ -160,6 +160,23 @@ function openRoomEditModal(room = null) {
   const title = document.getElementById('roomEditModalTitle');
   const idInput = document.getElementById('roomEditId');
   
+  const isEventsCheckbox = document.getElementById('roomEditIsEventsRoom');
+  const eventsOptions = document.getElementById('roomEditEventsOptions');
+  const maxCamsInput = document.getElementById('roomEditMaxCams');
+  
+  /* Toggle events options visibility */
+  const toggleEventsOptions = () => {
+    if (isEventsCheckbox.checked) {
+      eventsOptions.style.display = 'block';
+      if (!maxCamsInput.value) maxCamsInput.value = '4'; /* Default to 4 */
+    } else {
+      eventsOptions.style.display = 'none';
+      maxCamsInput.value = '';
+    }
+  };
+  
+  isEventsCheckbox.onchange = toggleEventsOptions;
+  
   if (room) {
     title.textContent = 'Edit Room';
     if (idInput) {
@@ -172,7 +189,9 @@ function openRoomEditModal(room = null) {
     document.getElementById('roomEditIsOpen').checked = room.is_open;
     document.getElementById('roomEditPassword').value = '';
     document.getElementById('roomEditPassword').placeholder = 'Leave empty to keep current password';
-    document.getElementById('roomEditMaxCams').value = room.max_cams || '';
+    isEventsCheckbox.checked = !!(room.max_cams && room.max_cams >= 1 && room.max_cams <= 8);
+    maxCamsInput.value = room.max_cams || '';
+    toggleEventsOptions();
   } else {
     title.textContent = 'Create New Room';
     form.reset();
@@ -182,6 +201,8 @@ function openRoomEditModal(room = null) {
       idInput.parentElement.style.display = 'none'; // Nascondi il campo ID in creazione
     }
     document.getElementById('roomEditPassword').placeholder = 'Leave empty for no password';
+    isEventsCheckbox.checked = false;
+    toggleEventsOptions();
   }
   dom.roomEditModal.hidden = false;
 }
@@ -195,8 +216,9 @@ async function saveRoom() {
   const icon = document.getElementById('roomEditIcon').value.trim() || '💬';
   const isOpen = document.getElementById('roomEditIsOpen').checked;
   const password = document.getElementById('roomEditPassword').value.trim();
+  const isEventsRoom = document.getElementById('roomEditIsEventsRoom').checked;
   const maxCamsInput = document.getElementById('roomEditMaxCams').value.trim();
-  const maxCams = maxCamsInput ? parseInt(maxCamsInput, 10) : null;
+  const maxCams = isEventsRoom && maxCamsInput ? parseInt(maxCamsInput, 10) : null;
   
   if (!name) {
     showToast('⚠️ Room Name is required.');
@@ -210,7 +232,7 @@ async function saveRoom() {
       is_open: isOpen,
       created_by: state.currentUser.id,
       password: password ? await hashPassword(password) : null,
-      max_cams: maxCams && maxCams >= 1 && maxCams <= 8 ? maxCams : null,
+      max_cams: (isEventsRoom && maxCams && maxCams >= 1 && maxCams <= 8) ? maxCams : null,
     };
     
     // Se è un edit, aggiungi l'ID

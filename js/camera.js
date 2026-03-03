@@ -308,6 +308,26 @@ export async function startOwnCamera() {
     await updateAllRoomPresences(); 
     renderUsers();
     
+    /* Events room: automatically share camera with everyone in the room */
+    const availableRooms = getAvailableRooms();
+    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+    const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
+    
+    if (isEventsRoom) {
+      /* Automatically share with all users in Events room */
+      const room = state.rooms[state.activeRoom];
+      if (room) {
+        Object.values(room.users).forEach(user => {
+          if (user.online && String(user.id) !== String(state.currentUser?.id)) {
+            /* Small delay to ensure stream is ready */
+            setTimeout(() => {
+              sharePublicCameraTo(user.id);
+            }, 300);
+          }
+        });
+      }
+    }
+    
     /* Grid column layout is updated inside insertCameraIntoEventsGrid */
     
     showToast('📹 Camera enabled.');
@@ -651,10 +671,23 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   video.style.objectFit = 'cover';
   if (isOwn) video.style.transform = 'scaleX(-1)';
   
-  /* Create label */
+  /* Create label - clickable for context menu */
   const label = document.createElement('div');
   label.className = 'events-cam-slot-label';
   label.textContent = name;
+  label.style.cursor = 'pointer';
+  label.title = `Click to view ${name}'s profile`;
+  
+  /* Add context menu on click */
+  label.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const { openContextMenu } = await import('./ui.js');
+    state.contextTargetUID = uid;
+    const user = findUser(uid);
+    if (user) {
+      openContextMenu(e.clientX, e.clientY, uid, user);
+    }
+  });
   
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);

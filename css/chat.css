@@ -794,15 +794,23 @@
 
 .events-cam-slot-label {
   position: absolute;
-  bottom: -20px; /* Below the cam */
+  bottom: -24px; /* Below the cam */
   left: 0;
   right: 0;
   text-align: center;
   color: var(--tx1);
-  font-size: var(--fz-xs);
+  font-size: var(--fz-sm);
+  font-weight: 500;
   padding: 4px 0;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
   background: transparent;
+  cursor: pointer;
+  transition: color var(--tf);
+}
+
+.events-cam-slot-label:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
