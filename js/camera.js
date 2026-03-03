@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260422 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260423 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -938,8 +938,29 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
 
   dom.eventsCamGrid.hidden = false;
 
-  /* ── If slot already exists ── */
+  /* ── ALWAYS check DOM first — remove any existing slot for this user (even if not in state.cameraWindows)
+      This prevents race conditions when guest riactivates cam while we have outgoing PC active */
   let targetSlot = dom.eventsCamGrid.querySelector(`[data-user-id="${uid}"]`);
+  if (targetSlot) {
+    /* Slot exists in DOM — check if it matches our state */
+    const cw = state.cameraWindows[uid];
+    if (cw?.isEventsGrid && cw.el === targetSlot) {
+      /* Slot matches state — check if we need to rebuild */
+    } else {
+      /* Slot exists in DOM but not in state (or different reference) — remove it immediately
+         This happens when guest riactivates cam and old slot wasn't cleaned up properly */
+      console.log('[Events Grid] Found orphaned slot in DOM for', uid, '— removing before creating new');
+      const orphanVideo = targetSlot.querySelector('video');
+      if (orphanVideo) {
+        orphanVideo.pause();
+        orphanVideo.srcObject = null;
+      }
+      targetSlot.remove();
+      targetSlot = null;
+    }
+  }
+  
+  /* ── If slot still exists (matches state), check if we need to rebuild ── */
   if (targetSlot) {
     const existingVideo = targetSlot.querySelector('video');
     if (existingVideo && stream) {
@@ -1014,11 +1035,12 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260422] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260423] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
     const assignAndPlay = () => {
+      console.log('[Events Grid] assignAndPlay called for', uid, 'stream tracks:', stream.getTracks().map(t => t.kind + ':' + t.readyState));
       video.srcObject = stream;
 
       /* play() may hang forever on Edge/Windows when ICE hasn't connected yet.
@@ -1037,12 +1059,13 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
       video.addEventListener('canplay',     onFrames, { once: true });
       video.addEventListener('loadeddata',  onFrames, { once: true });
 
+      console.log('[Events Grid] Calling play() for', uid, 'video.paused:', video.paused, 'video.srcObject:', !!video.srcObject);
       const playPromise = video.play();
       if (playPromise && typeof playPromise.then === 'function') {
         playPromise.then(() => {
           if (playStarted) return; /* already handled by frame event */
           playStarted = true;
-          console.log('[Events Grid] Playing for', uid, '— unmuting:', !isOwn);
+          console.log('[Events Grid] Playing for', uid, '(playPromise resolved) — unmuting:', !isOwn);
           if (!isOwn) video.muted = false;
         }).catch(err => {
           /* AbortError is expected when slot is removed during play() — ignore it */
@@ -1078,14 +1101,19 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
     };
 
     const activeTracks = stream.getTracks().filter(t => t.readyState === 'live');
+    console.log('[Events Grid] Stream tracks for', uid, 'total:', stream.getTracks().length, 'live:', activeTracks.length);
     if (activeTracks.length > 0) {
+      console.log('[Events Grid] Tracks are live — calling assignAndPlay immediately for', uid);
       assignAndPlay();
     } else {
       /* Tracks not ready yet — poll until live (max 5s) */
+      console.log('[Events Grid] Tracks not live yet — polling for', uid);
       let attempts = 0;
       const poll = () => {
         attempts++;
-        if (stream.getTracks().some(t => t.readyState === 'live')) {
+        const liveTracks = stream.getTracks().filter(t => t.readyState === 'live');
+        if (liveTracks.length > 0) {
+          console.log('[Events Grid] Tracks became live after', attempts, 'attempts — calling assignAndPlay for', uid);
           assignAndPlay();
         } else if (attempts < 50) {
           setTimeout(poll, 100);
