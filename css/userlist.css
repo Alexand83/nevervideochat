@@ -5,22 +5,51 @@
 /* User list container */
 .users-panel {
   width: var(--panel-w);
-  background: var(--bg1);
+  flex-shrink: 0;
+  background: var(--bg0);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  position: fixed;
-  right: 0;
-  top: var(--hdr-h);
-  z-index: 100;
+  overflow: hidden;
+  /* Allow JS to override width via inline style */
+  min-width: 160px;
+  max-width: 480px;
 }
 
-.users-list {
+.panel-hdr {
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.panel-title {
+  font-size: var(--fz-xs);
+  font-weight: 700;
+  color: var(--tx1);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+}
+
+.close-panel-btn {
+  width: 28px; height: 28px;
+  border-radius: var(--r1);
+  color: var(--tx2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--tf);
+  display: none; /* shown via JS / media query */
+}
+.close-panel-btn:hover { background: var(--bg-hover); color: var(--tx0); }
+
+.users-list-wrap {
   flex: 1;
   overflow-y: auto;
-  padding: var(--s3);
+  padding: var(--s2) 0;
 }
+.users-list { display: flex; flex-direction: column; }
 
 .user-item {
   display: flex;

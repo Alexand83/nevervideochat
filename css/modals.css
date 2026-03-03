@@ -250,6 +250,15 @@
   border-radius: 50%;
 }
 
+/* Avatar with photo — profile modal */
+.profile-avatar.has-photo {
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  color: transparent;        /* hide initials text */
+  font-size: 0;
+}
+
 .profile-avatar-change-btn {
   position: absolute;
   bottom: 0; right: 0;
