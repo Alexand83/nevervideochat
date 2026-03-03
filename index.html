@@ -7,24 +7,24 @@
   <meta name="theme-color" content="#0d1117">
   <title>NeverVideoChat</title>
   <!-- Modular CSS - Load in correct order -->
-  <link rel="stylesheet" href="css/variables.css?v=20260317">
-  <link rel="stylesheet" href="css/reset.css?v=20260317">
-  <link rel="stylesheet" href="css/header.css?v=20260317">
-  <link rel="stylesheet" href="css/layout.css?v=20260317">
-  <link rel="stylesheet" href="css/chat.css?v=20260317">
-  <link rel="stylesheet" href="css/userlist.css?v=20260317">
-  <link rel="stylesheet" href="css/privatechat.css?v=20260317">
-  <link rel="stylesheet" href="css/minimisedbar.css?v=20260317">
-  <link rel="stylesheet" href="css/toasts.css?v=20260317">
-  <link rel="stylesheet" href="css/camrequest.css?v=20260317">
-  <link rel="stylesheet" href="css/videocall.css?v=20260317">
-  <link rel="stylesheet" href="css/webcam.css?v=20260317">
-  <link rel="stylesheet" href="css/contextmenu.css?v=20260317">
-  <link rel="stylesheet" href="css/ui.css?v=20260317">
-  <link rel="stylesheet" href="css/modals.css?v=20260317">
-  <link rel="stylesheet" href="css/admin.css?v=20260317">
-  <link rel="stylesheet" href="css/kickbanoverlay.css?v=20260317">
-  <link rel="stylesheet" href="css/responsive.css?v=20260317">
+  <link rel="stylesheet" href="css/variables.css?v=20260318">
+  <link rel="stylesheet" href="css/reset.css?v=20260318">
+  <link rel="stylesheet" href="css/header.css?v=20260318">
+  <link rel="stylesheet" href="css/layout.css?v=20260318">
+  <link rel="stylesheet" href="css/chat.css?v=20260318">
+  <link rel="stylesheet" href="css/userlist.css?v=20260318">
+  <link rel="stylesheet" href="css/privatechat.css?v=20260318">
+  <link rel="stylesheet" href="css/minimisedbar.css?v=20260318">
+  <link rel="stylesheet" href="css/toasts.css?v=20260318">
+  <link rel="stylesheet" href="css/camrequest.css?v=20260318">
+  <link rel="stylesheet" href="css/videocall.css?v=20260318">
+  <link rel="stylesheet" href="css/webcam.css?v=20260318">
+  <link rel="stylesheet" href="css/contextmenu.css?v=20260318">
+  <link rel="stylesheet" href="css/ui.css?v=20260318">
+  <link rel="stylesheet" href="css/modals.css?v=20260318">
+  <link rel="stylesheet" href="css/admin.css?v=20260318">
+  <link rel="stylesheet" href="css/kickbanoverlay.css?v=20260318">
+  <link rel="stylesheet" href="css/responsive.css?v=20260318">
 </head>
 <body>
 
@@ -148,6 +148,11 @@
     <div class="room-tabs-bar" id="roomTabsBar" role="tablist" aria-label="Chat rooms"></div>
     <!-- Room picker popup (positioned absolutely) -->
     <div class="room-picker-panel" id="roomPickerPanel" hidden role="listbox" aria-label="Join a room"></div>
+    
+    <!-- Events room camera grid (shown only when active room has max_cams) -->
+    <div class="events-cam-grid" id="eventsCamGrid" hidden>
+      <!-- Filled by JS: up to max_cams camera slots -->
+    </div>
 
     <!-- Search bar -->
     <div class="search-bar" id="searchBar" hidden>
@@ -641,6 +646,27 @@
       </div>
     </div>
 
+    <!-- Language & Theme section -->
+    <div class="settings-section">
+      <h3 class="settings-section-title">🌐 Language &amp; Theme</h3>
+
+      <label class="settings-label" for="languageSelect">Language</label>
+      <select class="settings-select" id="languageSelect">
+        <option value="it">🇮🇹 Italiano</option>
+        <option value="en">🇬🇧 English</option>
+        <option value="es">🇪🇸 Español</option>
+        <option value="de">🇩🇪 Deutsch</option>
+      </select>
+
+      <label class="settings-label" for="themeSelect">Theme</label>
+      <select class="settings-select" id="themeSelect">
+        <option value="dark">🌙 Dark</option>
+        <option value="light">☀️ Light</option>
+        <option value="blue">🔵 Blue</option>
+        <option value="purple">🟣 Purple</option>
+      </select>
+    </div>
+
     <!-- Webcam & Audio section -->
     <div class="settings-section">
       <h3 class="settings-section-title">📷 Webcam &amp; Audio</h3>
@@ -691,6 +717,7 @@
       <button class="admin-tab" data-tab="users" role="tab">👥 Users</button>
       <button class="admin-tab" data-tab="banned" role="tab">🚫 Banned</button>
       <button class="admin-tab" data-tab="ips" role="tab">🌐 IP Blocks</button>
+      <button class="admin-tab" data-tab="themes" role="tab">🎨 Themes</button>
     </div>
 
     <!-- Rooms Management Tab -->
@@ -746,6 +773,16 @@
       </div>
     </div>
 
+    <!-- Themes Management Tab -->
+    <div class="admin-tab-content" id="adminTabThemes" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Manage Themes</h3>
+        <div id="adminThemesList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -780,6 +817,9 @@
       
       <label class="settings-label" for="roomEditPassword">Password Protection (optional)</label>
       <input type="password" id="roomEditPassword" class="settings-input" placeholder="Leave empty for no password">
+
+      <label class="settings-label" for="roomEditMaxCams">Max Cameras (for Events room, 1-8, leave empty for no limit)</label>
+      <input type="number" id="roomEditMaxCams" class="settings-input" min="1" max="8" placeholder="e.g., 4 for Events room">
       <p class="settings-hint">If set, users will need to enter this password to join the room</p>
       
       <div class="settings-actions">
@@ -909,6 +949,6 @@
 
 <!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="js/main.js?v=20260317"></script>
+<script type="module" src="js/main.js?v=20260318"></script>
 </body>
 </html>

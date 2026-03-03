@@ -81,6 +81,15 @@ export async function finishInit() {
   /* Reply cancel button */
   dom.replyPreviewCancel?.addEventListener('click', clearReplyTo);
 
+  /* Load and apply user theme and language */
+  if (state.currentUser) {
+    const { loadUserTheme } = await import('./themes.js');
+    const { initI18n, setLanguage } = await import('./i18n.js');
+    await loadUserTheme();
+    setLanguage(state.currentUser.language || 'it');
+    initI18n();
+  }
+
   /* Load mute/kick/ban status for current user */
   if (state.supa && state.currentUser) {
     await loadUserRestrictions(state.currentUser.id);

@@ -8,12 +8,26 @@ import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResiza
 import { broadcast, broadcastAll } from './broadcast.js';
 import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences } from './users.js';
 import { addRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints } from './storage.js';
+import { getAvailableRooms } from './rooms.js';
 
 const CAM_STEP = 30;
 function camCount() { return Object.keys(state.cameraWindows).length; }
 
 /* ── Camera window ─────────────────────────────────────────────── */
 export function createCameraWindow(uid, stream, name, isOwn) {
+  /* Check if active room has max_cams (Events room) */
+  const availableRooms = getAvailableRooms();
+  const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+  const maxCams = roomData?.max_cams;
+  const isEventsRoom = maxCams && maxCams >= 1 && maxCams <= 8;
+  
+  if (isEventsRoom) {
+    /* Insert into events cam grid instead of floating window */
+    insertCameraIntoEventsGrid(uid, stream, name, isOwn);
+    return;
+  }
+  
+  /* Normal floating window */
   if (state.cameraWindows[uid]) {
     state.cameraWindows[uid].el.style.zIndex = String(700 + camCount()); return;
   }
@@ -173,6 +187,24 @@ export async function closeAllCamerasForUser(userId) {
 }
 
 export async function closeCameraWindow(uid) {
+  /* Check if this camera is in events grid */
+  const camWin = state.cameraWindows[uid];
+  if (camWin?.isEventsGrid) {
+    /* Remove from events grid */
+    const slot = camWin.el;
+    if (slot) {
+      slot.classList.add('empty');
+      slot.innerHTML = 'Empty';
+      delete slot.dataset.userId;
+    }
+    delete state.cameraWindows[uid];
+    /* Update grid */
+    const { updateEventsCamGrid } = await import('./rooms.js');
+    updateEventsCamGrid();
+    return;
+  }
+  
+  /* Normal floating window close */
   const cw = state.cameraWindows[uid]; if (!cw) return;
   stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];
   const isOwn = uid === state.currentUser?.id || uid === 'me';
@@ -194,14 +226,49 @@ export async function closeCameraWindow(uid) {
   }
 }
 
-export function handleCamClosed(payload) {
+export async function handleCamClosed(payload) {
   if (payload.from === state.currentUser?.id) return;
   const uid      = String(payload.from);
+  
+  /* Check if camera is in events grid */
+  const camWin = state.cameraWindows[uid];
+  if (camWin?.isEventsGrid) {
+    const slot = camWin.el;
+    if (slot) {
+      slot.classList.add('empty');
+      slot.innerHTML = 'Empty';
+      delete slot.dataset.userId;
+    }
+    delete state.cameraWindows[uid];
+    /* Update grid */
+    const { updateEventsCamGrid } = await import('./rooms.js');
+    updateEventsCamGrid();
+  }
+  
+  /* Normal floating window close */
   const inMyRoom = !payload.room_id || payload.room_id === state.activeRoom;
 
   /* Close the local window if it's open */
   const cw = state.cameraWindows[uid];
-  if (cw) { stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid]; }
+  if (cw) {
+    if (cw.isEventsGrid) {
+      /* Remove from events grid */
+      const slot = cw.el;
+      if (slot) {
+        slot.classList.add('empty');
+        slot.innerHTML = 'Empty';
+        delete slot.dataset.userId;
+      }
+      /* Update grid */
+      const { updateEventsCamGrid } = await import('./rooms.js');
+      updateEventsCamGrid();
+    } else {
+      /* Normal floating window */
+      stopMicMeter(uid);
+      cw.el.remove();
+    }
+    delete state.cameraWindows[uid];
+  }
   if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
 
   /* Clear hasCamera in ALL joined rooms for this user */
@@ -242,7 +309,17 @@ export async function startOwnCamera() {
     dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
     createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
     broadcastAll('cam-opened', { room_id: state.cameraRoom });
-    await updateAllRoomPresences(); renderUsers(); showToast('📹 Camera enabled.');
+    await updateAllRoomPresences(); renderUsers();
+    
+    /* Update events cam grid if active room has max_cams */
+    const availableRooms = getAvailableRooms();
+    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+    if (roomData?.max_cams) {
+      const { updateEventsCamGrid } = await import('./rooms.js');
+      updateEventsCamGrid();
+    }
+    
+    showToast('📹 Camera enabled.');
   } catch (err) {
     state.localStream = null;
     showToast(err.name === 'NotAllowedError' ? '🚫 Camera/mic access denied.' : `⚠️ Camera error: ${err.message}`);
@@ -526,4 +603,41 @@ export function endCall(notify = true) {
     state.streamOpenedForCall = false;
   }
   state.activeCallUID = null; showToast('📵 Call ended.');
+}
+
+/* Insert camera into Events room grid */
+function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
+  if (!dom.eventsCamGrid || dom.eventsCamGrid.hidden) return;
+  const slots = dom.eventsCamGrid.querySelectorAll('.events-cam-slot');
+  let targetSlot = null;
+  for (const slot of slots) {
+    if (slot.dataset.userId === String(uid)) { targetSlot = slot; break; }
+  }
+  if (!targetSlot) {
+    for (const slot of slots) {
+      if (slot.classList.contains('empty')) { targetSlot = slot; break; }
+    }
+  }
+  if (!targetSlot) { showToast('All camera slots are full.'); return; }
+  targetSlot.classList.remove('empty');
+  targetSlot.innerHTML = '';
+  targetSlot.dataset.userId = uid;
+  const video = document.createElement('video');
+  video.autoplay = true; video.playsInline = true;
+  if (isOwn) video.muted = true;
+  video.style.width = '100%'; video.style.height = '100%'; video.style.objectFit = 'cover';
+  if (isOwn) video.style.transform = 'scaleX(-1)';
+  const label = document.createElement('div');
+  label.className = 'events-cam-slot-label';
+  label.textContent = name;
+  targetSlot.appendChild(video);
+  targetSlot.appendChild(label);
+  video.srcObject = stream;
+  video.play().catch(() => {});
+  if (!state.cameraWindows[uid]) {
+    state.cameraWindows[uid] = { el: targetSlot, stream, isOwn, micEnabled: true, isEventsGrid: true };
+  } else {
+    state.cameraWindows[uid].el = targetSlot;
+    state.cameraWindows[uid].isEventsGrid = true;
+  }
 }

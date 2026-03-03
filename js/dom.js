@@ -19,6 +19,7 @@ export const dom = {
   /* Room tabs */
   roomTabsBar:   $('roomTabsBar'),
   roomPickerBtn: $('roomPickerBtn'),
+  eventsCamGrid: $('eventsCamGrid'),
   roomPickerPanel: $('roomPickerPanel'),
 
   /* Search */
@@ -140,6 +141,8 @@ export const dom = {
   cameraDeviceSelect:  $('cameraDeviceSelect'),
   micDeviceSelect:     $('micDeviceSelect'),
   detectDevicesBtn:    $('detectDevicesBtn'),
+  languageSelect:      $('languageSelect'),
+  themeSelect:         $('themeSelect'),
   detectDevicesHint:   $('detectDevicesHint'),
   settingsSaveBtn:     $('settingsSaveBtn'),
   rejectedCamsSection: $('rejectedCamsSection'),

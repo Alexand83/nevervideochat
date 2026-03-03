@@ -123,6 +123,12 @@ export async function connectSupabase() {
         if (u) u.hasCamera = inMyRoom;
         else if (inMyRoom) ensureUser(fromId, payload.fromName, { hasCamera: true, online: true });
         renderUsers();
+        
+        /* Update events cam grid if active room has max_cams */
+        if (camRoom === state.activeRoom) {
+          const { updateEventsCamGrid } = await import('./rooms.js');
+          updateEventsCamGrid();
+        }
       })
       .on('broadcast', { event: 'cam-closed'   }, ({ payload }) => handleCamClosed(payload))
       .on('broadcast', { event: 'call-ended'   }, ({ payload }) => {

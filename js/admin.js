@@ -101,6 +101,7 @@ function switchAdminTab(tabName) {
   else if (tabName === 'roles') loadCustomRoles();
   else if (tabName === 'banned') loadBannedUsers();
   else if (tabName === 'ips') loadBannedIPs();
+  else if (tabName === 'themes') loadThemes();
 }
 
 async function openAdminPanel() {
@@ -171,6 +172,7 @@ function openRoomEditModal(room = null) {
     document.getElementById('roomEditIsOpen').checked = room.is_open;
     document.getElementById('roomEditPassword').value = '';
     document.getElementById('roomEditPassword').placeholder = 'Leave empty to keep current password';
+    document.getElementById('roomEditMaxCams').value = room.max_cams || '';
   } else {
     title.textContent = 'Create New Room';
     form.reset();
@@ -193,6 +195,8 @@ async function saveRoom() {
   const icon = document.getElementById('roomEditIcon').value.trim() || '💬';
   const isOpen = document.getElementById('roomEditIsOpen').checked;
   const password = document.getElementById('roomEditPassword').value.trim();
+  const maxCamsInput = document.getElementById('roomEditMaxCams').value.trim();
+  const maxCams = maxCamsInput ? parseInt(maxCamsInput, 10) : null;
   
   if (!name) {
     showToast('⚠️ Room Name is required.');
@@ -206,6 +210,7 @@ async function saveRoom() {
       is_open: isOpen,
       created_by: state.currentUser.id,
       password: password ? await hashPassword(password) : null,
+      max_cams: maxCams && maxCams >= 1 && maxCams <= 8 ? maxCams : null,
     };
     
     // Se è un edit, aggiungi l'ID
@@ -477,6 +482,51 @@ async function unblockIP(ip) {
     showToast('⚠️ Failed to unblock IP.');
   }
 }
+
+/* ── Themes Management ── */
+async function loadThemes() {
+  const list = document.getElementById('adminThemesList');
+  if (!list || !state.supa) return;
+  
+  try {
+    const { getAllThemes } = await import('./themes.js');
+    const themes = await getAllThemes();
+    
+    list.innerHTML = '';
+    if (!themes || themes.length === 0) {
+      list.innerHTML = '<p class="admin-empty">No themes found.</p>';
+      return;
+    }
+    
+    themes.forEach(theme => {
+      const item = document.createElement('div');
+      item.className = 'admin-list-item';
+      item.innerHTML = `
+        <div class="admin-item-info">
+          <strong>${theme.display_name || theme.name}</strong>
+          <div class="admin-item-id">ID: ${theme.id}</div>
+          ${theme.is_default ? '<span class="admin-badge admin-badge-success">Default</span>' : ''}
+          ${theme.is_custom ? '<span class="admin-badge">Custom</span>' : ''}
+        </div>
+        <div class="admin-item-actions">
+          ${theme.is_custom ? `<button class="admin-action-btn admin-action-danger" onclick="window.deleteTheme('${theme.id}')">🗑️ Delete</button>` : ''}
+        </div>
+      `;
+      list.appendChild(item);
+    });
+  } catch (err) {
+    console.error('[Admin] Load themes error:', err);
+    showToast('⚠️ Failed to load themes.');
+  }
+}
+
+window.deleteTheme = async function(themeId) {
+  if (!confirm('Are you sure you want to delete this theme?')) return;
+  const { deleteTheme } = await import('./themes.js');
+  if (await deleteTheme(themeId)) {
+    loadThemes();
+  }
+};
 
 /* ── Password hashing (simple, should use proper hashing in production) ── */
 async function hashPassword(password) {

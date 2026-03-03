@@ -35,7 +35,14 @@ export async function loginUser(nick, password) {
   if (data.session) persistAuthSession(data.session);
   const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
   const displayName = profile?.display_name || profile?.username || nick;
-  return { userId: data.user.id, nick: displayName, username: profile?.username || nick, avatarUrl: profile?.avatar_url || null };
+  return { 
+    userId: data.user.id, 
+    nick: displayName, 
+    username: profile?.username || nick, 
+    avatarUrl: profile?.avatar_url || null,
+    theme_id: profile?.theme_id || 'dark',
+    language: profile?.language || 'it'
+  };
 }
 
 export async function logoutUser() {
@@ -66,8 +73,17 @@ export async function tryRestoreSession() {
         const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
         const cachedId    = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
         const displayName = profile?.display_name || profile?.username || cachedId?.name || `User_${data.user.id.slice(0, 6)}`;
-        const user = { id: data.user.id, name: displayName, username: profile?.username || displayName,
-          avatarUrl: profile?.avatar_url || null, isGuest: false, online: true, hasCamera: false };
+        const user = { 
+          id: data.user.id, 
+          name: displayName, 
+          username: profile?.username || displayName,
+          avatarUrl: profile?.avatar_url || null, 
+          isGuest: false, 
+          online: true, 
+          hasCamera: false,
+          theme_id: profile?.theme_id || 'dark',
+          language: profile?.language || 'it'
+        };
         localStorage.setItem('nvc_identity', JSON.stringify(user));
         return user;
       }
@@ -84,8 +100,18 @@ export async function tryRestoreSession() {
   return null;
 }
 
-export function applyAuthIdentity(id, name, username, avatarUrl, isGuest) {
-  state.currentUser = { id, name, username: username || null, avatarUrl: avatarUrl || null, isGuest, online: true, hasCamera: false };
+export function applyAuthIdentity(id, name, username, avatarUrl, isGuest, themeId = 'dark', language = 'it') {
+  state.currentUser = { 
+    id, 
+    name, 
+    username: username || null, 
+    avatarUrl: avatarUrl || null, 
+    isGuest, 
+    online: true, 
+    hasCamera: false,
+    theme_id: themeId,
+    language: language
+  };
   localStorage.setItem('nvc_identity', JSON.stringify(state.currentUser));
 }
 
@@ -257,6 +283,37 @@ export function initSettingsModal() {
     finally { dom.detectDevicesBtn.textContent = '🔍 Detect Devices'; dom.detectDevicesBtn.disabled = false; }
   });
 
+  /* Language selector */
+  dom.languageSelect?.addEventListener('change', async (e) => {
+    const lang = e.target.value;
+    if (!state.currentUser) return;
+    
+    const { setLanguage } = await import('./i18n.js');
+    setLanguage(lang);
+    
+    /* Update user profile */
+    if (state.supa) {
+      try {
+        await state.supa
+          .from('profiles')
+          .update({ language: lang })
+          .eq('id', state.currentUser.id);
+        state.currentUser.language = lang;
+      } catch (err) {
+        console.error('[Auth] Update language error:', err);
+      }
+    }
+  });
+  
+  /* Theme selector */
+  dom.themeSelect?.addEventListener('change', async (e) => {
+    const themeId = e.target.value;
+    if (!state.currentUser) return;
+    
+    const { setUserTheme } = await import('./themes.js');
+    await setUserTheme(themeId);
+  });
+  
   dom.settingsSaveBtn?.addEventListener('click', () => {
     const s = { cameraId: dom.cameraDeviceSelect.value || '', micId: dom.micDeviceSelect.value || '' };
     saveDeviceSettings(s); state.settings = s;
@@ -269,6 +326,13 @@ function openSettingsModal() {
   dom.cameraDeviceSelect.value = s.cameraId || '';
   dom.micDeviceSelect.value    = s.micId    || '';
   dom.detectDevicesHint.textContent = 'Click "Detect Devices" to list your cameras and microphones.';
+  
+  /* Set current language and theme */
+  if (state.currentUser) {
+    dom.languageSelect.value = state.currentUser.language || 'it';
+    dom.themeSelect.value = state.currentUser.theme_id || 'dark';
+  }
+  
   renderRejectedCams();
   renderIgnoredUsers();
   dom.settingsModal.hidden = false;

@@ -37,8 +37,8 @@ export function getAvailableRooms() {
 }
 
 /* ── Create a room state entry ── */
-function mkRoom(id, name = null, icon = '💬') {
-  return { id: String(id), name: name || String(id), icon, messages: [], presenceCh: null, dbSub: null, users: {}, unreadCount: 0 };
+function mkRoom(id, name = null, icon = '💬', maxCams = null) {
+  return { id: String(id), name: name || String(id), icon, max_cams: maxCams, messages: [], presenceCh: null, dbSub: null, users: {}, unreadCount: 0 };
 }
 
 /* ── Join a room (subscribe presence + DB, load messages) ── */
@@ -66,7 +66,7 @@ export async function joinRoom(roomId) {
 
   /* Load room info from DB if available */
   const roomInfo = availableRoomsCache.find(r => String(r.id) === roomIdStr);
-  state.rooms[roomIdStr] = mkRoom(roomIdStr, roomInfo?.name, roomInfo?.icon);
+  state.rooms[roomIdStr] = mkRoom(roomIdStr, roomInfo?.name, roomInfo?.icon, roomInfo?.max_cams);
 
   /* Presence channel for this room */
   const presenceCh = state.supa.channel(`presence:room-${roomIdStr}`, {
@@ -136,6 +136,26 @@ export function switchRoom(roomId) {
   state.activeRoom = roomIdStr;
   /* Reset unread count when switching to this room */
   state.rooms[roomId].unreadCount = 0;
+  
+  /* Check if room has max_cams (Events room) */
+  const roomData = availableRoomsCache.find(r => String(r.id) === roomIdStr);
+  const maxCams = roomData?.max_cams;
+  
+  if (maxCams && maxCams >= 1 && maxCams <= 8) {
+    /* Show events cam grid */
+    if (dom.eventsCamGrid) {
+      dom.eventsCamGrid.hidden = false;
+      dom.eventsCamGrid.setAttribute('data-cols', maxCams);
+      renderEventsCamGrid(maxCams);
+    }
+  } else {
+    /* Hide events cam grid */
+    if (dom.eventsCamGrid) {
+      dom.eventsCamGrid.hidden = true;
+      clearEventsCamGrid();
+    }
+  }
+  
   renderRoomTabs();
   renderActiveRoomMessages();
   renderUsers();
@@ -280,4 +300,61 @@ export async function initRooms() {
       await joinRoom(String(availableRoomsCache[0].id));
     }
   }
+}
+
+/* ── Events Room Camera Grid ── */
+function renderEventsCamGrid(maxCams) {
+  if (!dom.eventsCamGrid) return;
+  
+  dom.eventsCamGrid.innerHTML = '';
+  
+  /* Create slots for max_cams */
+  for (let i = 0; i < maxCams; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'events-cam-slot empty';
+    slot.dataset.slotIndex = i;
+    slot.textContent = 'Empty';
+    dom.eventsCamGrid.appendChild(slot);
+  }
+  
+  /* Populate with active cameras in this room */
+  updateEventsCamGrid();
+}
+
+function clearEventsCamGrid() {
+  if (dom.eventsCamGrid) {
+    dom.eventsCamGrid.innerHTML = '';
+  }
+}
+
+export function updateEventsCamGrid() {
+  if (!dom.eventsCamGrid || dom.eventsCamGrid.hidden) return;
+  
+  const roomData = availableRoomsCache.find(r => String(r.id) === String(state.activeRoom));
+  const maxCams = roomData?.max_cams;
+  if (!maxCams) return;
+  
+  /* Get all active cameras in this room */
+  const activeCams = [];
+  Object.values(state.rooms[state.activeRoom]?.users || {}).forEach(user => {
+    if (user.hasCamera && user.online) {
+      activeCams.push(user);
+    }
+  });
+  
+  /* Update slots */
+  const slots = dom.eventsCamGrid.querySelectorAll('.events-cam-slot');
+  slots.forEach((slot, index) => {
+    const cam = activeCams[index];
+    if (cam) {
+      slot.classList.remove('empty');
+      slot.textContent = '';
+      /* Camera will be inserted by camera.js */
+      slot.dataset.userId = cam.id;
+    } else {
+      slot.classList.add('empty');
+      slot.textContent = 'Empty';
+      delete slot.dataset.userId;
+    }
+  });
 }

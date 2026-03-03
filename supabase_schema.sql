@@ -70,6 +70,8 @@ END $$;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'it'; -- 'it', 'en', 'es', 'de'
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS theme_id TEXT DEFAULT 'dark'; -- Reference to themes table
 
 -- ── Tabella stanze (gestite da admin) ─────────────────────────
 CREATE TABLE IF NOT EXISTS public.rooms (
@@ -78,6 +80,7 @@ CREATE TABLE IF NOT EXISTS public.rooms (
   icon        TEXT        DEFAULT '💬',
   is_open     BOOLEAN     DEFAULT true,
   password    TEXT,       -- NULL = no password, TEXT = hashed password
+  max_cams    INTEGER     DEFAULT NULL, -- NULL = no limit, 1-8 for special rooms like "Eventi"
   created_by  TEXT        NOT NULL,
   created_at  TIMESTAMPTZ DEFAULT NOW(),
   updated_at  TIMESTAMPTZ DEFAULT NOW()
@@ -334,6 +337,84 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ── Tabella temi (themes) ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.themes (
+  id          TEXT        PRIMARY KEY,  -- 'dark', 'light', 'blue', 'purple'
+  name        TEXT        NOT NULL,
+  display_name TEXT       NOT NULL,     -- Nome visualizzato
+  colors      JSONB       NOT NULL,     -- { "bg0": "#0d1117", "bg1": "#161b22", ... }
+  is_default  BOOLEAN     DEFAULT false,
+  is_custom   BOOLEAN     DEFAULT false, -- true = uploaded by admin
+  created_by  TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Insert default themes
+INSERT INTO public.themes (id, name, display_name, colors, is_default) VALUES
+  ('dark', 'Dark', 'Dark Theme', '{
+    "bg0": "#0d1117", "bg1": "#161b22", "bg2": "#21262d", "bg3": "#2d333b", "bg-hover": "#30363d",
+    "border": "#30363d", "border-subtle": "#21262d",
+    "tx0": "#e6edf3", "tx1": "#8b949e", "tx2": "#484f58", "tx-link": "#58a6ff",
+    "accent": "#1f6feb", "accent-h": "#388bfd", "accent-dim": "rgba(31,111,235,.18)",
+    "clr-danger": "#da3633", "clr-danger-h": "#f85149",
+    "clr-success": "#238636", "clr-success-h": "#2ea043",
+    "clr-online": "#3fb950", "clr-offline": "#484f58",
+    "bubble-own": "#1a3f6f", "bubble-other": "#21262d"
+  }'::jsonb, true)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.themes (id, name, display_name, colors, is_default) VALUES
+  ('light', 'Light', 'Light Theme', '{
+    "bg0": "#ffffff", "bg1": "#f6f8fa", "bg2": "#e1e4e8", "bg3": "#d1d5da", "bg-hover": "#c6cbd1",
+    "border": "#d1d5da", "border-subtle": "#e1e4e8",
+    "tx0": "#24292e", "tx1": "#586069", "tx2": "#959da5", "tx-link": "#0366d6",
+    "accent": "#0366d6", "accent-h": "#005cc5", "accent-dim": "rgba(3,102,214,.1)",
+    "clr-danger": "#d73a49", "clr-danger-h": "#cb2431",
+    "clr-success": "#28a745", "clr-success-h": "#22863a",
+    "clr-online": "#28a745", "clr-offline": "#959da5",
+    "bubble-own": "#c8e1ff", "bubble-other": "#f1f3f5"
+  }'::jsonb, false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.themes (id, name, display_name, colors, is_default) VALUES
+  ('blue', 'Blue', 'Blue Theme', '{
+    "bg0": "#0a1929", "bg1": "#132f4c", "bg2": "#1e4976", "bg3": "#2a5a8a", "bg-hover": "#35699e",
+    "border": "#2a5a8a", "border-subtle": "#1e4976",
+    "tx0": "#e3f2fd", "tx1": "#90caf9", "tx2": "#64b5f6", "tx-link": "#42a5f5",
+    "accent": "#2196f3", "accent-h": "#1e88e5", "accent-dim": "rgba(33,150,243,.2)",
+    "clr-danger": "#f44336", "clr-danger-h": "#e53935",
+    "clr-success": "#4caf50", "clr-success-h": "#43a047",
+    "clr-online": "#4caf50", "clr-offline": "#64b5f6",
+    "bubble-own": "#1565c0", "bubble-other": "#1e4976"
+  }'::jsonb, false)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.themes (id, name, display_name, colors, is_default) VALUES
+  ('purple', 'Purple', 'Purple Theme', '{
+    "bg0": "#1a1a2e", "bg1": "#16213e", "bg2": "#0f3460", "bg3": "#533483", "bg-hover": "#6a4c93",
+    "border": "#533483", "border-subtle": "#0f3460",
+    "tx0": "#e8eaf6", "tx1": "#c5cae9", "tx2": "#9fa8da", "tx-link": "#7986cb",
+    "accent": "#9c27b0", "accent-h": "#8e24aa", "accent-dim": "rgba(156,39,176,.2)",
+    "clr-danger": "#e91e63", "clr-danger-h": "#c2185b",
+    "clr-success": "#4caf50", "clr-success-h": "#43a047",
+    "clr-online": "#4caf50", "clr-offline": "#9fa8da",
+    "bubble-own": "#6a1b9a", "bubble-other": "#0f3460"
+  }'::jsonb, false)
+ON CONFLICT (id) DO NOTHING;
+
+-- RLS for themes
+ALTER TABLE public.themes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read themes" ON public.themes;
+DROP POLICY IF EXISTS "Admin manage themes" ON public.themes;
+CREATE POLICY "Public read themes" ON public.themes FOR SELECT USING (true);
+CREATE POLICY "Admin manage themes" ON public.themes FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
+);
+
+-- Add column to rooms for max_cams
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS max_cams INTEGER DEFAULT NULL;
 
 -- ================================================================
 --  STORAGE — bucket "chat-media"
