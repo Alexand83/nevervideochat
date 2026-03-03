@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260427 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260428 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -647,7 +647,7 @@ export async function handleWebRTCSignal(payload) {
       }
       
       /* If we have an active outgoing PC for this user, it might interfere with incoming PC ICE negotiation.
-         Wait for outgoing PC to stabilize (or timeout after 500ms) before processing incoming offer. */
+         Close it temporarily to give incoming PC priority, then recreate it after incoming PC connects. */
       const outgoingPc = state.outgoingPCs[from];
       if (outgoingPc) {
         const outgoingState = outgoingPc.connectionState;
@@ -660,11 +660,19 @@ export async function handleWebRTCSignal(payload) {
             waited += 50;
           }
           console.log('[WebRTC] Outgoing PC state after wait:', outgoingPc.connectionState, 'waited:', waited, 'ms');
+          if (outgoingPc.connectionState === 'connected') {
+            /* Outgoing PC connected during wait — close it temporarily */
+            outgoingPc.close();
+            delete state.outgoingPCs[from];
+            console.log('[WebRTC] Outgoing PC closed for', from, '— will recreate after incoming PC connects');
+          }
         } else if (outgoingState === 'connected') {
-          /* Outgoing PC is already connected — add delay to let ICE resources free up
-             When outgoing PC is connected, incoming PC might struggle to connect due to resource contention */
-          console.log('[WebRTC] Outgoing PC connected for', from, '— delaying incoming PC by 500ms to free ICE resources');
-          await new Promise(r => setTimeout(r, 500));
+          /* Outgoing PC is already connected — close it temporarily to free ICE resources
+             We'll recreate it after incoming PC connects */
+          console.log('[WebRTC] Outgoing PC connected for', from, '— closing temporarily to prioritize incoming PC');
+          outgoingPc.close();
+          delete state.outgoingPCs[from];
+          console.log('[WebRTC] Outgoing PC closed for', from, '— will recreate after incoming PC connects');
         }
       }
       
@@ -710,6 +718,21 @@ export async function handleWebRTCSignal(payload) {
 
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
+        
+        /* If incoming PC connects and we don't have outgoing PC but should (we have camera), recreate it */
+        if (pc.connectionState === 'connected' && !state.outgoingPCs[from]) {
+          /* Check if we still have local stream and user still has camera — if so, we closed outgoing PC earlier */
+          if (state.localStream && state.currentUser?.hasCamera) {
+            console.log('[WebRTC] Incoming PC connected for', from, '— recreating outgoing PC');
+            setTimeout(() => {
+              /* Recreate outgoing PC to share our camera with the guest */
+              sharePublicCameraTo(from).catch(err => {
+                console.warn('[WebRTC] Failed to recreate outgoing PC for', from, ':', err);
+              });
+            }, 300); /* Delay to let incoming PC fully stabilize */
+          }
+        }
+        
         if (pc.connectionState === 'failed') {
           /* Only act if this PC is still the current one */
           if (state.incomingPCs[from] !== pc) return;
@@ -1075,7 +1098,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260427] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260428] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
