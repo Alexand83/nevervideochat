@@ -306,16 +306,11 @@ export async function initRooms() {
 function renderEventsCamGrid(maxCams) {
   if (!dom.eventsCamGrid) return;
   
+  /* Don't create empty slots - they will be created dynamically */
   dom.eventsCamGrid.innerHTML = '';
   
-  /* Create slots for max_cams */
-  for (let i = 0; i < maxCams; i++) {
-    const slot = document.createElement('div');
-    slot.className = 'events-cam-slot empty';
-    slot.dataset.slotIndex = i;
-    slot.textContent = 'Empty';
-    dom.eventsCamGrid.appendChild(slot);
-  }
+  /* Set max columns for autoresize */
+  dom.eventsCamGrid.setAttribute('data-max-cols', maxCams);
   
   /* Populate with active cameras in this room */
   updateEventsCamGrid();
@@ -342,19 +337,53 @@ export function updateEventsCamGrid() {
     }
   });
   
-  /* Update slots */
-  const slots = dom.eventsCamGrid.querySelectorAll('.events-cam-slot');
-  slots.forEach((slot, index) => {
-    const cam = activeCams[index];
-    if (cam) {
-      slot.classList.remove('empty');
-      slot.textContent = '';
-      /* Camera will be inserted by camera.js */
-      slot.dataset.userId = cam.id;
-    } else {
-      slot.classList.add('empty');
-      slot.textContent = 'Empty';
-      delete slot.dataset.userId;
+  /* Limit to max_cams */
+  const camsToShow = activeCams.slice(0, maxCams);
+  const currentSlots = dom.eventsCamGrid.querySelectorAll('.events-cam-slot');
+  
+  /* Remove extra slots if we have more than needed */
+  if (currentSlots.length > camsToShow.length) {
+    for (let i = camsToShow.length; i < currentSlots.length; i++) {
+      currentSlots[i].remove();
     }
+  }
+  
+  /* Add slots if we need more */
+  while (currentSlots.length < camsToShow.length) {
+    const slot = document.createElement('div');
+    slot.className = 'events-cam-slot';
+    dom.eventsCamGrid.appendChild(slot);
+  }
+  
+  /* Update autoresize based on number of active cams */
+  const numCams = camsToShow.length;
+  if (numCams > 0) {
+    /* Calculate optimal columns: 1-2 cams = 1 col, 3-4 = 2 cols, 5-6 = 3 cols, 7-8 = 4 cols */
+    let cols = 1;
+    if (numCams >= 7) cols = 4;
+    else if (numCams >= 5) cols = 3;
+    else if (numCams >= 3) cols = 2;
+    else cols = 1;
+    
+    dom.eventsCamGrid.setAttribute('data-cols', cols);
+  } else {
+    /* No cams - hide grid */
+    dom.eventsCamGrid.setAttribute('data-cols', '1');
+  }
+  
+  /* Update slot data attributes - don't remove slots that have cameras inserted */
+  const slots = Array.from(dom.eventsCamGrid.querySelectorAll('.events-cam-slot'));
+  slots.forEach((slot, index) => {
+    const cam = camsToShow[index];
+    const hasVideo = slot.querySelector('video');
+    
+    if (cam) {
+      slot.dataset.userId = cam.id;
+      /* If slot doesn't have video but camera exists in state, it will be inserted by insertCameraIntoEventsGrid */
+    } else if (!hasVideo) {
+      /* Empty slot with no camera - remove it */
+      slot.remove();
+    }
+    /* Keep slots that have video even if cam is not in activeCams list yet (might be updating) */
   });
 }

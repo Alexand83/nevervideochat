@@ -309,14 +309,18 @@ export async function startOwnCamera() {
     dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
     createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
     broadcastAll('cam-opened', { room_id: state.cameraRoom });
-    await updateAllRoomPresences(); renderUsers();
+    await updateAllRoomPresences(); 
+    renderUsers();
     
     /* Update events cam grid if active room has max_cams */
     const availableRooms = getAvailableRooms();
     const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
     if (roomData?.max_cams) {
-      const { updateEventsCamGrid } = await import('./rooms.js');
-      updateEventsCamGrid();
+      /* Small delay to ensure camera is inserted before updating grid */
+      setTimeout(async () => {
+        const { updateEventsCamGrid } = await import('./rooms.js');
+        updateEventsCamGrid();
+      }, 100);
     }
     
     showToast('📹 Camera enabled.');
@@ -608,36 +612,63 @@ export function endCall(notify = true) {
 /* Insert camera into Events room grid */
 function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   if (!dom.eventsCamGrid || dom.eventsCamGrid.hidden) return;
-  const slots = dom.eventsCamGrid.querySelectorAll('.events-cam-slot');
-  let targetSlot = null;
-  for (const slot of slots) {
-    if (slot.dataset.userId === String(uid)) { targetSlot = slot; break; }
-  }
+  
+  /* Find existing slot for this user */
+  let targetSlot = dom.eventsCamGrid.querySelector(`[data-user-id="${uid}"]`);
+  
   if (!targetSlot) {
-    for (const slot of slots) {
-      if (slot.classList.contains('empty')) { targetSlot = slot; break; }
+    /* Check if we can add a new slot (check max_cams limit) */
+    const availableRooms = getAvailableRooms();
+    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+    const maxCams = roomData?.max_cams;
+    
+    const currentSlots = dom.eventsCamGrid.querySelectorAll('.events-cam-slot');
+    if (maxCams && currentSlots.length >= maxCams) {
+      showToast('⚠️ All camera slots are full.');
+      return;
     }
+    
+    /* Create new slot */
+    targetSlot = document.createElement('div');
+    targetSlot.className = 'events-cam-slot';
+    targetSlot.dataset.userId = uid;
+    dom.eventsCamGrid.appendChild(targetSlot);
+    
+    /* Update grid layout will be called by updateEventsCamGrid from rooms.js */
   }
-  if (!targetSlot) { showToast('All camera slots are full.'); return; }
-  targetSlot.classList.remove('empty');
+  
+  /* Clear and populate slot */
   targetSlot.innerHTML = '';
   targetSlot.dataset.userId = uid;
+  
+  /* Create video element */
   const video = document.createElement('video');
-  video.autoplay = true; video.playsInline = true;
+  video.autoplay = true;
+  video.playsInline = true;
   if (isOwn) video.muted = true;
-  video.style.width = '100%'; video.style.height = '100%'; video.style.objectFit = 'cover';
+  video.style.width = '100%';
+  video.style.height = '100%';
+  video.style.objectFit = 'cover';
   if (isOwn) video.style.transform = 'scaleX(-1)';
+  
+  /* Create label */
   const label = document.createElement('div');
   label.className = 'events-cam-slot-label';
   label.textContent = name;
+  
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
+  
+  /* Set stream */
   video.srcObject = stream;
   video.play().catch(() => {});
+  
+  /* Store reference */
   if (!state.cameraWindows[uid]) {
     state.cameraWindows[uid] = { el: targetSlot, stream, isOwn, micEnabled: true, isEventsGrid: true };
   } else {
     state.cameraWindows[uid].el = targetSlot;
+    state.cameraWindows[uid].stream = stream;
     state.cameraWindows[uid].isEventsGrid = true;
   }
 }
