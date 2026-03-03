@@ -229,7 +229,7 @@ export async function sendMessage() {
   
   /* Check for game commands BEFORE processing message */
   const textContent = dom.msgInput.textContent || dom.msgInput.innerText || '';
-  if (_handleGameCommand && textContent.trim().startsWith('/game')) {
+  if (_handleGameCommand && (textContent.trim().startsWith('/game') || textContent.trim().startsWith('/giochi'))) {
     const handled = _handleGameCommand(textContent);
     if (handled) {
       dom.msgInput.innerHTML = '';

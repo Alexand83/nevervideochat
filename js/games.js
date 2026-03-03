@@ -84,24 +84,83 @@ export async function checkActiveGame() {
     
     if (error) throw error;
     if (data) {
-      activeGame = data;
-      gameData[data.game_type] = { ...gameData[data.game_type], ...data.game_state };
-      startGameUI(data.game_type, data.game_state);
+      activeGame = {
+        id: data.id,
+        game_type: data.game_type,
+        host_id: data.host_id,
+        room_id: data.room_id,
+        game_state: data.game_state,
+      };
+      
+      /* Ricostruisci Maps da JSON */
+      const gameState = data.game_state || {};
+      if (data.game_type === 'song') {
+        gameData.song = {
+          currentSong: gameState.currentSong || null,
+          hints: gameState.hints || [],
+          answers: new Map(Object.entries(gameState.answers || {})),
+          correctAnswer: gameState.correctAnswer || null,
+          timeLimit: gameState.timeLimit || 30000,
+        };
+        /* Ripristina timer se necessario */
+        if (gameData.song.currentSong && gameData.song.hints.length < 3) {
+          const hintsRemaining = 3 - gameData.song.hints.length;
+          if (hintsRemaining > 0) {
+            setTimeout(() => showSongHint(gameData.song.hints.length), 10000);
+          }
+          if (hintsRemaining > 1) {
+            setTimeout(() => showSongHint(gameData.song.hints.length + 1), 20000);
+          }
+        }
+      } else if (data.game_type === 'truthLie') {
+        gameData.truthLie = {
+          host: gameState.host || null,
+          statements: gameState.statements || [],
+          votes: new Map(Object.entries(gameState.votes || {})),
+          timeLimit: gameState.timeLimit || 60000,
+        };
+      } else if (data.game_type === 'quiz') {
+        gameData.quiz = {
+          currentQuestion: gameState.currentQuestion || null,
+          questionIndex: gameState.questionIndex || 0,
+          answers: new Map(Object.entries(gameState.answers || {})),
+          timeLimit: gameState.timeLimit || 15000,
+          questions: gameState.questions || gameData.quiz.questions,
+        };
+        /* Se c'è una domanda attiva, ripristina il timer */
+        if (gameData.quiz.currentQuestion) {
+          gameTimer = setTimeout(() => {
+            checkQuizAnswers();
+            setTimeout(() => askNextQuestion(), 2000);
+          }, gameData.quiz.timeLimit);
+        }
+      }
+      
+      startGameUI(data.game_type, gameData[data.game_type]);
+      console.log('[Games] Reloaded active game:', data.game_type, 'in room', state.activeRoom);
+    } else {
+      /* Nessun gioco attivo - reset */
+      activeGame = null;
+      gameData.song.answers.clear();
+      gameData.truthLie.votes.clear();
+      gameData.quiz.answers.clear();
+      if (gameTimer) {
+        clearTimeout(gameTimer);
+        gameTimer = null;
+      }
+      updateGamesPanel();
     }
   } catch (err) {
     console.error('[Games] Error checking active game:', err);
   }
 }
 
-/* ── Gestione comandi /game ──────────────────────────────────── */
+/* ── Gestione comandi /game e /giochi ─────────────────────────── */
 export function handleGameCommand(message) {
   const parts = message.trim().split(/\s+/);
   const cmd = parts[0]?.toLowerCase();
   
-  if (cmd !== '/game') return false;
-  
-  const subCmd = parts[1]?.toLowerCase();
-  const args = parts.slice(2);
+  if (cmd !== '/game' && cmd !== '/giochi') return false;
   
   /* Verifica se siamo in una stanza Giochi */
   const availableRooms = getAvailableRooms();
@@ -112,6 +171,15 @@ export function handleGameCommand(message) {
     showToast('🎮 I giochi sono disponibili solo nella stanza Giochi!');
     return true;
   }
+  
+  /* Comando /giochi mostra menu interattivo */
+  if (cmd === '/giochi') {
+    showGamesMenu();
+    return true;
+  }
+  
+  const subCmd = parts[1]?.toLowerCase();
+  const args = parts.slice(2);
   
   if (!subCmd) {
     showGameHelp();
@@ -151,6 +219,78 @@ export function handleGameCommand(message) {
   }
   
   return true;
+}
+
+/* ── Mostra menu interattivo giochi ───────────────────────────── */
+function showGamesMenu() {
+  const menuHtml = `
+    <div class="games-menu-overlay" id="gamesMenuOverlay">
+      <div class="games-menu-card">
+        <div class="games-menu-header">
+          <h3>🎮 Scegli un Gioco</h3>
+          <button class="games-menu-close" id="gamesMenuClose">✕</button>
+        </div>
+        <div class="games-menu-options">
+          <button class="games-menu-option" data-game="song">
+            <span class="games-menu-icon">🎵</span>
+            <div class="games-menu-info">
+              <strong>Indovina la Canzone</strong>
+              <span>Indovina il titolo dalla canzone dagli hint!</span>
+            </div>
+          </button>
+          <button class="games-menu-option" data-game="truth">
+            <span class="games-menu-icon">🎭</span>
+            <div class="games-menu-info">
+              <strong>Due Verità e una Bugia</strong>
+              <span>Indovina quale affermazione è falsa!</span>
+            </div>
+          </button>
+          <button class="games-menu-option" data-game="quiz">
+            <span class="games-menu-icon">❓</span>
+            <div class="games-menu-info">
+              <strong>Quiz a Tempo</strong>
+              <span>Rispondi velocemente alle domande!</span>
+            </div>
+          </button>
+        </div>
+        <div class="games-menu-footer">
+          <button class="games-menu-btn-secondary" id="gamesMenuScores">🏆 Classifica</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  /* Rimuovi menu esistente se presente */
+  const existing = document.getElementById('gamesMenuOverlay');
+  if (existing) existing.remove();
+  
+  document.body.insertAdjacentHTML('beforeend', menuHtml);
+  const overlay = document.getElementById('gamesMenuOverlay');
+  const closeBtn = document.getElementById('gamesMenuClose');
+  const scoresBtn = document.getElementById('gamesMenuScores');
+  
+  /* Click su opzione gioco */
+  overlay.querySelectorAll('.games-menu-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const gameType = btn.dataset.game;
+      overlay.remove();
+      if (gameType === 'song') startSongGame();
+      else if (gameType === 'truth') startTruthLieGame();
+      else if (gameType === 'quiz') startQuizGame();
+    });
+  });
+  
+  /* Close button */
+  closeBtn.addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  
+  /* Scores button */
+  scoresBtn.addEventListener('click', () => {
+    overlay.remove();
+    showScores();
+  });
 }
 
 /* ── Mostra help giochi ───────────────────────────────────────── */
@@ -221,7 +361,10 @@ async function startSongGame() {
     room_id: state.activeRoom,
   });
   
-  showToast(`🎵 Gioco iniziato! Indovina la canzone! Primo hint: ${randomSong.hints[0]}`);
+  /* Mostra toast solo se siamo nella stanza attiva */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(`🎵 Gioco iniziato! Indovina la canzone! Primo hint: ${randomSong.hints[0]}`);
+  }
 }
 
 /* ── Mostra hint canzone ─────────────────────────────────────── */
@@ -268,6 +411,8 @@ function handleGuess(answer) {
     timestamp: Date.now(),
   });
   
+  /* Salva stato aggiornato */
+  saveActiveGame();
   updateGamesPanel();
   
   if (normalizedAnswer === correctAnswer || normalizedAnswer.includes(correctAnswer) || correctAnswer.includes(normalizedAnswer)) {
@@ -275,7 +420,10 @@ function handleGuess(answer) {
     clearTimeout(gameTimer);
     endSongGame(true, userId);
   } else {
-    showToast(`❌ Sbagliato! Prova ancora. Hint: ${gameData.song.hints.join(' ')}`);
+    /* Toast solo se siamo nella stanza attiva */
+    if (String(state.activeRoom) === String(activeGame.room_id)) {
+      showToast(`❌ Sbagliato! Prova ancora. Hint: ${gameData.song.hints.join(' ')}`);
+    }
   }
 }
 
@@ -285,6 +433,7 @@ async function endSongGame(winner = false, winnerId = null) {
   
   const correctAnswer = gameData.song.currentSong.title;
   const artist = gameData.song.currentSong.artist;
+  const isInActiveRoom = String(state.activeRoom) === String(activeGame.room_id);
   
   if (winner && winnerId) {
     const winnerUser = findUser(winnerId);
@@ -297,19 +446,23 @@ async function endSongGame(winner = false, winnerId = null) {
       game_type: 'song',
       winner: winnerName,
       correct_answer: `${correctAnswer} - ${artist}`,
-      room_id: state.activeRoom,
+      room_id: activeGame.room_id,
     });
     
-    showToast(`🎉 ${winnerName} ha indovinato! La risposta era: ${correctAnswer} - ${artist}`);
+    if (isInActiveRoom) {
+      showToast(`🎉 ${winnerName} ha indovinato! La risposta era: ${correctAnswer} - ${artist}`);
+    }
   } else {
     broadcastAll('game-ended', {
       game_type: 'song',
       winner: null,
       correct_answer: `${correctAnswer} - ${artist}`,
-      room_id: state.activeRoom,
+      room_id: activeGame.room_id,
     });
     
-    showToast(`⏰ Tempo scaduto! La risposta era: ${correctAnswer} - ${artist}`);
+    if (isInActiveRoom) {
+      showToast(`⏰ Tempo scaduto! La risposta era: ${correctAnswer} - ${artist}`);
+    }
   }
   
   await stopGame();
@@ -346,7 +499,10 @@ async function startTruthLieGame() {
     room_id: state.activeRoom,
   });
   
-  showToast(`🎭 ${state.currentUser.name} ha iniziato "Due verità e una bugia"! Scrivi 3 affermazioni su di te (2 vere, 1 bugia) usando /game start truth [affermazione1] [affermazione2] [affermazione3]`);
+  /* Toast solo se siamo nella stanza attiva */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(`🎭 ${state.currentUser.name} ha iniziato "Due verità e una bugia"! Scrivi 3 affermazioni su di te (2 vere, 1 bugia) usando /game start truth [affermazione1] [affermazione2] [affermazione3]`);
+  }
 }
 
 /* ── Gestisce start con affermazioni ─────────────────────────── */
@@ -367,6 +523,9 @@ function handleStartGame(args) {
   }
   
   gameData.truthLie.statements = args.slice(0, 3);
+  
+  /* Salva stato aggiornato */
+  saveActiveGame();
   updateGamesPanel();
   
   /* Timer per votazione */
@@ -378,7 +537,10 @@ function handleStartGame(args) {
     room_id: state.activeRoom,
   });
   
-  showToast(`🎭 Affermazioni pubblicate! Votate quale è la bugia con /game vote [1/2/3]`);
+  /* Toast solo se siamo nella stanza attiva */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(`🎭 Affermazioni pubblicate! Votate quale è la bugia con /game vote [1/2/3]`);
+  }
 }
 
 /* ── Gestisce voto bugia ─────────────────────────────────────── */
@@ -407,17 +569,27 @@ function handleVote(statementIndex) {
   }
   
   gameData.truthLie.votes.set(userId, index - 1); // 0-based
+  
+  /* Salva stato aggiornato */
+  saveActiveGame();
   updateGamesPanel();
   
-  showToast(`✅ Hai votato l'affermazione ${index} come bugia!`);
+  /* Toast solo se siamo nella stanza attiva */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(`✅ Hai votato l'affermazione ${index} come bugia!`);
+  }
 }
 
 /* ── Termina gioco verità/bugia ───────────────────────────────── */
 async function endTruthLieGame() {
   if (!activeGame || activeGame.game_type !== 'truthLie') return;
   
+  const isInActiveRoom = String(state.activeRoom) === String(activeGame.room_id);
+  
   /* L'host deve rivelare quale è la bugia manualmente */
-  showToast(`🎭 Tempo scaduto! L'host deve rivelare quale affermazione era la bugia.`);
+  if (isInActiveRoom) {
+    showToast(`🎭 Tempo scaduto! L'host deve rivelare quale affermazione era la bugia.`);
+  }
   
   await stopGame();
 }
@@ -447,6 +619,11 @@ async function startQuizGame() {
     host: state.currentUser.name,
     room_id: state.activeRoom,
   });
+  
+  /* Toast solo se siamo nella stanza attiva */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(`❓ Quiz iniziato! Preparati a rispondere velocemente!`);
+  }
 }
 
 /* ── Chiedi prossima domanda quiz ────────────────────────────── */
@@ -461,6 +638,8 @@ function askNextQuestion() {
   gameData.quiz.currentQuestion = gameData.quiz.questions[gameData.quiz.questionIndex];
   gameData.quiz.answers.clear();
   
+  /* Salva stato aggiornato */
+  saveActiveGame();
   updateGamesPanel();
   
   broadcastAll('game-question', {
@@ -472,7 +651,10 @@ function askNextQuestion() {
     room_id: state.activeRoom,
   });
   
-  showToast(`❓ Domanda ${gameData.quiz.questionIndex + 1}/${gameData.quiz.questions.length}: ${gameData.quiz.currentQuestion.q}`);
+  /* Toast solo se siamo nella stanza attiva */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(`❓ Domanda ${gameData.quiz.questionIndex + 1}/${gameData.quiz.questions.length}: ${gameData.quiz.currentQuestion.q}`);
+  }
   
   /* Timer per risposta */
   gameTimer = setTimeout(() => {
@@ -506,8 +688,14 @@ function handleAnswer(answer) {
     timestamp: Date.now(),
   });
   
+  /* Salva stato aggiornato */
+  saveActiveGame();
   updateGamesPanel();
-  showToast(`✅ Risposta registrata: ${answer.trim()}`);
+  
+  /* Toast solo se siamo nella stanza attiva */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(`✅ Risposta registrata: ${answer.trim()}`);
+  }
 }
 
 /* ── Controlla risposte quiz ──────────────────────────────────── */
@@ -536,14 +724,22 @@ function checkQuizAnswers() {
     ? `✅ Corretti: ${correctNames} (+${pointsPerUser} punti)`
     : `❌ Nessuno ha risposto correttamente!`;
   
-  showToast(`⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}. ${correctText}`);
+  /* Toast solo se siamo nella stanza attiva */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(`⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}. ${correctText}`);
+  }
 }
 
 /* ── Termina gioco quiz ───────────────────────────────────────── */
 async function endQuizGame() {
   if (!activeGame || activeGame.game_type !== 'quiz') return;
   
-  showToast(`🎉 Quiz completato! Controlla la classifica con /game scores`);
+  const isInActiveRoom = String(state.activeRoom) === String(activeGame.room_id);
+  
+  if (isInActiveRoom) {
+    showToast(`🎉 Quiz completato! Controlla la classifica con /game scores`);
+  }
+  
   await stopGame();
 }
 
@@ -567,13 +763,19 @@ async function stopGame() {
     }
   }
   
+  const wasInActiveRoom = activeGame && String(state.activeRoom) === String(activeGame.room_id);
+  
   activeGame = null;
   gameData.song.answers.clear();
   gameData.truthLie.votes.clear();
   gameData.quiz.answers.clear();
   
   updateGamesPanel();
-  showToast('🛑 Gioco terminato!');
+  
+  /* Toast solo se eravamo nella stanza attiva */
+  if (wasInActiveRoom) {
+    showToast('🛑 Gioco terminato!');
+  }
 }
 
 /* ── Salva gioco attivo ──────────────────────────────────────── */
@@ -581,13 +783,31 @@ async function saveActiveGame() {
   if (!state.supa || !activeGame) return;
   
   try {
-    const gameState = { ...activeGame.game_state };
-    /* Converti Map in oggetti per JSON */
-    if (gameState.answers instanceof Map) {
-      gameState.answers = Object.fromEntries(gameState.answers);
-    }
-    if (gameState.votes instanceof Map) {
-      gameState.votes = Object.fromEntries(gameState.votes);
+    /* Prendi lo stato corrente dal gameData */
+    let gameState = {};
+    if (activeGame.game_type === 'song') {
+      gameState = {
+        currentSong: gameData.song.currentSong,
+        hints: gameData.song.hints,
+        answers: Object.fromEntries(gameData.song.answers),
+        correctAnswer: gameData.song.correctAnswer,
+        timeLimit: gameData.song.timeLimit,
+      };
+    } else if (activeGame.game_type === 'truthLie') {
+      gameState = {
+        host: gameData.truthLie.host,
+        statements: gameData.truthLie.statements,
+        votes: Object.fromEntries(gameData.truthLie.votes),
+        timeLimit: gameData.truthLie.timeLimit,
+      };
+    } else if (activeGame.game_type === 'quiz') {
+      gameState = {
+        currentQuestion: gameData.quiz.currentQuestion,
+        questionIndex: gameData.quiz.questionIndex,
+        answers: Object.fromEntries(gameData.quiz.answers),
+        timeLimit: gameData.quiz.timeLimit,
+        questions: gameData.quiz.questions,
+      };
     }
     
     const { data, error } = await state.supa
@@ -716,18 +936,72 @@ function updateGamesPanel() {
   
   dom.gamesPanelBody.innerHTML = html;
   renderGamesUsersList();
+  
+  /* Aggiungi event listeners per bottoni cliccabili */
+  attachGameButtonListeners();
+}
+
+/* ── Attacca event listeners ai bottoni del gioco ─────────────── */
+function attachGameButtonListeners() {
+  if (!dom.gamesPanelBody) return;
+  
+  /* Bottoni suggerimenti canzone */
+  dom.gamesPanelBody.querySelectorAll('.game-suggestion-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const answer = btn.dataset.answer;
+      if (answer) handleGuess(answer);
+    });
+  });
+  
+  /* Bottoni voto verità/bugia */
+  dom.gamesPanelBody.querySelectorAll('.game-vote-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const vote = btn.dataset.vote;
+      if (vote) handleVote(vote);
+    });
+  });
+  
+  /* Bottoni risposta quiz */
+  dom.gamesPanelBody.querySelectorAll('.game-option-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      const answer = btn.dataset.answer;
+      if (answer) {
+        btn.disabled = true;
+        btn.classList.add('disabled');
+        handleAnswer(answer);
+      }
+    });
+  });
 }
 
 /* ── Render UI canzone ────────────────────────────────────────── */
 function renderSongGameUI() {
   const hints = gameData.song.hints.join(' ');
   const answersCount = gameData.song.answers.size;
+  const userId = state.currentUser?.id;
+  const hasAnswered = gameData.song.answers.has(userId);
+  
+  /* Suggerimenti comuni per canzoni */
+  const suggestions = gameData.song.currentSong ? [
+    gameData.song.currentSong.title,
+    gameData.song.currentSong.artist,
+  ].filter(Boolean) : [];
+  
+  let suggestionsHtml = '';
+  if (suggestions.length > 0 && !hasAnswered) {
+    suggestionsHtml = '<div class="game-suggestions"><strong>💡 Suggerimenti:</strong><div class="game-suggestion-buttons">';
+    suggestions.forEach(suggestion => {
+      suggestionsHtml += `<button class="game-suggestion-btn" data-answer="${escHtml(suggestion)}">${escHtml(suggestion)}</button>`;
+    });
+    suggestionsHtml += '</div></div>';
+  }
   
   return `
     <div class="games-panel-content">
       <div class="game-hint">💡 Hint: ${hints || 'Nessun hint ancora'}</div>
       <div class="game-stats">👥 Risposte: ${answersCount}</div>
-      <div class="game-instruction">Scrivi: <code>/game guess [titolo canzone]</code></div>
+      ${hasAnswered ? '<div class="game-instruction">✅ Hai già risposto! Attendi il risultato...</div>' : suggestionsHtml + '<div class="game-instruction">Clicca su un suggerimento o scrivi: <code>/game guess [titolo]</code></div>'}
     </div>
   `;
 }
@@ -736,11 +1010,21 @@ function renderSongGameUI() {
 function renderTruthLieGameUI() {
   const statements = gameData.truthLie.statements;
   const votesCount = gameData.truthLie.votes.size;
+  const userId = state.currentUser?.id;
+  const hasVoted = gameData.truthLie.votes.has(userId);
   
   let statementsHtml = '';
   if (statements.length > 0) {
     statements.forEach((stmt, idx) => {
-      statementsHtml += `<div class="game-statement">${idx + 1}. ${escHtml(stmt)}</div>`;
+      const isVoted = hasVoted && gameData.truthLie.votes.get(userId) === idx;
+      statementsHtml += `
+        <div class="game-statement ${isVoted ? 'voted' : ''}" data-statement="${idx}">
+          <span class="game-statement-num">${idx + 1}.</span>
+          <span class="game-statement-text">${escHtml(stmt)}</span>
+          ${!hasVoted ? `<button class="game-vote-btn" data-vote="${idx + 1}">Vota</button>` : ''}
+          ${isVoted ? '<span class="game-voted-badge">✓ Votato</span>' : ''}
+        </div>
+      `;
     });
   } else {
     statementsHtml = '<div class="game-instruction">In attesa delle affermazioni dall\'host...</div>';
@@ -751,7 +1035,7 @@ function renderTruthLieGameUI() {
       <div class="game-host">👤 Host: ${escHtml(gameData.truthLie.host)}</div>
       ${statementsHtml}
       <div class="game-stats">🗳️ Voti: ${votesCount}</div>
-      <div class="game-instruction">Vota: <code>/game vote [1/2/3]</code></div>
+      ${hasVoted ? '<div class="game-instruction">✅ Hai già votato! Attendi il risultato...</div>' : '<div class="game-instruction">Clicca "Vota" su un\'affermazione o scrivi: <code>/game vote [1/2/3]</code></div>'}
     </div>
   `;
 }
@@ -762,6 +1046,8 @@ function renderQuizGameUI() {
   const answersCount = gameData.quiz.answers.size;
   const questionNum = gameData.quiz.questionIndex + 1;
   const totalQuestions = gameData.quiz.questions.length;
+  const userId = state.currentUser?.id;
+  const hasAnswered = gameData.quiz.answers.has(userId);
   
   if (!question) {
     return '<div class="games-panel-content">Caricamento domanda...</div>';
@@ -769,16 +1055,22 @@ function renderQuizGameUI() {
   
   let optionsHtml = '';
   question.options.forEach((opt, idx) => {
-    optionsHtml += `<div class="game-option">${String.fromCharCode(65 + idx)}. ${escHtml(opt)}</div>`;
+    const letter = String.fromCharCode(65 + idx);
+    optionsHtml += `
+      <button class="game-option-btn ${hasAnswered ? 'disabled' : ''}" data-answer="${escHtml(opt)}" ${hasAnswered ? 'disabled' : ''}>
+        <span class="game-option-letter">${letter}</span>
+        <span class="game-option-text">${escHtml(opt)}</span>
+      </button>
+    `;
   });
   
   return `
     <div class="games-panel-content">
       <div class="game-question-number">Domanda ${questionNum}/${totalQuestions}</div>
       <div class="game-question">${escHtml(question.q)}</div>
-      ${optionsHtml}
+      <div class="game-options-container">${optionsHtml}</div>
       <div class="game-stats">👥 Risposte: ${answersCount}</div>
-      <div class="game-instruction">Rispondi: <code>/game answer [risposta]</code></div>
+      ${hasAnswered ? '<div class="game-instruction">✅ Hai già risposto! Attendi il risultato...</div>' : '<div class="game-instruction">Clicca su una risposta o scrivi: <code>/game answer [risposta]</code></div>'}
     </div>
   `;
 }
