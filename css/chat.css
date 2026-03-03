@@ -788,31 +788,34 @@
 
 .events-cam-slot video {
   width: 100%;
-  height: 100%;
+  flex: 1;
   object-fit: cover;
+  min-height: 0;
 }
 
 .events-cam-slot-label {
   position: absolute;
-  bottom: -26px; /* Below the cam */
+  bottom: 0;
   left: 0;
   right: 0;
   text-align: center;
-  color: var(--tx1);
-  font-size: var(--fz-sm);
-  font-weight: 500;
-  padding: 4px 0;
+  color: #fff;
+  font-size: var(--fz-xs);
+  font-weight: 600;
+  padding: 6px 8px;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
-  background: transparent;
+  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 70%, transparent 100%);
   cursor: pointer;
-  transition: color var(--tf);
-  z-index: 10; /* Ensure label is on top */
-  pointer-events: auto; /* Ensure clickable */
+  transition: color var(--tf), background var(--tf);
+  z-index: 10;
+  pointer-events: auto;
+  border-radius: 0 0 var(--r2) var(--r2);
 }
 
 .events-cam-slot-label:hover {
   color: var(--accent);
+  background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.7) 70%, transparent 100%);
   text-decoration: underline;
 }
