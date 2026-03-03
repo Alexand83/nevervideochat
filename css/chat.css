@@ -794,7 +794,7 @@
 
 .events-cam-slot-label {
   position: absolute;
-  bottom: -24px; /* Below the cam */
+  bottom: -26px; /* Below the cam */
   left: 0;
   right: 0;
   text-align: center;
@@ -808,6 +808,8 @@
   background: transparent;
   cursor: pointer;
   transition: color var(--tf);
+  z-index: 10; /* Ensure label is on top */
+  pointer-events: auto; /* Ensure clickable */
 }
 
 .events-cam-slot-label:hover {
