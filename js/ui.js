@@ -33,7 +33,32 @@ export function initToolbar() {
   });
   dom.fontSizeSelect.addEventListener('change', e => {
     state.fontSize = e.target.value;
-    dom.msgInput.focus(); document.execCommand('fontSize', false, state.fontSize);
+    dom.msgInput.focus();
+    
+    /* Enable CSS styling */
+    document.execCommand('styleWithCSS', false, true);
+    
+    /* For X-Large (5), use fontSize 7 (max) and then override with CSS */
+    /* For other sizes, use the value directly */
+    const execValue = state.fontSize === '5' ? '7' : state.fontSize;
+    document.execCommand('fontSize', false, execValue);
+    
+    /* For X-Large, immediately replace the <font size="7"> with a <span style="font-size: 24px"> */
+    if (state.fontSize === '5') {
+      /* Use requestAnimationFrame to ensure the font tag is created first */
+      requestAnimationFrame(() => {
+        const fontTags = dom.msgInput.querySelectorAll('font[size="7"]');
+        fontTags.forEach(font => {
+          /* Only replace if it doesn't already have a style override */
+          if (!font.style.fontSize) {
+            const span = document.createElement('span');
+            span.style.fontSize = '24px';
+            span.innerHTML = font.innerHTML;
+            font.parentNode.replaceChild(span, font);
+          }
+        });
+      });
+    }
   });
   dom.msgInput.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); dom.boldBtn.click(); }
