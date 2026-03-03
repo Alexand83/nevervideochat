@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260432 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260433 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -636,6 +636,7 @@ export async function handleWebRTCSignal(payload) {
       
       console.log('[WebRTC] Creating new incoming peer connection for', from);
       const pc = new RTCPeerConnection(ICE_SERVERS);
+      pc._createdInRoom = state.activeRoom; /* Track room at creation — used to discard stale streams */
       state.incomingPCs[from] = pc;
       pc.onicecandidate = ({ candidate: c }) => {
         if (c) {
@@ -666,6 +667,15 @@ export async function handleWebRTCSignal(payload) {
         
         const stream = streams[0];
         console.log('[WebRTC] Opening window for', from, 'stream tracks:', stream.getTracks().map(t => t.kind + ':' + t.readyState));
+        
+        /* Guard: if user has switched away from the room where this PC was created,
+           discard the stream — don't open a floating window in the wrong room */
+        if (pc._createdInRoom && String(pc._createdInRoom) !== String(state.activeRoom)) {
+          console.log('[WebRTC] PC created in room', pc._createdInRoom, 'but now in room', state.activeRoom, '— discarding stream from', from);
+          try { pc.close(); } catch {}
+          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+          return;
+        }
         
         /* Open window immediately — insertCameraIntoEventsGrid handles stream readiness */
         openRemoteCamWindow(from, stream, payload.fromName);
@@ -1080,7 +1090,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260432] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260433] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {

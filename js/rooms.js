@@ -129,26 +129,63 @@ export function leaveRoom(roomId) {
   showToast(`👋 Left #${room.name}`);
 }
 
+/* ── Timer to auto-close camera if user stays away from Events room > 1 min ── */
+let _eventsRoomCamOffTimer = null;
+
 /* ── Switch active room (no network activity, just UI) ── */
 export function switchRoom(roomId) {
   const roomIdStr = String(roomId);
   if (!state.rooms[roomIdStr]) return;
+
+  /* Track previous room to detect Events room transitions */
+  const previousRoomId = String(state.activeRoom);
+  const previousRoomData = availableRoomsCache.find(r => String(r.id) === previousRoomId);
+  const wasEventsRoom = !!(previousRoomData?.max_cams && previousRoomData.max_cams >= 1 && previousRoomData.max_cams <= 8);
+
   state.activeRoom = roomIdStr;
   /* Reset unread count when switching to this room */
-  state.rooms[roomId].unreadCount = 0;
+  if (state.rooms[roomId]) state.rooms[roomId].unreadCount = 0;
   
   /* Check if room has max_cams (Events room) */
   const roomData = availableRoomsCache.find(r => String(r.id) === roomIdStr);
   const maxCams = roomData?.max_cams;
+  const isEventsRoom = !!(maxCams && maxCams >= 1 && maxCams <= 8);
   
-  if (maxCams && maxCams >= 1 && maxCams <= 8) {
+  if (isEventsRoom) {
+    /* ENTERING Events room — cancel any pending camera-off timer */
+    if (_eventsRoomCamOffTimer) {
+      clearTimeout(_eventsRoomCamOffTimer);
+      _eventsRoomCamOffTimer = null;
+    }
     /* Show events cam grid */
     if (dom.eventsCamGrid) {
       dom.eventsCamGrid.hidden = false;
       dom.eventsCamGrid.setAttribute('data-cols', maxCams);
       renderEventsCamGrid(maxCams);
     }
+    /* Re-insert own camera into Events grid if it was active in this room */
+    if (state.localStream && String(state.cameraRoom) === roomIdStr) {
+      import('./camera.js?v=20260433').then(({ createCameraWindow }) => {
+        if (state.activeRoom === roomIdStr && !state.cameraWindows[state.currentUser.id]?.el?.parentNode) {
+          createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
+        }
+      });
+    }
   } else {
+    /* LEAVING Events room (or switching between non-Events rooms) */
+    if (wasEventsRoom && state.localStream && String(state.cameraRoom) === previousRoomId) {
+      /* Start 1-minute timer: if user doesn't return, close their camera */
+      if (_eventsRoomCamOffTimer) clearTimeout(_eventsRoomCamOffTimer);
+      _eventsRoomCamOffTimer = setTimeout(async () => {
+        _eventsRoomCamOffTimer = null;
+        /* Only close if still away from the Events room and camera is still for that room */
+        if (state.activeRoom !== previousRoomId && state.cameraRoom === previousRoomId) {
+          console.log('[Events Room] User away > 1 min — closing camera');
+          const { closeCameraWindow } = await import('./camera.js?v=20260433');
+          closeCameraWindow(state.currentUser.id);
+        }
+      }, 60000);
+    }
     /* Hide events cam grid */
     if (dom.eventsCamGrid) {
       dom.eventsCamGrid.hidden = true;
@@ -163,37 +200,39 @@ export function switchRoom(roomId) {
   _updateCamBtn();
   
   /* Events room: automatically request cameras from users who already have them open */
-  if (maxCams && maxCams >= 1 && maxCams <= 8) {
+  if (isEventsRoom) {
     const room = state.rooms[roomIdStr];
-    console.log('[Events Room] Entered Events room, checking for users with cameras. Room:', room, 'Users:', room ? Object.values(room.users).map(u => ({ id: u.id, name: u.name, hasCamera: u.hasCamera, online: u.online })) : 'no room');
     if (room) {
-      /* Request cameras from all users who have them open in this room */
-      /* Increased delay to ensure WebRTC connections are ready */
+      /* Request cameras after a short delay to let WebRTC connections settle.
+         CRITICAL: always check state.activeRoom === roomIdStr before acting — the
+         user may have already switched away before the timeout fires. */
       setTimeout(async () => {
-        const { requestPublicCamera } = await import('./camera.js?v=20260432');
+        /* Guard: abort if user has left this room */
+        if (state.activeRoom !== roomIdStr) return;
+
+        const { requestPublicCamera } = await import('./camera.js?v=20260433');
         const allUsers = Object.values(room.users);
-        console.log('[Events Room] All users in room:', allUsers.map(u => ({ id: u.id, name: u.name, hasCamera: u.hasCamera, online: u.online })));
-        const usersWithCam = allUsers.filter(user => 
+        const usersWithCam = allUsers.filter(user =>
           user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)
         );
         console.log('[Events Room] Requesting cameras from', usersWithCam.length, 'users:', usersWithCam.map(u => u.name || u.id));
-        if (usersWithCam.length === 0) {
-          console.log('[Events Room] No users with cameras found. Waiting for cameras to be opened...');
-        }
+
         usersWithCam.forEach((user, index) => {
-          if (!state.cameraWindows[user.id]) {
-            /* Stagger requests slightly to avoid overwhelming the connection */
+          const alreadyViewing  = !!state.cameraWindows[user.id];
+          const pcActive        = !!state.incomingPCs?.[user.id];
+          const reqPending      = !!state.pendingCamRequests?.[user.id];
+          if (!alreadyViewing && !pcActive && !reqPending) {
             setTimeout(() => {
-              console.log('[Events Room] Requesting camera from', user.name || user.id, 'hasCamera:', user.hasCamera, 'online:', user.online);
+              /* Guard: abort if user has left before the staggered delay fires */
+              if (state.activeRoom !== roomIdStr) return;
+              console.log('[Events Room] Requesting camera from', user.name || user.id);
               requestPublicCamera(user.id);
-            }, index * 200); /* 200ms delay between each request */
+            }, index * 200);
           } else {
-            console.log('[Events Room] Already viewing camera from', user.name || user.id);
+            console.log('[Events Room] Already viewing/connecting camera from', user.name || user.id);
           }
         });
-      }, 1000); /* Increased delay to ensure room is fully set up */
-    } else {
-      console.warn('[Events Room] Room not found:', roomIdStr);
+      }, 1000);
     }
   }
 }
