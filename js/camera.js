@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260425 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260426 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -637,6 +637,28 @@ export async function handleWebRTCSignal(payload) {
           return;
         }
       }
+      
+      /* If we have an active outgoing PC for this user, it might interfere with incoming PC ICE negotiation.
+         Wait for outgoing PC to stabilize (or timeout after 500ms) before processing incoming offer. */
+      const outgoingPc = state.outgoingPCs[from];
+      if (outgoingPc) {
+        const outgoingState = outgoingPc.connectionState;
+        if (outgoingState === 'connecting' || outgoingState === 'new') {
+          console.log('[WebRTC] Outgoing PC exists for', from, 'in state', outgoingState, '— waiting for stabilization');
+          /* Wait up to 500ms for outgoing PC to connect, then proceed anyway */
+          let waited = 0;
+          while (waited < 500 && (outgoingPc.connectionState === 'connecting' || outgoingPc.connectionState === 'new')) {
+            await new Promise(r => setTimeout(r, 50));
+            waited += 50;
+          }
+          console.log('[WebRTC] Outgoing PC state after wait:', outgoingPc.connectionState, 'waited:', waited, 'ms');
+        } else if (outgoingState === 'connected') {
+          /* Outgoing PC is already connected — add small delay to let ICE resources free up */
+          console.log('[WebRTC] Outgoing PC connected for', from, '— delaying incoming PC by 300ms');
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+      
       console.log('[WebRTC] Creating new incoming peer connection for', from);
       const pc = new RTCPeerConnection(ICE_SERVERS);
       state.incomingPCs[from] = pc;
@@ -1044,7 +1066,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260425] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260426] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
