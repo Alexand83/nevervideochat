@@ -5,7 +5,7 @@ import { EMOJI_CATEGORIES }  from './config.js';
 import { state }             from './state.js';
 import { dom }               from './dom.js';
 import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js';
-import { findUser }          from './users.js';
+import { findUser, checkIsMuted, renderUsers } from './users.js';
 import { addIgnoredUser, removeIgnoredUser } from './storage.js';
 import { broadcast }         from './broadcast.js';
 import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js';
@@ -227,7 +227,6 @@ export function openContextMenu(uid, anchor) {
       
       /* Update mute button text based on mute status */
       if (hasPerms && dom.ctxMuteBtn) {
-        const { checkIsMuted } = await import('./users.js');
         const muteInfo = checkIsMuted(uid, state.activeRoom);
         const muteLabel = dom.ctxMuteBtn.querySelector('.ctx-mute-label') || dom.ctxMuteBtn;
         if (muteInfo) {
@@ -325,7 +324,6 @@ export function initContextMenu() {
     if (!uid || !user) return;
     
     /* Check if user is already muted */
-    const { checkIsMuted } = await import('./users.js');
     const muteInfo = checkIsMuted(uid, state.activeRoom);
     if (muteInfo) {
       /* Unmute user */
@@ -561,7 +559,6 @@ async function handleMuteUser(userId, userName, minutes, isGlobal) {
     broadcast('user-muted', userId, { room_id: roomId, duration: minutes, expires_at: expiresAt });
     
     /* Re-render users to show muted indicator */
-    const { renderUsers } = await import('./users.js');
     renderUsers();
     
     if (String(userId) === String(state.currentUser?.id)) {
@@ -608,7 +605,6 @@ async function handleUnmuteUser(userId, userName, muteInfo) {
     broadcast('user-unmuted', userId, { room_id: roomId });
     
     /* Re-render users to remove muted indicator */
-    const { renderUsers } = await import('./users.js');
     renderUsers();
     
     return true;
