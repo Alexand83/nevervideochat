@@ -99,11 +99,12 @@ export function renderUsers() {
     }
     
     /* Show muted indicator */
-    const isMuted = checkIsMuted(user.id, roomId);
-    if (isMuted) {
+    const muteInfo = checkIsMuted(user.id, roomId);
+    if (muteInfo) {
       const muteTag = document.createElement('span');
-      muteTag.className = 'muted-tag'; muteTag.textContent = '🔇 Muted';
-      muteTag.title = isMuted.global ? 'Muted globally' : `Muted in ${roomId}`;
+      muteTag.className = 'muted-tag';
+      muteTag.textContent = '🔇 Muted';
+      muteTag.title = muteInfo.global ? 'Muted globally' : `Muted in this room`;
       li.appendChild(muteTag);
     }
     

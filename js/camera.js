@@ -293,6 +293,18 @@ export function requestPublicCamera(targetUid) {
   const target = findUser(uid);
   if (!target?.online) { showToast(`${target?.name || 'User'} is offline.`); return; }
   if (!state.supa)     { showToast('⚠️ Server connection required.'); return; }
+  
+  /* Check if target has camera active in this room */
+  const roomId = state.activeRoom;
+  const room = state.rooms[roomId];
+  const targetInRoom = room?.users[uid];
+  const hasCameraActive = targetInRoom?.hasCamera || (target.hasCamera && target.online);
+  
+  if (!hasCameraActive) {
+    showToast(`📹 ${target.name} does not have their camera active.`);
+    return;
+  }
+  
   if (state.cameraWindows[uid]) { showToast(`📹 Already viewing ${target.name}'s camera.`); return; }
   if (state.pendingCamRequests[uid]) { showToast(`⏳ Already waiting for ${target.name}'s reply.`); return; }
   setPendingCamRequest(uid, 'public', target.name);

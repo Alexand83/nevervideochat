@@ -195,7 +195,14 @@ export function openContextMenu(uid, anchor) {
   const alreadyView = !!state.cameraWindows[String(uid)];
   const pendingReq  = !!state.pendingCamRequests[String(uid)];
   const isOffline   = user.online !== true;
-  const camBlocked  = alreadyView || pendingReq || isOffline || isIgnored;
+  
+  /* Check if user has camera active in current room */
+  const roomId = state.activeRoom;
+  const room = state.rooms[roomId];
+  const targetInRoom = room?.users[uid];
+  const hasCameraActive = targetInRoom?.hasCamera || (user.hasCamera && user.online);
+  
+  const camBlocked  = alreadyView || pendingReq || isOffline || isIgnored || !hasCameraActive;
 
   dom.ctxCamBtn.disabled      = camBlocked;
   dom.ctxCamBtn.style.opacity = camBlocked ? '0.35' : '1';
@@ -203,7 +210,8 @@ export function openContextMenu(uid, anchor) {
                       : pendingReq  ? 'Request already sent — waiting for reply'
                       : isIgnored   ? 'User is ignored — unignore to interact'
                       : isOffline   ? 'User is offline'
-                      : user.hasCamera ? 'Request Camera' : 'Request Camera (cam may not be active)';
+                      : !hasCameraActive ? 'User does not have camera active'
+                      : 'Request Camera';
 
   if (dom.ctxIgnoreBtn) {
     dom.ctxIgnoreBtn.classList.toggle('is-ignored', isIgnored);
