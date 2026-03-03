@@ -290,8 +290,36 @@ function toggleCamMic(uid) {
 }
 
 export async function toggleOwnCamera() {
-  if (state.localStream) closeCameraWindow(state.currentUser.id);
-  else await startOwnCamera();
+  if (state.localStream) {
+    /* Check if camera is in Events grid */
+    const camWin = state.cameraWindows[state.currentUser.id];
+    if (camWin?.isEventsGrid) {
+      /* Close Events grid camera */
+      await closeCameraWindow(state.currentUser.id);
+    } else if (camWin) {
+      /* Close normal floating window */
+      await closeCameraWindow(state.currentUser.id);
+    } else {
+      /* Camera window doesn't exist but stream is active - force close */
+      state.localStream?.getTracks().forEach(t => t.stop());
+      state.localStream = null;
+      state.cameraClosedAt = Date.now();
+      state.cameraRoom = null;
+      Object.keys(state.outgoingPCs).forEach(peerId => {
+        state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
+      });
+      state.currentUser.hasCamera = false;
+      dom.cameraBtnLabel.textContent = 'Camera Off';
+      dom.cameraBtnHeader.classList.remove('camera-on');
+      broadcastAll('cam-closed', { room_id: state.cameraRoom });
+      const { updateAllRoomPresences } = await import('./users.js');
+      await updateAllRoomPresences();
+      renderUsers();
+      showToast('📹 Camera disabled.');
+    }
+  } else {
+    await startOwnCamera();
+  }
 }
 
 export async function startOwnCamera() {
@@ -303,15 +331,34 @@ export async function startOwnCamera() {
     state.currentUser.hasCamera = true;
     state.cameraRoom = state.activeRoom;    /* camera is active in THIS room */
     dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
-    createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
-    broadcastAll('cam-opened', { room_id: state.cameraRoom });
-    await updateAllRoomPresences(); 
-    renderUsers();
-    
-    /* Events room: automatically share camera with everyone in the room */
+    /* Check if Events room before creating camera window */
     const availableRooms = getAvailableRooms();
     const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
     const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
+    
+    /* Make sure Events grid is visible if it's an Events room */
+    if (isEventsRoom && dom.eventsCamGrid) {
+      dom.eventsCamGrid.hidden = false;
+    }
+    
+    createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
+    
+    /* Verify camera was created successfully */
+    if (!state.cameraWindows[state.currentUser.id]) {
+      /* Camera creation failed - reset state */
+      state.localStream?.getTracks().forEach(t => t.stop());
+      state.localStream = null;
+      state.currentUser.hasCamera = false;
+      state.cameraRoom = null;
+      dom.cameraBtnLabel.textContent = 'Camera Off';
+      dom.cameraBtnHeader.classList.remove('camera-on');
+      showToast('⚠️ Failed to create camera window.');
+      return;
+    }
+    
+    broadcastAll('cam-opened', { room_id: state.cameraRoom });
+    await updateAllRoomPresences(); 
+    renderUsers();
     
     if (isEventsRoom) {
       /* Automatically share with all users in Events room */
@@ -631,7 +678,12 @@ export function endCall(notify = true) {
 
 /* Insert camera into Events room grid */
 function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
-  if (!dom.eventsCamGrid || dom.eventsCamGrid.hidden) return;
+  if (!dom.eventsCamGrid) return;
+  
+  /* Make sure grid is visible before inserting */
+  if (dom.eventsCamGrid.hidden) {
+    dom.eventsCamGrid.hidden = false;
+  }
   
   /* Find existing slot for this user */
   let targetSlot = dom.eventsCamGrid.querySelector(`[data-user-id="${uid}"]`);
