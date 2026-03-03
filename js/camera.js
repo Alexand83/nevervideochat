@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260433 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260434 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -458,14 +458,19 @@ export function requestPublicCamera(targetUid) {
     return;
   }
   
+  /* If already viewing (slot exists in grid or floating window), skip */
   if (state.cameraWindows[uid]) { 
     console.log('[Camera Request] Already viewing camera from', uid);
-    showToast(`📹 Already viewing ${target.name}'s camera.`); 
     return; 
+  }
+  /* If an incoming PC already exists and is connected/connecting, skip */
+  const existingInPC = state.incomingPCs[uid];
+  if (existingInPC && (existingInPC.connectionState === 'connected' || existingInPC.connectionState === 'connecting' || existingInPC.iceConnectionState === 'connected' || existingInPC.iceConnectionState === 'checking')) {
+    console.log('[Camera Request] Incoming PC for', uid, 'already exists in state:', existingInPC.connectionState, '/ ICE:', existingInPC.iceConnectionState, '— skipping duplicate request');
+    return;
   }
   if (state.pendingCamRequests[uid]) { 
     console.log('[Camera Request] Already waiting for reply from', uid);
-    showToast(`⏳ Already waiting for ${target.name}'s reply.`); 
     return; 
   }
   console.log('[Camera Request] Sending camera request to', uid, 'in room', state.activeRoom);
@@ -1090,7 +1095,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260433] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260434] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {

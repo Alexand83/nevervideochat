@@ -165,7 +165,7 @@ export function switchRoom(roomId) {
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {
-      import('./camera.js?v=20260433').then(({ createCameraWindow }) => {
+      import('./camera.js?v=20260434').then(({ createCameraWindow }) => {
         if (state.activeRoom === roomIdStr && !state.cameraWindows[state.currentUser.id]?.el?.parentNode) {
           createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
         }
@@ -181,7 +181,7 @@ export function switchRoom(roomId) {
         /* Only close if still away from the Events room and camera is still for that room */
         if (state.activeRoom !== previousRoomId && state.cameraRoom === previousRoomId) {
           console.log('[Events Room] User away > 1 min — closing camera');
-          const { closeCameraWindow } = await import('./camera.js?v=20260433');
+          const { closeCameraWindow } = await import('./camera.js?v=20260434');
           closeCameraWindow(state.currentUser.id);
         }
       }, 60000);
@@ -210,7 +210,7 @@ export function switchRoom(roomId) {
         /* Guard: abort if user has left this room */
         if (state.activeRoom !== roomIdStr) return;
 
-        const { requestPublicCamera } = await import('./camera.js?v=20260433');
+        const { requestPublicCamera } = await import('./camera.js?v=20260434');
         const allUsers = Object.values(room.users);
         const usersWithCam = allUsers.filter(user =>
           user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)
