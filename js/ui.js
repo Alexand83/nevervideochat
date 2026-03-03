@@ -224,6 +224,20 @@ export function openContextMenu(uid, anchor) {
   if (dom.ctxAdminActions) {
     checkAndShowAdminActions(uid).then(hasPerms => {
       dom.ctxAdminActions.hidden = !hasPerms;
+      
+      /* Update mute button text based on mute status */
+      if (hasPerms && dom.ctxMuteBtn) {
+        const { checkIsMuted } = await import('./users.js');
+        const muteInfo = checkIsMuted(uid, state.activeRoom);
+        const muteLabel = dom.ctxMuteBtn.querySelector('.ctx-mute-label') || dom.ctxMuteBtn;
+        if (muteInfo) {
+          muteLabel.textContent = 'Unmute User';
+          dom.ctxMuteBtn.title = muteInfo.global ? 'Unmute user globally' : 'Unmute user in this room';
+        } else {
+          muteLabel.textContent = 'Mute User';
+          dom.ctxMuteBtn.title = 'Mute user';
+        }
+      }
     });
   }
 
@@ -304,12 +318,24 @@ export function initContextMenu() {
     openKickModal(uid, user.name || user.username);
   });
   
-  dom.ctxMuteBtn?.addEventListener('click', () => {
+  dom.ctxMuteBtn?.addEventListener('click', async () => {
     const uid = state.contextTargetUID;
     const user = findUser(uid);
     closeCtxMenu();
     if (!uid || !user) return;
-    openMuteModal(uid, user.name || user.username);
+    
+    /* Check if user is already muted */
+    const { checkIsMuted } = await import('./users.js');
+    const muteInfo = checkIsMuted(uid, state.activeRoom);
+    if (muteInfo) {
+      /* Unmute user */
+      if (await handleUnmuteUser(uid, user.name || user.username, muteInfo)) {
+        showToast(`✅ Unmuted ${user.name || user.username}`);
+      }
+    } else {
+      /* Mute user */
+      openMuteModal(uid, user.name || user.username);
+    }
   });
   
   dom.ctxBanBtn?.addEventListener('click', () => {
@@ -525,11 +551,18 @@ async function handleMuteUser(userId, userName, minutes, isGlobal) {
     }, { onConflict: 'user_id,room_id' });
     if (error) throw error;
     
+    /* Update local state */
+    state.mutedUsers[String(userId)] = { room_id: roomId, expires_at: expiresAt };
+    
     /* Close all cameras for the user */
     await closeAllCamerasForUser(userId);
     
     /* Broadcast mute event */
-    broadcast('user-muted', userId, { room_id: roomId, duration: minutes });
+    broadcast('user-muted', userId, { room_id: roomId, duration: minutes, expires_at: expiresAt });
+    
+    /* Re-render users to show muted indicator */
+    const { renderUsers } = await import('./users.js');
+    renderUsers();
     
     if (String(userId) === String(state.currentUser?.id)) {
       const scopeText = roomId ? 'in this room' : 'globally';
@@ -539,6 +572,49 @@ async function handleMuteUser(userId, userName, minutes, isGlobal) {
   } catch (err) {
     console.error('[UI] Mute error:', err);
     showToast('⚠️ Failed to mute user.');
+    return false;
+  }
+}
+
+async function handleUnmuteUser(userId, userName, muteInfo) {
+  if (!state.supa) return false;
+  
+  try {
+    const roomId = muteInfo.global ? null : muteInfo.room_id;
+    
+    /* Delete mute from database */
+    let query = state.supa.from('muted_users').delete().eq('user_id', userId);
+    if (roomId === null) {
+      query = query.is('room_id', null);
+    } else {
+      query = query.eq('room_id', roomId);
+    }
+    
+    const { error } = await query;
+    if (error) throw error;
+    
+    /* Update local state */
+    if (muteInfo.global || muteInfo.room_id === state.activeRoom) {
+      delete state.mutedUsers[String(userId)];
+    } else {
+      /* If unmuting from a different room, keep the mute for other rooms */
+      const mute = state.mutedUsers[String(userId)];
+      if (mute && mute.room_id === roomId) {
+        delete state.mutedUsers[String(userId)];
+      }
+    }
+    
+    /* Broadcast unmute event */
+    broadcast('user-unmuted', userId, { room_id: roomId });
+    
+    /* Re-render users to remove muted indicator */
+    const { renderUsers } = await import('./users.js');
+    renderUsers();
+    
+    return true;
+  } catch (err) {
+    console.error('[UI] Unmute error:', err);
+    showToast('⚠️ Failed to unmute user.');
     return false;
   }
 }

@@ -206,19 +206,39 @@ export async function connectSupabase() {
           await closeAllCamerasForUser(targetId);
         }
         
+        const roomId = payload.room_id || null;
+        /* Add to muted cache */
+        state.mutedUsers[targetId] = { room_id: roomId, expires_at: payload.expires_at };
+        
+        /* Re-render users to show muted indicator */
+        const { renderUsers } = await import('./users.js');
+        renderUsers();
+        
         if (isCurrentUser) {
-          const roomId = payload.room_id || null;
-          /* Add to muted cache */
-          state.mutedUsers[targetId] = { room_id: roomId, expires_at: payload.expires_at };
-          
-          /* Re-render users to show muted indicator */
-          const { renderUsers } = await import('./users.js');
-          renderUsers();
-          
           const scope = roomId ? 'in this room' : 'globally';
           const duration = payload.duration > 0 ? ` for ${payload.duration} minutes` : ' permanently';
           showToast(`🔇 You have been muted ${scope}${duration}.`);
         }
+      })
+      .on('broadcast', { event: 'user-unmuted' }, async ({ payload }) => {
+        const targetId = payload.to || payload.user_id;
+        const roomId = payload.room_id || null;
+        
+        /* Remove from muted cache */
+        if (roomId === null) {
+          /* Global unmute - remove all mutes for this user */
+          delete state.mutedUsers[targetId];
+        } else {
+          /* Room-specific unmute */
+          const mute = state.mutedUsers[targetId];
+          if (mute && mute.room_id === roomId) {
+            delete state.mutedUsers[targetId];
+          }
+        }
+        
+        /* Re-render users to remove muted indicator */
+        const { renderUsers } = await import('./users.js');
+        renderUsers();
       })
       .subscribe();
 
