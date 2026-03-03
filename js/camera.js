@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260434 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260435 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -614,14 +614,25 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPublic) {
     if (sigType === 'offer') {
-      /* Prevent duplicate PC creation — if we're already processing an offer for this user, ignore */
+      /* Prevent duplicate PC creation — if we're already connected with live video, ignore the new offer.
+         New offers while connected are usually ICE restart attempts that we don't need to re-negotiate. */
       if (state.incomingPCs[from]) {
         const existingPc = state.incomingPCs[from];
         const existingCw = state.cameraWindows[from];
-        /* Always close old incoming PC and accept the new offer.
-           Whether it's a duplicate or a new camera activation, we need to process it.
-           ICE candidate buffering (below) ensures candidates are applied correctly. */
-        console.log('[WebRTC] Closing existing incoming PC for', from, 'to accept new offer. state:', existingPc.signalingState, existingPc.connectionState);
+        const existingVideo = existingCw?.el?.querySelector('video');
+        const streamAlive   = existingCw?.stream?.active &&
+                              existingCw.stream.getTracks().some(t => t.readyState === 'live');
+        const videoPlaying  = existingVideo && !existingVideo.paused && existingVideo.readyState >= 2;
+
+        /* If already connected + video is playing → ignore new offer (ICE restart noise) */
+        if ((existingPc.connectionState === 'connected' || existingPc.iceConnectionState === 'connected') &&
+            streamAlive && videoPlaying) {
+          console.log('[WebRTC] Ignoring new offer from', from, '— already connected with live video. connectionState:', existingPc.connectionState);
+          return;
+        }
+
+        /* Otherwise: close stale/dead PC and accept the new offer */
+        console.log('[WebRTC] Closing stale incoming PC for', from, 'to accept new offer. state:', existingPc.signalingState, existingPc.connectionState);
         existingPc.close();
         delete state.incomingPCs[from];
         
@@ -712,6 +723,11 @@ export async function handleWebRTCSignal(payload) {
               '— reconnect attempt', reconnectAttempts, 'of', MAX_RECONNECT, 'in', delay, 'ms');
 
             setTimeout(() => {
+              /* Don't reconnect if user has left the Events room where this PC was created */
+              if (pc._createdInRoom && String(state.activeRoom) !== String(pc._createdInRoom)) {
+                console.log('[WebRTC] Skipping reconnect for', from, '— user left Events room (was:', pc._createdInRoom, 'now:', state.activeRoom, ')');
+                return;
+              }
               const user = findUser(from);
               const currentCw = state.cameraWindows[from];
               const streamAlive = currentCw?.stream?.active &&
@@ -1095,7 +1111,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260434] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260435] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {

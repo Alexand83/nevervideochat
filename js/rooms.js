@@ -165,7 +165,7 @@ export function switchRoom(roomId) {
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {
-      import('./camera.js?v=20260434').then(({ createCameraWindow }) => {
+      import('./camera.js?v=20260435').then(({ createCameraWindow }) => {
         if (state.activeRoom === roomIdStr && !state.cameraWindows[state.currentUser.id]?.el?.parentNode) {
           createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
         }
@@ -181,10 +181,31 @@ export function switchRoom(roomId) {
         /* Only close if still away from the Events room and camera is still for that room */
         if (state.activeRoom !== previousRoomId && state.cameraRoom === previousRoomId) {
           console.log('[Events Room] User away > 1 min — closing camera');
-          const { closeCameraWindow } = await import('./camera.js?v=20260434');
+          const { closeCameraWindow } = await import('./camera.js?v=20260435');
           closeCameraWindow(state.currentUser.id);
         }
       }, 60000);
+    }
+    /* Close ALL incoming PCs for remote cameras — they belong to the Events room.
+       Leaving them open causes new offers to be processed in the wrong room context,
+       which opens floating camera windows in non-Events rooms. */
+    if (wasEventsRoom) {
+      for (const uid of Object.keys(state.incomingPCs)) {
+        try { state.incomingPCs[uid].close(); } catch {}
+        delete state.incomingPCs[uid];
+      }
+      /* Clean up pending cam requests so they don't re-trigger on re-entry */
+      for (const uid of Object.keys(state.pendingCamRequests || {})) {
+        delete state.pendingCamRequests[uid];
+      }
+      /* Remove Events-grid cameraWindows entries (DOM already cleared by clearEventsCamGrid below).
+         Keep own camera window if it exists since localStream is still active. */
+      for (const uid of Object.keys(state.cameraWindows)) {
+        if (String(uid) === String(state.currentUser?.id)) continue; /* keep own */
+        const cw = state.cameraWindows[uid];
+        if (cw?.isEventsGrid) delete state.cameraWindows[uid];
+      }
+      console.log('[Events Room] Left Events room — closed all incoming PCs and cleaned up grid windows');
     }
     /* Hide events cam grid */
     if (dom.eventsCamGrid) {
@@ -210,7 +231,7 @@ export function switchRoom(roomId) {
         /* Guard: abort if user has left this room */
         if (state.activeRoom !== roomIdStr) return;
 
-        const { requestPublicCamera } = await import('./camera.js?v=20260434');
+        const { requestPublicCamera } = await import('./camera.js?v=20260435');
         const allUsers = Object.values(room.users);
         const usersWithCam = allUsers.filter(user =>
           user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)
