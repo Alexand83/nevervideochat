@@ -1,4 +1,4 @@
-﻿/* ─── 5. CHAT SECTION ─── */
+/* --- 5. CHAT SECTION --- */
 .chat-section {
   flex: 1;
   min-width: 0;
@@ -32,7 +32,7 @@
 .welcome-banner h3 { font-size: var(--fz-md); color: var(--tx1); margin-bottom: var(--s2); }
 .welcome-banner p  { font-size: var(--fz-sm); line-height: 1.6; max-width: 380px; margin: 0 auto; }
 
-/* ─── Message Groups ─── */
+/* --- Message Groups --- */
 .msg-group {
   display: flex;
   gap: var(--s3);
@@ -188,7 +188,7 @@
   flex-shrink: 0;
 }
 
-/* ─── Typing indicator ─── */
+/* --- Typing indicator --- */
 .typing-row {
   display: flex;
   align-items: center;
@@ -228,7 +228,7 @@
   font-style: italic;
 }
 
-/* ─── 6. CHAT INPUT AREA ─── */
+/* --- 6. CHAT INPUT AREA --- */
 .chat-input-area {
   border-top: 1px solid var(--border);
   background: var(--bg1);
@@ -310,7 +310,7 @@
 }
 
 .color-preview {
-  display: none; /* purely decorative, hidden — label does the job */
+  display: none; /* purely decorative, hidden � label does the job */
 }
 
 .tbr-sep {
@@ -467,7 +467,7 @@
 .send-btn:active { transform: scale(.95); }
 .send-btn svg { width: 18px; height: 18px; }
 
-/* ─── SEARCH BAR ─── */
+/* --- SEARCH BAR --- */
 .search-bar {
   display: flex;
   align-items: center;
@@ -522,7 +522,7 @@
   border-radius: 2px;
 }
 
-/* ─── MESSAGE REACTIONS ─── */
+/* --- MESSAGE REACTIONS --- */
 .msg-reactions {
   display: flex;
   flex-wrap: wrap;
@@ -616,4 +616,5 @@
   transform: scale(1.2);
 }
 
-/* ─── 7. EMOJI PANEL ─── */
+/* --- 7. EMOJI PANEL --- */
+
