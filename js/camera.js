@@ -560,7 +560,7 @@ export async function handleWebRTCSignal(payload) {
           ensureUser(from, payload.fromName);
           /* Small delay to ensure stream is ready */
           setTimeout(() => {
-            openRemoteCamWindow(from, streams[0]);
+            openRemoteCamWindow(from, streams[0], payload.fromName);
           }, 100);
         }
       };
@@ -601,9 +601,10 @@ export async function handleWebRTCSignal(payload) {
   }
 }
 
-function openRemoteCamWindow(uid, stream) {
+function openRemoteCamWindow(uid, stream, userName = null) {
   clearPendingCamRequest(String(uid));
   const user = findUser(uid);
+  const name = userName || user?.name || uid;
   
   /* Check if we're in Events room - if so, ensure grid is visible */
   const availableRooms = getAvailableRooms();
@@ -614,7 +615,7 @@ function openRemoteCamWindow(uid, stream) {
     dom.eventsCamGrid.hidden = false;
   }
   
-  createCameraWindow(uid, stream, user?.name || uid, false);
+  createCameraWindow(uid, stream, name, false);
 }
 
 /* ── Private video call ───────────────────────────────────────── */
