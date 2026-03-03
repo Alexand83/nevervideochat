@@ -183,8 +183,11 @@ export async function connectSupabase() {
         }
         
         if (isCurrentUser) {
-          /* Add to banned cache */
-          state.bannedUsers[targetId] = { expires_at: payload.expires_at };
+          /* Add to banned cache with reason */
+          state.bannedUsers[targetId] = { 
+            expires_at: payload.expires_at,
+            reason: payload.reason 
+          };
           /* Leave all rooms and show ban overlay */
           const { leaveRoom } = await import('./rooms.js');
           const { renderRoomTabs } = await import('./rooms.js');

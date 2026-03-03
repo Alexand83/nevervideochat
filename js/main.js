@@ -84,6 +84,16 @@ export async function finishInit() {
   /* Load mute/kick/ban status for current user */
   if (state.supa && state.currentUser) {
     await loadUserRestrictions(state.currentUser.id);
+    
+    /* Check if user is banned - if so, show ban overlay and stop initialization */
+    const { checkIsBanned } = await import('./users.js');
+    if (checkIsBanned(state.currentUser.id)) {
+      const ban = state.bannedUsers[String(state.currentUser.id)];
+      const { showBanOverlay } = await import('./kick-ban.js');
+      showBanOverlay(ban?.reason || 'You have been banned from all rooms.', ban?.expires_at);
+      /* Don't initialize rooms, chat, or any other features - user is banned */
+      return;
+    }
   }
 
   /* Init room system (joins general room, subscribes presence + DB) */
@@ -131,7 +141,10 @@ async function loadUserRestrictions(userId) {
       .eq('user_id', userId)
       .maybeSingle();
     if (!banErr && banned) {
-      state.bannedUsers[userId] = { expires_at: banned.expires_at };
+      state.bannedUsers[userId] = { 
+        expires_at: banned.expires_at,
+        reason: banned.reason 
+      };
     }
   } catch (err) {
     console.error('[Main] Load restrictions error:', err);
