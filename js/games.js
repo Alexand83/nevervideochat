@@ -603,6 +603,17 @@ async function startQuizGame() {
     return;
   }
   
+  /* Assicurati che questions sia sempre inizializzato */
+  if (!gameData.quiz.questions || gameData.quiz.questions.length === 0) {
+    gameData.quiz.questions = [
+      { q: "Qual è la capitale d'Italia?", options: ["Roma", "Milano", "Napoli", "Torino"], a: "Roma" },
+      { q: "Quanti continenti ci sono?", options: ["5", "6", "7", "8"], a: "7" },
+      { q: "Qual è il fiume più lungo del mondo?", options: ["Nilo", "Amazzoni", "Mississippi", "Gange"], a: "Nilo" },
+      { q: "In quale anno è caduto il muro di Berlino?", options: ["1987", "1989", "1991", "1993"], a: "1989" },
+      { q: "Chi ha scritto '1984'?", options: ["George Orwell", "Aldous Huxley", "Ray Bradbury", "J.D. Salinger"], a: "George Orwell" },
+    ];
+  }
+  
   gameData.quiz.questionIndex = 0;
   gameData.quiz.answers.clear();
   
@@ -921,26 +932,30 @@ function updateGamesPanel() {
   if (!dom.gamesPanelBody) return;
   
   if (!activeGame) {
-    dom.gamesPanelBody.innerHTML = '<div class="games-panel-empty">🎮 Nessun gioco attivo. Usa /game per iniziare!</div>';
+    dom.gamesPanelBody.innerHTML = '<div class="games-panel-empty">🎮 Nessun gioco attivo. Usa <code>/giochi</code> per iniziare!</div>';
     renderGamesUsersList();
     return;
   }
   
-  let html = `<div class="games-panel-header">🎮 ${getGameName(activeGame.game_type)}</div>`;
+  let html = '';
   
   if (activeGame.game_type === 'song') {
-    html += renderSongGameUI();
+    html = renderSongGameUI();
   } else if (activeGame.game_type === 'truthLie') {
-    html += renderTruthLieGameUI();
+    html = renderTruthLieGameUI();
   } else if (activeGame.game_type === 'quiz') {
-    html += renderQuizGameUI();
+    html = renderQuizGameUI();
+  } else {
+    html = '<div class="games-panel-empty">Tipo di gioco sconosciuto.</div>';
   }
   
   dom.gamesPanelBody.innerHTML = html;
-  renderGamesUsersList();
   
   /* Aggiungi event listeners per bottoni cliccabili */
   attachGameButtonListeners();
+  
+  /* Renderizza sempre la lista utenti DOPO il contenuto del gioco */
+  renderGamesUsersList();
 }
 
 /* ── Attacca event listeners ai bottoni del gioco ─────────────── */
@@ -1093,30 +1108,49 @@ function renderGamesUsersList() {
   if (!dom.gamesPanelBody) return;
   
   const room = state.rooms[state.activeRoom];
-  if (!room) return;
+  if (!room) {
+    /* Se non c'è la stanza, mostra comunque un messaggio */
+    const existingUsersSection = dom.gamesPanelBody.querySelector('.games-users-section');
+    if (existingUsersSection) {
+      existingUsersSection.outerHTML = '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza</div><div class="games-users-empty">Caricamento...</div></div>';
+    } else {
+      dom.gamesPanelBody.insertAdjacentHTML('beforeend', '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza</div><div class="games-users-empty">Caricamento...</div></div>');
+    }
+    return;
+  }
   
   const users = Object.values(room.users || {});
-  const onlineUsers = users.filter(u => u.online);
+  const onlineUsers = users.filter(u => u.online).sort((a, b) => {
+    /* Ordina: utente corrente primo, poi alfabetico */
+    if (a.id === state.currentUser?.id) return -1;
+    if (b.id === state.currentUser?.id) return 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
   
   let usersHtml = '';
   if (onlineUsers.length > 0) {
-    usersHtml = '<div class="games-users-section"><div class="games-users-header">👥 Online (' + onlineUsers.length + ')</div><div class="games-users-list">';
+    usersHtml = '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza (' + onlineUsers.length + ')</div><div class="games-users-list">';
     onlineUsers.forEach(user => {
       const color = avatarColor(user.name);
       const init = initials(user.name);
-      usersHtml += `<div class="games-user-item" title="${escHtml(user.name)}">
+      const isMe = user.id === state.currentUser?.id;
+      const hasCam = user.hasCamera && user.online;
+      usersHtml += `<div class="games-user-item ${isMe ? 'games-user-me' : ''}" title="${escHtml(user.name)}">
         <span class="games-user-avatar" style="background: ${color};">${init}</span>
-        <span class="games-user-name">${escHtml(user.name)}</span>
+        <span class="games-user-name">${escHtml(user.name)}${isMe ? ' (Tu)' : ''}</span>
+        ${hasCam ? '<span class="games-user-cam">📹</span>' : ''}
       </div>`;
     });
     usersHtml += '</div></div>';
+  } else {
+    usersHtml = '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza (0)</div><div class="games-users-empty">Nessun utente online</div></div>';
   }
   
-  /* Aggiungi la lista utenti al pannello (sotto il contenuto del gioco) */
+  /* Aggiungi/aggiorna la lista utenti al pannello (sotto il contenuto del gioco) */
   const existingUsersSection = dom.gamesPanelBody.querySelector('.games-users-section');
   if (existingUsersSection) {
     existingUsersSection.outerHTML = usersHtml;
-  } else if (usersHtml) {
+  } else {
     dom.gamesPanelBody.insertAdjacentHTML('beforeend', usersHtml);
   }
 }
