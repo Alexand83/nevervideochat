@@ -120,23 +120,36 @@ export async function checkActiveGame() {
           timeLimit: gameState.timeLimit || 60000,
         };
       } else if (data.game_type === 'quiz') {
+        /* Assicurati che questions sia sempre inizializzato */
+        const defaultQuestions = [
+          { q: "Qual è la capitale d'Italia?", options: ["Roma", "Milano", "Napoli", "Torino"], a: "Roma" },
+          { q: "Quanti continenti ci sono?", options: ["5", "6", "7", "8"], a: "7" },
+          { q: "Qual è il fiume più lungo del mondo?", options: ["Nilo", "Amazzoni", "Mississippi", "Gange"], a: "Nilo" },
+          { q: "In quale anno è caduto il muro di Berlino?", options: ["1987", "1989", "1991", "1993"], a: "1989" },
+          { q: "Chi ha scritto '1984'?", options: ["George Orwell", "Aldous Huxley", "Ray Bradbury", "J.D. Salinger"], a: "George Orwell" },
+        ];
+        
         gameData.quiz = {
           currentQuestion: gameState.currentQuestion || null,
           questionIndex: gameState.questionIndex || 0,
           answers: new Map(Object.entries(gameState.answers || {})),
           timeLimit: gameState.timeLimit || 15000,
-          questions: gameState.questions || gameData.quiz.questions,
+          questions: gameState.questions || defaultQuestions,
         };
         /* Se c'è una domanda attiva, ripristina il timer */
         if (gameData.quiz.currentQuestion) {
+          /* Calcola tempo rimanente (approssimativo) */
+          const timeElapsed = Date.now() - (gameState.questionStartTime || Date.now());
+          const timeRemaining = Math.max(1000, gameData.quiz.timeLimit - timeElapsed);
           gameTimer = setTimeout(() => {
             checkQuizAnswers();
             setTimeout(() => askNextQuestion(), 2000);
-          }, gameData.quiz.timeLimit);
+          }, timeRemaining);
         }
       }
       
       startGameUI(data.game_type, gameData[data.game_type]);
+      renderGamesUsersList(); /* Assicurati che la lista utenti sia sempre renderizzata */
       console.log('[Games] Reloaded active game:', data.game_type, 'in room', state.activeRoom);
     } else {
       /* Nessun gioco attivo - reset */
@@ -295,18 +308,7 @@ function showGamesMenu() {
 
 /* ── Mostra help giochi ───────────────────────────────────────── */
 function showGameHelp() {
-  const help = `
-🎮 <strong>Comandi Giochi:</strong><br>
-• <code>/game song</code> - Inizia "Indovina la canzone"<br>
-• <code>/game truth</code> - Inizia "Due verità e una bugia"<br>
-• <code>/game quiz</code> - Inizia "Quiz a tempo"<br>
-• <code>/game guess [risposta]</code> - Indovina (per canzone)<br>
-• <code>/game vote [1/2/3]</code> - Vota quale è la bugia<br>
-• <code>/game answer [risposta]</code> - Rispondi al quiz<br>
-• <code>/game stop</code> - Termina il gioco corrente<br>
-• <code>/game scores</code> - Mostra classifica
-  `;
-  showToast(help, 5000);
+  showToast('🎮 Usa /giochi per vedere il menu giochi! Oppure: /game song, /game truth, /game quiz', 5000);
 }
 
 /* ── Avvia gioco: Indovina la canzone ────────────────────────── */
