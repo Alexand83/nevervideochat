@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260418 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260419 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -712,21 +712,34 @@ export async function handleWebRTCSignal(payload) {
           }
         }
       });
+      /* Retry play() when connection becomes ready — multiple triggers for robustness */
+      const retryPlay = () => {
+        const cw = state.cameraWindows[from];
+        if (!cw?.isEventsGrid || !cw.el) return;
+        const vid = cw.el.querySelector('video');
+        if (!vid || !vid.srcObject) return;
+        if (!vid.paused) return; /* Already playing */
+        
+        console.log('[WebRTC] Retrying play() for', from, 'ICE:', pc.iceConnectionState, 'conn:', pc.connectionState);
+        vid.play().then(() => {
+          console.log('[Events Grid] Playing for', from, '(retry-triggered) — unmuting:', !cw.isOwn);
+          if (!cw.isOwn) vid.muted = false;
+        }).catch(err => {
+          console.warn('[WebRTC] Retry play() failed for', from, ':', err.name);
+        });
+      };
+
       pc.addEventListener('iceconnectionstatechange', () => {
         console.log('[WebRTC] ICE connection state changed:', pc.iceConnectionState, 'for', from);
-        /* When ICE actually connects, retry play() in case it was pending/hanging */
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          const cw = state.cameraWindows[from];
-          if (cw?.isEventsGrid && cw.el) {
-            const vid = cw.el.querySelector('video');
-            if (vid && vid.paused && vid.srcObject) {
-              console.log('[WebRTC] ICE connected for', from, '— triggering video play()');
-              vid.play().then(() => {
-                console.log('[Events Grid] Playing for', from, '(ICE-triggered) — unmuting:', !cw.isOwn);
-                if (!cw.isOwn) vid.muted = false;
-              }).catch(console.warn);
-            }
-          }
+          setTimeout(retryPlay, 100); /* Small delay to ensure video is in DOM */
+        }
+      });
+      
+      pc.addEventListener('connectionstatechange', () => {
+        console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
+        if (pc.connectionState === 'connected') {
+          setTimeout(retryPlay, 200); /* Retry when full connection is established */
         }
       });
       await pc.setRemoteDescription({ type: 'offer', sdp });
@@ -965,7 +978,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260418] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260419] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
@@ -1002,6 +1015,19 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           }
         });
       }
+      
+      /* Fallback timeout: if play() doesn't resolve and frame events don't fire within 3s,
+         force retry (ICE might have connected in the meantime) */
+      setTimeout(() => {
+        if (!playStarted && video.paused && video.srcObject) {
+          console.log('[Events Grid] Timeout fallback — forcing play() for', uid);
+          video.play().then(() => {
+            playStarted = true;
+            console.log('[Events Grid] Playing for', uid, '(timeout fallback) — unmuting:', !isOwn);
+            if (!isOwn) video.muted = false;
+          }).catch(console.warn);
+        }
+      }, 3000);
     };
 
     const activeTracks = stream.getTracks().filter(t => t.readyState === 'live');
