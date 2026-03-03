@@ -108,7 +108,7 @@ export async function connectSupabase() {
         if (state.cameraWindows[fromId]) closeCameraWindow(fromId);
         showToast('📵 Camera access revoked.');
       })
-      .on('broadcast', { event: 'cam-opened'   }, ({ payload }) => {
+      .on('broadcast', { event: 'cam-opened'   }, async ({ payload }) => {
         if (String(payload.from) === String(state.currentUser?.id)) return;
         const fromId   = String(payload.from);
         const camRoom  = payload.room_id || null;   /* room where cam was activated */
