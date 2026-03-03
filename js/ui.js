@@ -401,9 +401,12 @@ function openKickModal(userId, userName) {
   dom.kickCancelBtn.onclick = handleCancel;
   dom.kickModalClose.onclick = handleCancel;
   dom.kickModal.onclick = (e) => { if (e.target === dom.kickModal) handleCancel(); };
+  /* Enter key on duration input confirms */
+  dom.kickDuration.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleConfirm(); } };
   document.addEventListener('keydown', function escHandler(e) {
     if (e.key === 'Escape') { handleCancel(); document.removeEventListener('keydown', escHandler); }
   });
+  dom.kickDuration.focus();
 }
 
 function closeKickModal() {
@@ -433,9 +436,12 @@ function openMuteModal(userId, userName) {
   dom.muteCancelBtn.onclick = handleCancel;
   dom.muteModalClose.onclick = handleCancel;
   dom.muteModal.onclick = (e) => { if (e.target === dom.muteModal) handleCancel(); };
+  /* Enter key on duration input confirms */
+  dom.muteDuration.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleConfirm(); } };
   document.addEventListener('keydown', function escHandler(e) {
     if (e.key === 'Escape') { handleCancel(); document.removeEventListener('keydown', escHandler); }
   });
+  dom.muteDuration.focus();
 }
 
 function closeMuteModal() {
@@ -482,6 +488,8 @@ function openBanModal(userId, userName) {
   dom.banCancelBtn.onclick = handleCancel;
   dom.banModalClose.onclick = handleCancel;
   dom.banModal.onclick = (e) => { if (e.target === dom.banModal) handleCancel(); };
+  /* Enter key on days input confirms */
+  if (dom.banDays) dom.banDays.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleConfirm(); } };
   document.addEventListener('keydown', function escHandler(e) {
     if (e.key === 'Escape') { handleCancel(); document.removeEventListener('keydown', escHandler); }
   });

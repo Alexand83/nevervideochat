@@ -190,17 +190,30 @@ export async function closeCameraWindow(uid) {
   /* Check if this camera is in events grid */
   const camWin = state.cameraWindows[uid];
   if (camWin?.isEventsGrid) {
-    /* Remove from events grid */
+    /* Remove slot from events grid entirely */
     const slot = camWin.el;
-    if (slot) {
-      slot.classList.add('empty');
-      slot.innerHTML = 'Empty';
-      delete slot.dataset.userId;
-    }
+    if (slot && slot.parentNode) slot.remove();
     delete state.cameraWindows[uid];
-    /* Update grid */
+    /* Recalculate columns */
     const { updateEventsCamGrid } = await import('./rooms.js');
     updateEventsCamGrid();
+    
+    /* If this is own camera, also stop stream */
+    const isOwn = uid === state.currentUser?.id || uid === 'me';
+    if (isOwn) {
+      const closedRoom = state.cameraRoom;
+      state.localStream?.getTracks().forEach(t => t.stop());
+      state.localStream = null;
+      state.cameraClosedAt = Date.now();
+      state.cameraRoom = null;
+      Object.keys(state.outgoingPCs).forEach(peerId => {
+        state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
+      });
+      state.currentUser.hasCamera = false;
+      dom.cameraBtnLabel.textContent = 'Camera Off'; dom.cameraBtnHeader.classList.remove('camera-on');
+      broadcastAll('cam-closed', { room_id: closedRoom });
+      await updateAllRoomPresences(); renderUsers(); showToast('📹 Camera disabled.');
+    }
     return;
   }
   
@@ -231,20 +244,6 @@ export async function handleCamClosed(payload) {
   const uid      = String(payload.from);
   
   /* Check if camera is in events grid */
-  const camWin = state.cameraWindows[uid];
-  if (camWin?.isEventsGrid) {
-    const slot = camWin.el;
-    if (slot) {
-      slot.classList.add('empty');
-      slot.innerHTML = 'Empty';
-      delete slot.dataset.userId;
-    }
-    delete state.cameraWindows[uid];
-    /* Update grid */
-    const { updateEventsCamGrid } = await import('./rooms.js');
-    updateEventsCamGrid();
-  }
-  
   /* Normal floating window close */
   const inMyRoom = !payload.room_id || payload.room_id === state.activeRoom;
 
@@ -252,14 +251,11 @@ export async function handleCamClosed(payload) {
   const cw = state.cameraWindows[uid];
   if (cw) {
     if (cw.isEventsGrid) {
-      /* Remove from events grid */
+      /* Remove slot from events grid entirely */
       const slot = cw.el;
-      if (slot) {
-        slot.classList.add('empty');
-        slot.innerHTML = 'Empty';
-        delete slot.dataset.userId;
-      }
-      /* Update grid */
+      if (slot && slot.parentNode) slot.remove();
+      delete state.cameraWindows[uid];
+      /* Recalculate columns */
       const { updateEventsCamGrid } = await import('./rooms.js');
       updateEventsCamGrid();
     } else {
@@ -312,16 +308,7 @@ export async function startOwnCamera() {
     await updateAllRoomPresences(); 
     renderUsers();
     
-    /* Update events cam grid if active room has max_cams */
-    const availableRooms = getAvailableRooms();
-    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-    if (roomData?.max_cams) {
-      /* Small delay to ensure camera is inserted before updating grid */
-      setTimeout(async () => {
-        const { updateEventsCamGrid } = await import('./rooms.js');
-        updateEventsCamGrid();
-      }, 100);
-    }
+    /* Grid column layout is updated inside insertCameraIntoEventsGrid */
     
     showToast('📹 Camera enabled.');
   } catch (err) {
@@ -634,7 +621,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
     targetSlot.dataset.userId = uid;
     dom.eventsCamGrid.appendChild(targetSlot);
     
-    /* Update grid layout will be called by updateEventsCamGrid from rooms.js */
+    /* Grid layout update happens after video is set */
   }
   
   /* Clear and populate slot */
@@ -671,4 +658,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
     state.cameraWindows[uid].stream = stream;
     state.cameraWindows[uid].isEventsGrid = true;
   }
+  
+  /* Update grid column layout now that a new cam is in DOM */
+  import('./rooms.js').then(({ updateEventsCamGrid }) => updateEventsCamGrid());
 }
