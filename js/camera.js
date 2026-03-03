@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260423 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260424 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -735,33 +735,42 @@ export async function handleWebRTCSignal(payload) {
         }
       });
       /* Retry play() when connection becomes ready — multiple triggers for robustness */
-      const retryPlay = () => {
+      const retryPlay = (trigger) => {
         const cw = state.cameraWindows[from];
-        if (!cw?.isEventsGrid || !cw.el) return;
+        if (!cw?.isEventsGrid || !cw.el) {
+          console.log('[WebRTC] Retry play() skipped for', from, '— no camera window (trigger:', trigger, ')');
+          return;
+        }
         const vid = cw.el.querySelector('video');
-        if (!vid || !vid.srcObject) return;
-        if (!vid.paused) return; /* Already playing */
+        if (!vid || !vid.srcObject) {
+          console.log('[WebRTC] Retry play() skipped for', from, '— no video/srcObject (trigger:', trigger, ')');
+          return;
+        }
+        if (!vid.paused) {
+          console.log('[WebRTC] Retry play() skipped for', from, '— already playing (trigger:', trigger, ')');
+          return; /* Already playing */
+        }
         
-        console.log('[WebRTC] Retrying play() for', from, 'ICE:', pc.iceConnectionState, 'conn:', pc.connectionState);
+        console.log('[WebRTC] Retrying play() for', from, 'ICE:', pc.iceConnectionState, 'conn:', pc.connectionState, 'trigger:', trigger);
         vid.play().then(() => {
-          console.log('[Events Grid] Playing for', from, '(retry-triggered) — unmuting:', !cw.isOwn);
+          console.log('[Events Grid] Playing for', from, '(retry-triggered:', trigger, ') — unmuting:', !cw.isOwn);
           if (!cw.isOwn) vid.muted = false;
         }).catch(err => {
-          console.warn('[WebRTC] Retry play() failed for', from, ':', err.name);
+          console.warn('[WebRTC] Retry play() failed for', from, ':', err.name, '(trigger:', trigger, ')');
         });
       };
 
       pc.addEventListener('iceconnectionstatechange', () => {
         console.log('[WebRTC] ICE connection state changed:', pc.iceConnectionState, 'for', from);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          setTimeout(retryPlay, 100); /* Small delay to ensure video is in DOM */
+          setTimeout(() => retryPlay('ICE-connected'), 100); /* Small delay to ensure video is in DOM */
         }
       });
       
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
         if (pc.connectionState === 'connected') {
-          setTimeout(retryPlay, 200); /* Retry when full connection is established */
+          setTimeout(() => retryPlay('connection-connected'), 200); /* Retry when full connection is established */
         }
       });
       await pc.setRemoteDescription({ type: 'offer', sdp });
@@ -1035,7 +1044,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260423] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260424] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
@@ -1062,12 +1071,31 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
       console.log('[Events Grid] Calling play() for', uid, 'video.paused:', video.paused, 'video.srcObject:', !!video.srcObject);
       const playPromise = video.play();
       if (playPromise && typeof playPromise.then === 'function') {
+        /* Set a timeout to detect if play() is hanging (common on Edge/Windows when ICE not connected) */
+        const playTimeout = setTimeout(() => {
+          if (!playStarted && video.parentNode && video.paused && video.srcObject) {
+            console.log('[Events Grid] play() hanging for', uid, '— forcing retry after 1s');
+            /* Force retry — play() might be waiting for ICE connection */
+            video.play().then(() => {
+              if (!playStarted) {
+                playStarted = true;
+                console.log('[Events Grid] Playing for', uid, '(forced retry) — unmuting:', !isOwn);
+                if (!isOwn) video.muted = false;
+              }
+            }).catch(err => {
+              if (err.name !== 'AbortError') console.warn('[Events Grid] Forced retry play() failed:', err.name);
+            });
+          }
+        }, 1000);
+        
         playPromise.then(() => {
+          clearTimeout(playTimeout);
           if (playStarted) return; /* already handled by frame event */
           playStarted = true;
           console.log('[Events Grid] Playing for', uid, '(playPromise resolved) — unmuting:', !isOwn);
           if (!isOwn) video.muted = false;
         }).catch(err => {
+          clearTimeout(playTimeout);
           /* AbortError is expected when slot is removed during play() — ignore it */
           if (err.name === 'AbortError') {
             console.log('[Events Grid] play() aborted for', uid, '(slot likely removed) — ignoring');
