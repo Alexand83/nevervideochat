@@ -745,9 +745,12 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   /* Create label - clickable for context menu */
   const label = document.createElement('div');
   label.className = 'events-cam-slot-label';
-  label.textContent = name;
+  label.textContent = name || uid || 'User';
   label.style.cursor = 'pointer';
-  label.title = `Click to view ${name}'s profile`;
+  label.style.display = 'block'; /* Ensure visible */
+  label.style.visibility = 'visible'; /* Ensure visible */
+  label.style.opacity = '1'; /* Ensure visible */
+  label.title = `Click to view ${name || uid}'s profile`;
   
   /* Add context menu on click */
   label.addEventListener('click', (e) => {
@@ -760,6 +763,9 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
+  
+  /* Debug: verify label is in DOM */
+  console.log('Created label for', name || uid, 'in slot:', targetSlot, 'label:', label);
   
   /* Set stream */
   video.srcObject = stream;

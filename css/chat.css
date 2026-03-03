@@ -756,11 +756,10 @@
 .events-cam-grid {
   display: grid;
   gap: 8px;
-  padding: 12px;
-  background: var(--bg1);
-  border-bottom: 1px solid var(--border);
+  padding: 12px 12px 40px 12px; /* Extra bottom padding for labels */
+  background: transparent; /* No background */
   width: 100%;
-  overflow: hidden; /* No scrollbars - autoresize */
+  overflow: visible; /* Allow labels to be visible */
   justify-items: center; /* Center slots when not filling full width */
 }
 
@@ -776,12 +775,12 @@
 .events-cam-slot {
   position: relative;
   aspect-ratio: 16 / 9;
-  background: var(--bg2);
-  border: 1px solid var(--border);
+  background: transparent; /* No background */
+  border: 1px solid var(--border); /* Thin border only */
   border-radius: var(--r2);
-  overflow: hidden;
-  min-height: 120px;
-  
+  overflow: visible; /* Allow label to be visible outside */
+  min-height: 60px; /* Smaller */
+  max-height: 120px; /* Limit max size */
   width: 100%;
   max-width: 100%;
 }
@@ -791,28 +790,29 @@
   height: 100%;
   object-fit: cover;
   border-radius: var(--r2);
-  overflow: hidden;
+  display: block;
 }
 
 .events-cam-slot-label {
   position: absolute;
-  bottom: -22px;
+  bottom: -24px;
   left: 0;
   right: 0;
   text-align: center;
   color: var(--tx1);
   font-size: var(--fz-sm);
-  font-weight: 500;
-  padding: 2px 4px;
+  font-weight: 600;
+  padding: 4px 0;
   text-overflow: ellipsis;
-  overflow: hidden;
+  overflow: visible;
   white-space: nowrap;
   background: transparent;
   cursor: pointer;
   transition: color var(--tf);
-  z-index: 10;
+  z-index: 100;
   pointer-events: auto;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 0 4px rgba(0,0,0,0.2);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5), 0 0 6px rgba(0,0,0,0.3);
+  line-height: 1.2;
 }
 
 .events-cam-slot-label:hover {
