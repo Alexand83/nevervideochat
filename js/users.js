@@ -45,6 +45,13 @@ export function renderUsers() {
   if (dom.onlineCountLabel) dom.onlineCountLabel.textContent = online;
   if (dom.onlineBadge)      dom.onlineBadge.textContent      = online;
 
+  /* Update games panel users list if we're in a games room */
+  if (dom.gamesPanel && !dom.gamesPanel.hidden) {
+    import('./games.js').then(({ updateGamesUsersList }) => {
+      if (updateGamesUsersList) updateGamesUsersList();
+    }).catch(() => {});
+  }
+  
   all.forEach(user => {
     if (!user) return;
     const li = document.createElement('div');

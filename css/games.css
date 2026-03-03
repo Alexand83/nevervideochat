@@ -155,6 +155,64 @@
   transform: translateX(4px);
 }
 
+/* Users list in games panel */
+.games-users-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, rgba(255,255,255,0.1));
+}
+
+.games-users-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, rgba(255,255,255,0.7));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.games-users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.games-user-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  background: var(--bg-tertiary, rgba(255,255,255,0.05));
+  border-radius: 6px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.games-user-item:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.1));
+}
+
+.games-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.games-user-name {
+  font-size: 13px;
+  color: var(--text-primary, #fff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .games-panel {

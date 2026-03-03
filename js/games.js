@@ -3,7 +3,7 @@
 ================================================================ */
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { showToast, escHtml } from './utils.js';
+import { showToast, escHtml, avatarColor, initials } from './utils.js';
 import { findUser } from './users.js';
 import { broadcastAll } from './broadcast.js';
 import { getAvailableRooms } from './rooms.js';
@@ -700,6 +700,7 @@ function updateGamesPanel() {
   
   if (!activeGame) {
     dom.gamesPanelBody.innerHTML = '<div class="games-panel-empty">🎮 Nessun gioco attivo. Usa /game per iniziare!</div>';
+    renderGamesUsersList();
     return;
   }
   
@@ -714,6 +715,7 @@ function updateGamesPanel() {
   }
   
   dom.gamesPanelBody.innerHTML = html;
+  renderGamesUsersList();
 }
 
 /* ── Render UI canzone ────────────────────────────────────────── */
@@ -785,6 +787,44 @@ function renderQuizGameUI() {
 function renderGamesPanel() {
   if (!dom.gamesPanelBody) return;
   updateGamesPanel();
+  renderGamesUsersList();
+}
+
+/* ── Render lista utenti online nella stanza giochi ──────────── */
+export function updateGamesUsersList() {
+  renderGamesUsersList();
+}
+
+function renderGamesUsersList() {
+  if (!dom.gamesPanelBody) return;
+  
+  const room = state.rooms[state.activeRoom];
+  if (!room) return;
+  
+  const users = Object.values(room.users || {});
+  const onlineUsers = users.filter(u => u.online);
+  
+  let usersHtml = '';
+  if (onlineUsers.length > 0) {
+    usersHtml = '<div class="games-users-section"><div class="games-users-header">👥 Online (' + onlineUsers.length + ')</div><div class="games-users-list">';
+    onlineUsers.forEach(user => {
+      const color = avatarColor(user.name);
+      const init = initials(user.name);
+      usersHtml += `<div class="games-user-item" title="${escHtml(user.name)}">
+        <span class="games-user-avatar" style="background: ${color};">${init}</span>
+        <span class="games-user-name">${escHtml(user.name)}</span>
+      </div>`;
+    });
+    usersHtml += '</div></div>';
+  }
+  
+  /* Aggiungi la lista utenti al pannello (sotto il contenuto del gioco) */
+  const existingUsersSection = dom.gamesPanelBody.querySelector('.games-users-section');
+  if (existingUsersSection) {
+    existingUsersSection.outerHTML = usersHtml;
+  } else if (usersHtml) {
+    dom.gamesPanelBody.insertAdjacentHTML('beforeend', usersHtml);
+  }
 }
 
 /* ── Nome gioco ──────────────────────────────────────────────── */

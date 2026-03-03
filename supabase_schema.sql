@@ -422,7 +422,7 @@ ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS is_games_room BOOLEAN DEFAULT 
 -- ── Tabella giochi attivi ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.active_games (
   id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-  room_id     TEXT        NOT NULL,
+  room_id     TEXT        NOT NULL UNIQUE,  -- UNIQUE: una stanza può avere solo un gioco attivo
   game_type   TEXT        NOT NULL,  -- 'song', 'truth_lie', 'quiz'
   game_state  JSONB       DEFAULT '{}'::jsonb,  -- stato del gioco (domande, risposte, timer, etc.)
   host_id     TEXT        NOT NULL,  -- chi ha avviato il gioco
