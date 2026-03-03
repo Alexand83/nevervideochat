@@ -765,12 +765,24 @@
 
 .events-cam-grid[data-cols='1'] { 
   grid-template-columns: 1fr;
-  max-width: 320px; /* Balanced single cam size */
+  max-width: 480px; /* Larger single cam, but not full page (chat below) */
   margin: 0 auto; /* Center single cam */
 }
-.events-cam-grid[data-cols='2'] { grid-template-columns: repeat(2, 1fr); }
-.events-cam-grid[data-cols='3'] { grid-template-columns: repeat(3, 1fr); }
-.events-cam-grid[data-cols='4'] { grid-template-columns: repeat(4, 1fr); }
+.events-cam-grid[data-cols='2'] { 
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 640px; /* 2 cams: smaller than single cam (320px each) */
+  margin: 0 auto; /* Center grid */
+}
+.events-cam-grid[data-cols='3'] { 
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 720px; /* 3 cams: even smaller (240px each) */
+  margin: 0 auto; /* Center grid */
+}
+.events-cam-grid[data-cols='4'] { 
+  grid-template-columns: repeat(4, 1fr);
+  max-width: 800px; /* 4+ cams: smallest (200px each) */
+  margin: 0 auto; /* Center grid */
+}
 
 .events-cam-slot {
   position: relative;

@@ -165,19 +165,35 @@ export function switchRoom(roomId) {
   /* Events room: automatically request cameras from users who already have them open */
   if (maxCams && maxCams >= 1 && maxCams <= 8) {
     const room = state.rooms[roomIdStr];
+    console.log('[Events Room] Entered Events room, checking for users with cameras. Room:', room, 'Users:', room ? Object.values(room.users).map(u => ({ id: u.id, name: u.name, hasCamera: u.hasCamera, online: u.online })) : 'no room');
     if (room) {
       /* Request cameras from all users who have them open in this room */
+      /* Increased delay to ensure WebRTC connections are ready */
       setTimeout(async () => {
-        const { requestPublicCamera } = await import('./camera.js');
-        Object.values(room.users).forEach(user => {
-          if (user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)) {
-            if (!state.cameraWindows[user.id]) {
-              /* Request camera - will be auto-accepted in Events room */
+        const { requestPublicCamera } = await import('./camera.js?v=20260415');
+        const allUsers = Object.values(room.users);
+        console.log('[Events Room] All users in room:', allUsers.map(u => ({ id: u.id, name: u.name, hasCamera: u.hasCamera, online: u.online })));
+        const usersWithCam = allUsers.filter(user => 
+          user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)
+        );
+        console.log('[Events Room] Requesting cameras from', usersWithCam.length, 'users:', usersWithCam.map(u => u.name || u.id));
+        if (usersWithCam.length === 0) {
+          console.log('[Events Room] No users with cameras found. Waiting for cameras to be opened...');
+        }
+        usersWithCam.forEach((user, index) => {
+          if (!state.cameraWindows[user.id]) {
+            /* Stagger requests slightly to avoid overwhelming the connection */
+            setTimeout(() => {
+              console.log('[Events Room] Requesting camera from', user.name || user.id, 'hasCamera:', user.hasCamera, 'online:', user.online);
               requestPublicCamera(user.id);
-            }
+            }, index * 200); /* 200ms delay between each request */
+          } else {
+            console.log('[Events Room] Already viewing camera from', user.name || user.id);
           }
         });
-      }, 500); /* Small delay to ensure room is fully set up */
+      }, 1000); /* Increased delay to ensure room is fully set up */
+    } else {
+      console.warn('[Events Room] Room not found:', roomIdStr);
     }
   }
 }
@@ -336,9 +352,24 @@ function renderEventsCamGrid(maxCams) {
 }
 
 function clearEventsCamGrid() {
-  if (dom.eventsCamGrid) {
-    dom.eventsCamGrid.innerHTML = '';
-  }
+  if (!dom.eventsCamGrid) return;
+  
+  /* Close all REMOTE camera windows in the events grid and their peer connections.
+     This is critical so that when re-entering the Events room, cameras are re-requested.
+     We do NOT close own camera here (that persists across room switches). */
+  Object.keys(state.cameraWindows).forEach(uid => {
+    const cw = state.cameraWindows[uid];
+    if (cw?.isEventsGrid && String(uid) !== String(state.currentUser?.id)) {
+      /* Close the incoming peer connection */
+      if (state.incomingPCs[uid]) {
+        try { state.incomingPCs[uid].close(); } catch {}
+        delete state.incomingPCs[uid];
+      }
+      delete state.cameraWindows[uid];
+    }
+  });
+  
+  dom.eventsCamGrid.innerHTML = '';
 }
 
 export function updateEventsCamGrid() {
@@ -363,12 +394,13 @@ export function updateEventsCamGrid() {
   
   dom.eventsCamGrid.hidden = false;
   
-  /* Autoresize grid columns based on number of ACTUAL cameras present in DOM */
-  /* Balanced layout: 1 cam = 1 col (max-width), 2-3 cam = 2 cols, 4+ cam = 4 cols */
+  /* Autoresize grid columns based on ACTUAL number of cameras present */
+  /* 1 cam = large (1 column), 2-3 cams = medium (2 columns), 4+ cams = small (4 columns) */
+  /* This ensures cameras shrink as more are added */
   let cols = 1;
-  if (numCams >= 4) cols = 4;      /* 4-8 cams: 4 columns (2 rows max) */
-  else if (numCams >= 2) cols = 2; /* 2-3 cams: 2 columns */
-  else cols = 1;                    /* 1 cam: 1 column (centered, max-width) */
+  if (numCams >= 4) cols = 4;      /* 4+ cams: 4 columns (smallest cams) */
+  else if (numCams >= 2) cols = 2; /* 2-3 cams: 2 columns (medium cams) */
+  else cols = 1;                   /* 1 cam: 1 column (largest cam) */
   
   dom.eventsCamGrid.setAttribute('data-cols', String(cols));
 }

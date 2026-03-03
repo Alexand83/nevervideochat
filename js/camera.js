@@ -1,6 +1,9 @@
 /* ================================================================
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
+/* VERSION MARKER — if you see this in logs, new code is running */
+console.log('%c[NVC] camera.js v20260415 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
 import { dom }           from './dom.js';
@@ -363,14 +366,18 @@ export async function startOwnCamera() {
     if (isEventsRoom) {
       /* Automatically share with all users in Events room */
       const room = state.rooms[state.activeRoom];
+      console.log('[Events Room] Camera opened, auto-sharing with users in room:', room ? Object.values(room.users).map(u => ({ id: u.id, name: u.name, online: u.online })) : 'no room');
       if (room) {
-        Object.values(room.users).forEach(user => {
-          if (user.online && String(user.id) !== String(state.currentUser?.id)) {
-            /* Small delay to ensure stream is ready */
-            setTimeout(() => {
-              sharePublicCameraTo(user.id);
-            }, 300);
-          }
+        const usersToShare = Object.values(room.users).filter(user => 
+          user.online && String(user.id) !== String(state.currentUser?.id)
+        );
+        console.log('[Events Room] Auto-sharing camera with', usersToShare.length, 'users:', usersToShare.map(u => u.name || u.id));
+        usersToShare.forEach((user, index) => {
+          /* Small delay to ensure stream is ready, stagger requests */
+          setTimeout(() => {
+            console.log('[Events Room] Sharing camera with', user.name || user.id);
+            sharePublicCameraTo(user.id);
+          }, 300 + (index * 200)); /* 300ms base + 200ms per user */
         });
       }
     }
@@ -426,22 +433,42 @@ export function initCameraSystem() {
 export function requestPublicCamera(targetUid) {
   const uid    = String(targetUid);
   const target = findUser(uid);
-  if (!target?.online) { showToast(`${target?.name || 'User'} is offline.`); return; }
-  if (!state.supa)     { showToast('⚠️ Server connection required.'); return; }
+  console.log('[Camera Request] requestPublicCamera called for', uid, 'target:', target);
+  if (!target?.online) { 
+    console.warn('[Camera Request] Target is offline:', target);
+    showToast(`${target?.name || 'User'} is offline.`); 
+    return; 
+  }
+  if (!state.supa) { 
+    console.warn('[Camera Request] Supabase not connected');
+    showToast('⚠️ Server connection required.'); 
+    return; 
+  }
   
   /* Check if target has camera active in this room */
   const roomId = state.activeRoom;
   const room = state.rooms[roomId];
   const targetInRoom = room?.users[uid];
   const hasCameraActive = targetInRoom?.hasCamera || (target.hasCamera && target.online);
+  console.log('[Camera Request] Room:', roomId, 'targetInRoom:', targetInRoom, 'hasCameraActive:', hasCameraActive);
   
   if (!hasCameraActive) {
+    console.warn('[Camera Request] Target does not have camera active');
     showToast(`📹 ${target.name} does not have their camera active.`);
     return;
   }
   
-  if (state.cameraWindows[uid]) { showToast(`📹 Already viewing ${target.name}'s camera.`); return; }
-  if (state.pendingCamRequests[uid]) { showToast(`⏳ Already waiting for ${target.name}'s reply.`); return; }
+  if (state.cameraWindows[uid]) { 
+    console.log('[Camera Request] Already viewing camera from', uid);
+    showToast(`📹 Already viewing ${target.name}'s camera.`); 
+    return; 
+  }
+  if (state.pendingCamRequests[uid]) { 
+    console.log('[Camera Request] Already waiting for reply from', uid);
+    showToast(`⏳ Already waiting for ${target.name}'s reply.`); 
+    return; 
+  }
+  console.log('[Camera Request] Sending camera request to', uid, 'in room', state.activeRoom);
   setPendingCamRequest(uid, 'public', target.name);
   broadcast('cam-req', uid, { reqType: 'public', room_id: state.activeRoom });
   showToast(`📹 Camera request sent to ${target.name}…`);
@@ -473,6 +500,7 @@ export function handleCamRequest(payload) {
     
     if (isEventsRoom) {
       /* Auto-accept in Events room - cameras are public */
+      console.log('[Events Room] Auto-accepting camera request from', fromName || fromId, 'in Events room');
       sharePublicCameraTo(fromId);
       return;
     }
@@ -521,16 +549,39 @@ export async function sharePublicCameraTo(toUid) {
       broadcastAll('cam-opened', { room_id: state.cameraRoom });
       await updateAllRoomPresences();
     }
+    console.log('[WebRTC] Creating peer connection for', toUid);
+    /* Close existing peer connection if it exists */
+    if (state.outgoingPCs[toUid]) {
+      console.log('[WebRTC] Closing existing peer connection for', toUid);
+      const oldPc = state.outgoingPCs[toUid];
+      oldPc.close();
+      delete state.outgoingPCs[toUid];
+    }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.outgoingPCs[toUid] = pc;
-    state.localStream.getTracks().filter(t => t.readyState === 'live').forEach(t => pc.addTrack(t, state.localStream));
+    const tracks = state.localStream.getTracks().filter(t => t.readyState === 'live');
+    console.log('[WebRTC] Adding', tracks.length, 'tracks to peer connection:', tracks.map(t => ({ kind: t.kind, readyState: t.readyState })));
+    tracks.forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
-      if (candidate) broadcast('webrtc', toUid, { sigType: 'ice', candidate, ctx: 'public' });
+      if (candidate) {
+        console.log('[WebRTC] Sending ICE candidate to', toUid);
+        broadcast('webrtc', toUid, { sigType: 'ice', candidate, ctx: 'public' });
+      }
     };
+    console.log('[WebRTC] Creating offer for', toUid);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    console.log('[WebRTC] Sending offer to', toUid, 'SDP length:', offer.sdp.length);
     broadcast('webrtc', toUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'public' });
     broadcast('cam-accepted', toUid, {});
+    
+    /* Monitor connection state */
+    pc.addEventListener('connectionstatechange', () => {
+      console.log('[WebRTC] Outgoing connection state changed:', pc.connectionState, 'for', toUid);
+    });
+    pc.addEventListener('iceconnectionstatechange', () => {
+      console.log('[WebRTC] Outgoing ICE connection state changed:', pc.iceConnectionState, 'for', toUid);
+    });
 
     const viewerUser = findUser(toUid);
     state.camViewers[toUid] = viewerUser?.username || viewerUser?.name || toUid;
@@ -552,24 +603,84 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPublic) {
     if (sigType === 'offer') {
+      /* Close existing peer connection if it exists */
+      if (state.incomingPCs[from]) {
+        console.log('[WebRTC] Closing existing incoming peer connection for', from);
+        const oldPc = state.incomingPCs[from];
+        oldPc.close();
+        delete state.incomingPCs[from];
+      }
+      console.log('[WebRTC] Creating new incoming peer connection for', from);
       const pc = new RTCPeerConnection(ICE_SERVERS);
       state.incomingPCs[from] = pc;
       pc.onicecandidate = ({ candidate: c }) => { if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public' }); };
-      pc.ontrack = ({ streams }) => {
-        if (streams && streams[0]) {
-          ensureUser(from, payload.fromName);
-          /* Small delay to ensure stream is ready */
-          setTimeout(() => {
-            openRemoteCamWindow(from, streams[0], payload.fromName);
-          }, 100);
+      
+      /* Flag to prevent openRemoteCamWindow from being called multiple times
+         (ontrack fires once per track: audio + video = 2 times for the same stream) */
+      let streamOpened = false;
+      
+      pc.ontrack = ({ streams, track }) => {
+        console.log('[WebRTC] ontrack from', from, '- kind:', track?.kind, 'readyState:', track?.readyState, 'streams:', streams?.length, 'streamOpened:', streamOpened);
+        if (!streams || !streams[0]) { console.warn('[WebRTC] No streams in ontrack from', from); return; }
+        
+        /* Only open the camera window ONCE per peer connection regardless of track type.
+           DO NOT check for video tracks here — on some browsers/PCs, audio track arrives first
+           and streams[0] may not yet include video. Using streamOpened flag is sufficient. */
+        if (streamOpened) {
+          console.log('[WebRTC] Stream already opened for', from, '- ignoring duplicate ontrack (kind:', track?.kind, ')');
+          return;
         }
+        streamOpened = true;
+        
+        ensureUser(from, payload.fromName);
+        
+        const stream = streams[0];
+        console.log('[WebRTC] Opening window for', from, 'stream tracks:', stream.getTracks().map(t => t.kind + ':' + t.readyState));
+        
+        /* Open window immediately — insertCameraIntoEventsGrid handles stream readiness */
+        openRemoteCamWindow(from, stream, payload.fromName);
       };
+      
+      /* Also listen for connection state changes */
+      pc.addEventListener('connectionstatechange', () => {
+        console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
+      });
+      
+      pc.addEventListener('iceconnectionstatechange', () => {
+        console.log('[WebRTC] ICE connection state changed:', pc.iceConnectionState, 'for', from);
+      });
       await pc.setRemoteDescription({ type: 'offer', sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
     } else if (sigType === 'answer') {
-      const pc = state.outgoingPCs[from]; if (pc) await pc.setRemoteDescription({ type: 'answer', sdp });
+      const pc = state.outgoingPCs[from];
+      if (pc) {
+        console.log('[WebRTC] Received answer from', from, 'PC state:', pc.signalingState, 'connectionState:', pc.connectionState);
+        /* Only set remote description if we're in the correct state */
+        if (pc.signalingState === 'have-local-offer') {
+          try {
+            await pc.setRemoteDescription({ type: 'answer', sdp });
+            console.log('[WebRTC] Successfully set remote answer from', from);
+          } catch (err) {
+            console.error('[WebRTC] Error setting remote answer:', err, 'PC state:', pc.signalingState);
+            /* If we're already connected, ignore the error */
+            if (pc.signalingState === 'stable' && pc.connectionState === 'connected') {
+              console.log('[WebRTC] Connection already established, ignoring answer');
+            } else {
+              throw err;
+            }
+          }
+        } else {
+          console.warn('[WebRTC] Cannot set remote answer - wrong state:', pc.signalingState, 'expected: have-local-offer');
+          /* If connection is already established, this is fine */
+          if (pc.signalingState === 'stable' && pc.connectionState === 'connected') {
+            console.log('[WebRTC] Connection already established, answer not needed');
+          }
+        }
+      } else {
+        console.warn('[WebRTC] Received answer from', from, 'but no outgoing PC found');
+      }
     } else if (sigType === 'ice') {
       const pc = state.outgoingPCs[from] || state.incomingPCs[from];
       if (pc && candidate) await pc.addIceCandidate(candidate).catch(console.warn);
@@ -698,88 +809,114 @@ export function endCall(notify = true) {
 /* Insert camera into Events room grid */
 function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   if (!dom.eventsCamGrid) return;
-  
-  /* Make sure grid is visible before inserting */
-  if (dom.eventsCamGrid.hidden) {
-    dom.eventsCamGrid.hidden = false;
-  }
-  
-  /* Find existing slot for this user */
+
+  dom.eventsCamGrid.hidden = false;
+
+  /* ── If slot already exists with the same stream, just ensure it's playing ── */
   let targetSlot = dom.eventsCamGrid.querySelector(`[data-user-id="${uid}"]`);
-  
-  if (!targetSlot) {
-    /* Check if we can add a new slot (check max_cams limit) */
-    const availableRooms = getAvailableRooms();
-    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-    const maxCams = roomData?.max_cams;
-    
-    const currentSlots = dom.eventsCamGrid.querySelectorAll('.events-cam-slot');
-    if (maxCams && currentSlots.length >= maxCams) {
-      showToast('⚠️ All camera slots are full.');
+  if (targetSlot) {
+    const existingVideo = targetSlot.querySelector('video');
+    if (existingVideo && stream) {
+      if (existingVideo.srcObject?.id === stream.id) {
+        /* Same stream — just make sure it's playing */
+        existingVideo.play().catch(() => {});
+        return;
+      }
+      /* New stream — update without destroying element */
+      console.log('[Events Grid] Updating stream for', uid);
+      existingVideo.srcObject = stream;
+      existingVideo.muted = true; /* Muted for autoplay guarantee */
+      existingVideo.play().then(() => {
+        if (!isOwn) existingVideo.muted = false; /* Unmute after play starts */
+      }).catch(console.warn);
+      /* Update state */
+      if (state.cameraWindows[uid]) state.cameraWindows[uid].stream = stream;
       return;
     }
-    
-    /* Create new slot */
+  } else {
+    /* Check max_cams limit */
+    const availableRooms = getAvailableRooms();
+    const maxCams = availableRooms.find(r => String(r.id) === String(state.activeRoom))?.max_cams;
+    const currentSlots = dom.eventsCamGrid.querySelectorAll('.events-cam-slot');
+    if (maxCams && currentSlots.length >= maxCams) { showToast('⚠️ All camera slots are full.'); return; }
     targetSlot = document.createElement('div');
     targetSlot.className = 'events-cam-slot';
     targetSlot.dataset.userId = uid;
     dom.eventsCamGrid.appendChild(targetSlot);
-    
-    /* Grid layout update happens after video is set */
   }
-  
-  /* Clear and populate slot */
+
+  /* ── Build slot content ── */
   targetSlot.innerHTML = '';
   targetSlot.dataset.userId = uid;
-  
-  /* Create video element */
+
+  /* Video element — always start MUTED so autoplay works on ALL browsers (PC/Safari/etc.)
+     For remote streams we auto-unmute once playing; own cam stays muted always */
   const video = document.createElement('video');
-  video.autoplay = true;
+  video.autoplay   = true;
   video.playsInline = true;
-  if (isOwn) video.muted = true;
-  video.style.width = '100%';
-  video.style.height = '100%';
-  video.style.objectFit = 'cover';
+  video.muted      = true;   /* KEY: muted = guaranteed autoplay on any browser */
+  video.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
   if (isOwn) video.style.transform = 'scaleX(-1)';
-  
-  /* Create label - clickable for context menu */
+
+  /* Label */
   const label = document.createElement('div');
   label.className = 'events-cam-slot-label';
   label.textContent = name || uid || 'User';
-  label.style.cursor = 'pointer';
-  label.style.display = 'block'; /* Ensure visible */
-  label.style.visibility = 'visible'; /* Ensure visible */
-  label.style.opacity = '1'; /* Ensure visible */
+  label.style.cssText = 'cursor:pointer;display:block;visibility:visible;opacity:1;';
   label.title = `Click to view ${name || uid}'s profile`;
-  
-  /* Add context menu on click */
   label.addEventListener('click', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    import('./ui.js').then(({ openContextMenu }) => {
-      openContextMenu(uid, label);
-    });
+    e.stopPropagation(); e.preventDefault();
+    import('./ui.js').then(({ openContextMenu }) => openContextMenu(uid, label));
   });
-  
+
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
-  
-  /* Debug: verify label is in DOM */
-  console.log('Created label for', name || uid, 'in slot:', targetSlot, 'label:', label);
-  
-  /* Set stream */
-  video.srcObject = stream;
-  video.play().catch(() => {});
-  
-  /* Store reference */
-  if (!state.cameraWindows[uid]) {
-    state.cameraWindows[uid] = { el: targetSlot, stream, isOwn, micEnabled: true, isEventsGrid: true };
+
+  console.log('[Events Grid v20260415] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+
+  /* ── Assign stream and play ── */
+  if (stream) {
+    const assignAndPlay = () => {
+      video.srcObject = stream;
+      video.play().then(() => {
+        console.log('[Events Grid] Playing for', uid, '— unmuting:', !isOwn);
+        if (!isOwn) {
+          /* Unmute remote streams after play starts — audio will work */
+          video.muted = false;
+        }
+      }).catch(err => {
+        console.warn('[Events Grid] play() failed for', uid, ':', err.name);
+        /* Even muted play failed (very rare) — keep trying */
+        setTimeout(() => video.play().catch(console.warn), 500);
+      });
+    };
+
+    const activeTracks = stream.getTracks().filter(t => t.readyState === 'live');
+    if (activeTracks.length > 0) {
+      assignAndPlay();
+    } else {
+      /* Tracks not ready yet — poll until live (max 5s) */
+      let attempts = 0;
+      const poll = () => {
+        attempts++;
+        if (stream.getTracks().some(t => t.readyState === 'live')) {
+          assignAndPlay();
+        } else if (attempts < 50) {
+          setTimeout(poll, 100);
+        } else {
+          console.warn('[Events Grid] Timeout waiting for live tracks for', uid, '— assigning anyway');
+          assignAndPlay();
+        }
+      };
+      setTimeout(poll, 100);
+    }
   } else {
-    state.cameraWindows[uid].el = targetSlot;
-    state.cameraWindows[uid].stream = stream;
-    state.cameraWindows[uid].isEventsGrid = true;
+    console.warn('[Events Grid] No stream for', uid);
   }
-  
-  /* Update grid column layout now that a new cam is in DOM */
+
+  /* ── Store reference ── */
+  state.cameraWindows[uid] = { el: targetSlot, stream, isOwn, micEnabled: true, isEventsGrid: true };
+
+  /* ── Update grid layout ── */
   import('./rooms.js').then(({ updateEventsCamGrid }) => updateEventsCamGrid());
 }

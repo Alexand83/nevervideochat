@@ -9,7 +9,7 @@ import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers 
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
-         closeCameraWindow, endCall } from './camera.js';
+         closeCameraWindow, endCall } from './camera.js?v=20260415';
 import { clearPendingCamRequest } from './storage.js';
 
 export function initSupabaseClient() {
@@ -124,20 +124,11 @@ export async function connectSupabase() {
         else if (inMyRoom) ensureUser(fromId, payload.fromName, { hasCamera: true, online: true });
         renderUsers();
         
-        /* Events room: automatically request camera (public, no request needed) */
+        /* Events room: update grid when cam-opened received */
+        /* NOTE: We do NOT call requestPublicCamera here because the camera owner
+           already auto-shares with everyone in startOwnCamera (push model).
+           Requesting here would create DUPLICATE WebRTC connections. */
         if (camRoom === state.activeRoom && inMyRoom) {
-          const { getAvailableRooms } = await import('./rooms.js');
-          const availableRooms = getAvailableRooms();
-          const roomData = availableRooms.find(r => String(r.id) === String(camRoom));
-          const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
-          
-          if (isEventsRoom) {
-            /* Events room: directly connect to camera if it's already open */
-            /* The camera owner will automatically share when they open it */
-            /* We just need to wait for the WebRTC offer */
-          }
-          
-          /* Update events cam grid */
           const { updateEventsCamGrid } = await import('./rooms.js');
           updateEventsCamGrid();
         }
@@ -153,7 +144,7 @@ export async function connectSupabase() {
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
         /* Close all cameras for the kicked user */
-        const { closeAllCamerasForUser } = await import('./camera.js');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260415');
         if (isCurrentUser || state.cameraWindows[targetId]) {
           await closeAllCamerasForUser(targetId);
         }
@@ -195,7 +186,7 @@ export async function connectSupabase() {
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
         /* Close all cameras for the banned user */
-        const { closeAllCamerasForUser } = await import('./camera.js');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260415');
         if (isCurrentUser || state.cameraWindows[targetId]) {
           await closeAllCamerasForUser(targetId);
         }
@@ -222,7 +213,7 @@ export async function connectSupabase() {
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
         /* Close all cameras for the muted user - always close if we're viewing their cam */
-        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js');
+        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260415');
         if (isCurrentUser) {
           await closeAllCamerasForUser(targetId);
         } else if (state.cameraWindows[targetId]) {
