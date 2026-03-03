@@ -1,4 +1,4 @@
-﻿/* ─── 3. APP HEADER ─── */
+/* ─── 3. APP HEADER ─── */
 .app-header {
   height: var(--hdr-h);
   background: var(--bg1);
@@ -125,4 +125,96 @@
 
 /* Users toggle only visible on mobile */
 .users-toggle-btn { display: none; }
+
+/* ─── Header User Chip (left column, shows current user) ─── */
+.header-user {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  touch-action: none;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.header-user-name {
+  font-size: var(--fz-sm);
+  font-weight: 500;
+  color: var(--tx1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+/* Profile icon button in header-actions */
+.hdr-icon-only-btn {
+  padding: 5px 7px;
+  min-width: 36px;
+  justify-content: center;
+}
+
+.hdr-profile-btn { padding: 4px; }
+
+.hdr-avatar-chip {
+  width: 28px; height: 28px;
+  min-width: 28px; min-height: 28px; /* Force square */
+  max-width: 28px; max-height: 28px; /* Force square */
+  border-radius: 50%;
+  aspect-ratio: 1 / 1; /* Ensure perfect circle */
+  background-color: var(--bg3);   /* use sub-property so inline bg-image wins */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.hdr-avatar-chip img {
+  width: 100%; height: 100%;
+  min-width: 100%; min-height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  aspect-ratio: 1 / 1; /* Ensure perfect circle */
+}
+
+/* Avatar with photo — user list, messages, profile preview */
+.user-item-avatar.has-photo,
+.msg-avatar.has-photo,
+.profile-avatar.has-photo,
+.hdr-avatar-chip.has-photo {
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  color: transparent;        /* hide initials text */
+  font-size: 0;
+}
+
+/* ─── Header registered / guest badge ─── */
+.header-user-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.header-user-badge.guest {
+  background: var(--bg3);
+  color: var(--tx1);
+  border: 1px solid var(--border);
+}
+.header-user-badge.registered {
+  background: var(--clr-success);
+  color: #fff;
+}
 
