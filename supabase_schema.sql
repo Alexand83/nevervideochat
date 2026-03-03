@@ -25,8 +25,9 @@ ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}
 -- Row Level Security
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Public read messages"   ON public.messages;
-DROP POLICY IF EXISTS "Public insert messages" ON public.messages;
+DROP POLICY IF EXISTS "Public read messages"    ON public.messages;
+DROP POLICY IF EXISTS "Public insert messages"  ON public.messages;
+DROP POLICY IF EXISTS "Public update messages"  ON public.messages;
 
 CREATE POLICY "Public read messages"
   ON public.messages FOR SELECT
@@ -34,6 +35,12 @@ CREATE POLICY "Public read messages"
 
 CREATE POLICY "Public insert messages"
   ON public.messages FOR INSERT
+  WITH CHECK (true);
+
+-- Needed for reaction updates (toggleReaction writes back the reactions JSONB column)
+CREATE POLICY "Public update messages"
+  ON public.messages FOR UPDATE
+  USING (true)
   WITH CHECK (true);
 
 -- ── Indici per caricare i messaggi in ordine e per stanza ──────
