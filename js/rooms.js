@@ -334,11 +334,11 @@ export function updateEventsCamGrid() {
   const numCams = slots.filter(s => s.querySelector('video')).length;
   
   /* Autoresize grid columns based on number of ACTUAL cameras present in DOM */
+  /* Balanced layout: 1 cam = 1 col (max-width), 2-3 cam = 2 cols, 4+ cam = 4 cols */
   let cols = 1;
-  if (numCams >= 7) cols = 4;
-  else if (numCams >= 5) cols = 3;
-  else if (numCams >= 3) cols = 2;
-  else cols = 1;
+  if (numCams >= 4) cols = 4;      /* 4-8 cams: 4 columns (2 rows max) */
+  else if (numCams >= 2) cols = 2; /* 2-3 cams: 2 columns */
+  else cols = 1;                    /* 1 cam: 1 column (centered, max-width) */
   
   dom.eventsCamGrid.setAttribute('data-cols', String(cols));
 }

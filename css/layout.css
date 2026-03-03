@@ -25,7 +25,7 @@
   .panel-resize-handle { display: none; }
 }
 
-/* Panel overlay - hidden by default on desktop, shown on mobile */
+/* Panel overlay — hidden by default on desktop, shown on mobile via responsive.css */
 .panel-overlay { display: none; }
 
 /* ─── ROOM TABS ─── */
