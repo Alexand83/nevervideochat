@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260429 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260430 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -618,17 +618,19 @@ export async function handleWebRTCSignal(payload) {
         /* Check if video is actually playing (not paused) and has live tracks */
         const isVideoPlaying = hasVideoElement && !existingVideo.paused && existingVideo.readyState >= 2; /* HAVE_CURRENT_DATA or higher */
         const hasLiveTracks = existingVideo?.srcObject?.getTracks().some(t => t.readyState === 'live');
-        const hasWorkingVideo = hasVideoElement && hasStream && isVideoPlaying && hasLiveTracks;
+        /* Also check if video has valid dimensions (not 0x0) — indicates it's actually rendering */
+        const hasValidDimensions = hasVideoElement && existingVideo.videoWidth > 0 && existingVideo.videoHeight > 0;
+        const hasWorkingVideo = hasVideoElement && hasStream && isVideoPlaying && hasLiveTracks && hasValidDimensions;
         
         /* If PC is already connected and video is working, IGNORE new offer (guest probably just riactivated cam) */
         if (existingPc.connectionState === 'connected' && hasWorkingVideo) {
-          console.log('[WebRTC] Ignoring new offer from', from, '— incoming PC already connected with working video (playing:', isVideoPlaying, 'liveTracks:', hasLiveTracks, ')');
+          console.log('[WebRTC] Ignoring new offer from', from, '— incoming PC already connected with working video (playing:', isVideoPlaying, 'liveTracks:', hasLiveTracks, 'dimensions:', hasValidDimensions, ')');
           return;
         }
         
         /* If PC is in stable state but not connected, or connected but video not working, close and recreate */
         if (existingPc.signalingState === 'stable' || existingPc.connectionState === 'connected') {
-          console.log('[WebRTC] Closing existing incoming peer connection for', from, 'state:', existingPc.signalingState, existingPc.connectionState, 'hasWorkingVideo:', hasWorkingVideo, 'playing:', isVideoPlaying, 'liveTracks:', hasLiveTracks);
+          console.log('[WebRTC] Closing existing incoming peer connection for', from, 'state:', existingPc.signalingState, existingPc.connectionState, 'hasWorkingVideo:', hasWorkingVideo, 'playing:', isVideoPlaying, 'liveTracks:', hasLiveTracks, 'dimensions:', hasValidDimensions);
           existingPc.close();
           delete state.incomingPCs[from];
           
@@ -653,7 +655,8 @@ export async function handleWebRTCSignal(payload) {
       }
       
       /* If we have an active outgoing PC for this user, it might interfere with incoming PC ICE negotiation.
-         Close it temporarily to give incoming PC priority, then recreate it after incoming PC connects. */
+         Strategy: if outgoing PC is connecting/new, wait for it. If connected, add delay but DON'T close it
+         (closing breaks guest's view of our cam). Instead, rely on delay + retry mechanisms. */
       const outgoingPc = state.outgoingPCs[from];
       if (outgoingPc) {
         const outgoingState = outgoingPc.connectionState;
@@ -666,19 +669,11 @@ export async function handleWebRTCSignal(payload) {
             waited += 50;
           }
           console.log('[WebRTC] Outgoing PC state after wait:', outgoingPc.connectionState, 'waited:', waited, 'ms');
-          if (outgoingPc.connectionState === 'connected') {
-            /* Outgoing PC connected during wait — close it temporarily */
-            outgoingPc.close();
-            delete state.outgoingPCs[from];
-            console.log('[WebRTC] Outgoing PC closed for', from, '— will recreate after incoming PC connects');
-          }
         } else if (outgoingState === 'connected') {
-          /* Outgoing PC is already connected — close it temporarily to free ICE resources
-             We'll recreate it after incoming PC connects */
-          console.log('[WebRTC] Outgoing PC connected for', from, '— closing temporarily to prioritize incoming PC');
-          outgoingPc.close();
-          delete state.outgoingPCs[from];
-          console.log('[WebRTC] Outgoing PC closed for', from, '— will recreate after incoming PC connects');
+          /* Outgoing PC is already connected — add longer delay to let ICE resources stabilize
+             We DON'T close it because that would break guest's view of our cam */
+          console.log('[WebRTC] Outgoing PC connected for', from, '— delaying incoming PC by 800ms (keeping outgoing PC open)');
+          await new Promise(r => setTimeout(r, 800));
         }
       }
       
@@ -724,20 +719,6 @@ export async function handleWebRTCSignal(payload) {
 
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
-        
-        /* If incoming PC connects and we don't have outgoing PC but should (we have camera), recreate it */
-        if (pc.connectionState === 'connected' && !state.outgoingPCs[from]) {
-          /* Check if we still have local stream and user still has camera — if so, we closed outgoing PC earlier */
-          if (state.localStream && state.currentUser?.hasCamera) {
-            console.log('[WebRTC] Incoming PC connected for', from, '— recreating outgoing PC');
-            setTimeout(() => {
-              /* Recreate outgoing PC to share our camera with the guest */
-              sharePublicCameraTo(from).catch(err => {
-                console.warn('[WebRTC] Failed to recreate outgoing PC for', from, ':', err);
-              });
-            }, 300); /* Delay to let incoming PC fully stabilize */
-          }
-        }
         
         if (pc.connectionState === 'failed') {
           /* Only act if this PC is still the current one */
@@ -1116,7 +1097,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260429] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260430] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
