@@ -798,4 +798,4 @@ function getGameName(gameType) {
 }
 
 /* ── Esporta funzioni ─────────────────────────────────────────── */
-export { handleGameCommand, checkActiveGame, updateGamesPanel, initGames };
+export { handleGameCommand, checkActiveGame, updateGamesPanel };
