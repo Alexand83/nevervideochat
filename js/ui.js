@@ -8,7 +8,7 @@ import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js'
 import { findUser, checkIsMuted, renderUsers } from './users.js';
 import { addIgnoredUser, removeIgnoredUser } from './storage.js';
 import { broadcast }         from './broadcast.js';
-import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260419';
+import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260420';
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';

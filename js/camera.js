@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260419 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260420 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -608,12 +608,20 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPublic) {
     if (sigType === 'offer') {
-      /* Close existing peer connection if it exists */
+      /* Close existing peer connection if it exists AND remove old slot from grid */
       if (state.incomingPCs[from]) {
         console.log('[WebRTC] Closing existing incoming peer connection for', from);
         const oldPc = state.incomingPCs[from];
         oldPc.close();
         delete state.incomingPCs[from];
+        
+        /* Remove old slot from Events grid to avoid black screen with dead video */
+        const oldCw = state.cameraWindows[from];
+        if (oldCw?.isEventsGrid && oldCw.el && oldCw.el.parentNode) {
+          console.log('[WebRTC] Removing old slot for', from, 'before creating new connection');
+          oldCw.el.remove();
+          delete state.cameraWindows[from];
+        }
       }
       console.log('[WebRTC] Creating new incoming peer connection for', from);
       const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -921,13 +929,21 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   if (targetSlot) {
     const existingVideo = targetSlot.querySelector('video');
     if (existingVideo && stream) {
-      if (existingVideo.srcObject?.id === stream.id) {
-        /* Same stream — just make sure it's playing */
-        if (existingVideo.paused) existingVideo.play().catch(() => {});
-        return;
+      const oldStream = existingVideo.srcObject;
+      if (oldStream?.id === stream.id) {
+        /* Same stream ID — check if it's still alive */
+        const hasLiveTracks = oldStream.getTracks().some(t => t.readyState === 'live');
+        if (hasLiveTracks) {
+          /* Same live stream — just make sure it's playing */
+          if (existingVideo.paused) existingVideo.play().catch(() => {});
+          return;
+        } else {
+          /* Same stream ID but dead — remove and rebuild */
+          console.log('[Events Grid] Old stream is dead for', uid, '— rebuilding slot');
+        }
       }
     }
-    /* New/different stream OR stream is null/undefined OR video is missing
+    /* New/different stream OR stream is null/undefined OR video is missing OR old stream is dead
        — MUST rebuild slot completely to avoid black screen */
     console.log('[Events Grid] Rebuilding slot for', uid, 'stream:', stream ? 'new' : 'null', 'existingVideo:', !!existingVideo);
     if (existingVideo) {
@@ -978,7 +994,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260419] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260420] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
