@@ -40,7 +40,7 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
   /* Update UI */
   dom.kickBanIcon.textContent = '👢';
   dom.kickBanTitle.textContent = isGlobal ? 'You have been kicked from all rooms' : 'You have been kicked from this room';
-  dom.kickBanMinutes.textContent = minutesRemaining;
+  dom.kickBanMessage.innerHTML = `You cannot rejoin for <span id="kickBanMinutes">${minutesRemaining}</span> minutes.`;
   dom.kickBanExpires.textContent = `Until: ${expires.toLocaleString()}`;
   
   /* If not global kick, try to find an available room */
