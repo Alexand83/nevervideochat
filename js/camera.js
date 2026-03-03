@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260421 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260422 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -608,26 +608,33 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPublic) {
     if (sigType === 'offer') {
-      /* Close existing peer connection if it exists AND remove old slot from grid */
+      /* Prevent duplicate PC creation — if we're already processing an offer for this user, ignore */
       if (state.incomingPCs[from]) {
-        console.log('[WebRTC] Closing existing incoming peer connection for', from);
-        const oldPc = state.incomingPCs[from];
-        oldPc.close();
-        delete state.incomingPCs[from];
-        
-        /* Remove old slot from Events grid to avoid black screen with dead video */
-        const oldCw = state.cameraWindows[from];
-        if (oldCw?.isEventsGrid && oldCw.el && oldCw.el.parentNode) {
-          console.log('[WebRTC] Removing old slot for', from, 'before creating new connection');
-          const oldVideo = oldCw.el.querySelector('video');
-          if (oldVideo) {
-            oldVideo.pause();
-            oldVideo.srcObject = null; /* Abort any pending play() */
+        const existingPc = state.incomingPCs[from];
+        /* If PC is already in a stable/connected state, close it and create new one */
+        if (existingPc.signalingState === 'stable' || existingPc.connectionState === 'connected') {
+          console.log('[WebRTC] Closing existing incoming peer connection for', from, 'state:', existingPc.signalingState, existingPc.connectionState);
+          existingPc.close();
+          delete state.incomingPCs[from];
+          
+          /* Remove old slot from Events grid to avoid black screen with dead video */
+          const oldCw = state.cameraWindows[from];
+          if (oldCw?.isEventsGrid && oldCw.el && oldCw.el.parentNode) {
+            console.log('[WebRTC] Removing old slot for', from, 'before creating new connection');
+            const oldVideo = oldCw.el.querySelector('video');
+            if (oldVideo) {
+              oldVideo.pause();
+              oldVideo.srcObject = null; /* Abort any pending play() */
+            }
+            oldCw.el.remove();
+            delete state.cameraWindows[from];
+            /* Delay to ensure DOM cleanup completes before new stream arrives */
+            await new Promise(r => setTimeout(r, 100));
           }
-          oldCw.el.remove();
-          delete state.cameraWindows[from];
-          /* Small delay to ensure DOM cleanup completes before new stream arrives */
-          await new Promise(r => setTimeout(r, 50));
+        } else {
+          /* PC is still being set up — ignore duplicate offer */
+          console.warn('[WebRTC] Ignoring duplicate offer from', from, '— PC already exists in state:', existingPc.signalingState);
+          return;
         }
       }
       console.log('[WebRTC] Creating new incoming peer connection for', from);
@@ -1007,7 +1014,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260421] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260422] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
@@ -1038,23 +1045,34 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           console.log('[Events Grid] Playing for', uid, '— unmuting:', !isOwn);
           if (!isOwn) video.muted = false;
         }).catch(err => {
-          console.warn('[Events Grid] play() failed for', uid, ':', err.name);
-          if (err.name !== 'AbortError') {
-            setTimeout(() => { if (!playStarted) video.play().catch(console.warn); }, 500);
+          /* AbortError is expected when slot is removed during play() — ignore it */
+          if (err.name === 'AbortError') {
+            console.log('[Events Grid] play() aborted for', uid, '(slot likely removed) — ignoring');
+            return;
           }
+          console.warn('[Events Grid] play() failed for', uid, ':', err.name);
+          /* Only retry if video is still in DOM and has stream */
+          setTimeout(() => {
+            if (!playStarted && video.parentNode && video.srcObject) {
+              video.play().catch(console.warn);
+            }
+          }, 500);
         });
       }
       
       /* Fallback timeout: if play() doesn't resolve and frame events don't fire within 3s,
          force retry (ICE might have connected in the meantime) */
       setTimeout(() => {
-        if (!playStarted && video.paused && video.srcObject) {
+        /* Only retry if video is still in DOM and has stream */
+        if (!playStarted && video.parentNode && video.paused && video.srcObject) {
           console.log('[Events Grid] Timeout fallback — forcing play() for', uid);
           video.play().then(() => {
             playStarted = true;
             console.log('[Events Grid] Playing for', uid, '(timeout fallback) — unmuting:', !isOwn);
             if (!isOwn) video.muted = false;
-          }).catch(console.warn);
+          }).catch(err => {
+            if (err.name !== 'AbortError') console.warn('[Events Grid] Timeout fallback play() failed:', err.name);
+          });
         }
       }, 3000);
     };
