@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260430 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260431 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -565,7 +565,8 @@ export async function sharePublicCameraTo(toUid) {
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
         console.log('[WebRTC] Outgoing ICE candidate type:', candidate.type, 'protocol:', candidate.protocol, 'to', toUid);
-        broadcast('webrtc', toUid, { sigType: 'ice', candidate, ctx: 'public' });
+        /* dir:'out' = from our outgoing PC → guest adds to their incomingPC */
+        broadcast('webrtc', toUid, { sigType: 'ice', candidate, ctx: 'public', dir: 'out' });
       }
     };
     console.log('[WebRTC] Creating offer for', toUid);
@@ -603,7 +604,7 @@ export async function sharePublicCameraTo(toUid) {
 /* ── All incoming WebRTC signals ──────────────────────────────── */
 export async function handleWebRTCSignal(payload) {
   if (payload.to !== state.currentUser?.id) return;
-  const { sigType, from, sdp, candidate } = payload;
+  const { sigType, from, sdp, candidate, dir } = payload;
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
 
   if (isPublic) {
@@ -639,7 +640,8 @@ export async function handleWebRTCSignal(payload) {
       pc.onicecandidate = ({ candidate: c }) => {
         if (c) {
           console.log('[WebRTC] Local ICE candidate type:', c.type, 'protocol:', c.protocol, 'for incoming from', from);
-          broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public' });
+          /* dir:'in' = from our incomingPC → guest adds to their outgoingPC */
+          broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public', dir: 'in' });
         }
       };
       
@@ -819,7 +821,18 @@ export async function handleWebRTCSignal(payload) {
         console.warn('[WebRTC] Received answer from', from, 'but no outgoing PC found');
       }
     } else if (sigType === 'ice') {
-      const pc = state.outgoingPCs[from] || state.incomingPCs[from];
+      /* Route ICE candidate to correct PC based on 'dir' field:
+         - dir:'out' means sender sent from their outgoingPC → goes to our outgoingPC (same connection, opposite side)
+         - dir:'in'  means sender sent from their incomingPC → goes to our incomingPC (same connection, opposite side)
+         - no dir (legacy): try outgoingPC first, then incomingPC */
+      let pc;
+      if (dir === 'out') {
+        pc = state.outgoingPCs[from]; /* Their outgoing → our outgoing (they answer our offer) */
+      } else if (dir === 'in') {
+        pc = state.incomingPCs[from]; /* Their incoming → our incoming (they answer our receive) */
+      } else {
+        pc = state.outgoingPCs[from] || state.incomingPCs[from]; /* Legacy fallback */
+      }
       if (pc && candidate) {
         /* candidate may be deserialized as plain object — reconstruct RTCIceCandidate for logging */
         const candType = candidate.type || (candidate.candidate?.includes(' typ relay ') ? 'relay' : 
@@ -827,14 +840,15 @@ export async function handleWebRTCSignal(payload) {
                                           candidate.candidate?.includes(' typ host ') ? 'host' : 'unknown');
         const candProto = candidate.protocol || (candidate.candidate?.includes(' UDP ') ? 'udp' : 
                                                  candidate.candidate?.includes(' TCP ') ? 'tcp' : 'unknown');
-        console.log('[WebRTC] Remote ICE candidate type:', candType, 'protocol:', candProto, 'from', from);
+        const pcType = pc === state.outgoingPCs[from] ? 'outgoing' : 'incoming';
+        console.log('[WebRTC] Remote ICE candidate type:', candType, 'protocol:', candProto, 'from', from, '→', pcType, 'PC (dir:', dir, ')');
         /* Reconstruct RTCIceCandidate if needed (WebRTC accepts plain objects too, but safer) */
         const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidate);
         /* If remote description not set yet, buffer the candidate and apply later */
         if (!pc.remoteDescription) {
           pc._pendingCandidates = pc._pendingCandidates || [];
           pc._pendingCandidates.push(iceCandidate);
-          console.log('[WebRTC] Buffering ICE candidate from', from, '(remoteDescription not set yet) — buffer size:', pc._pendingCandidates.length);
+          console.log('[WebRTC] Buffering ICE candidate from', from, '(remoteDescription not set yet, PC:', pcType, ') — buffer size:', pc._pendingCandidates.length);
         } else {
           await pc.addIceCandidate(iceCandidate).catch(err => console.warn('[WebRTC] addIceCandidate error:', err.message));
         }
@@ -1064,7 +1078,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260430] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260431] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
