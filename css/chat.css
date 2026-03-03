@@ -779,8 +779,6 @@
   border: 1px solid var(--border); /* Thin border only */
   border-radius: var(--r2);
   overflow: visible; /* Allow label to be visible outside */
-  min-height: 60px; /* Smaller */
-  max-height: 120px; /* Limit max size */
   width: 100%;
   max-width: 100%;
 }
