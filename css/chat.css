@@ -794,15 +794,15 @@
 
 .events-cam-slot-label {
   position: absolute;
-  bottom: 4px;
-  left: 4px;
-  right: 4px;
-  background: rgba(0,0,0,.7);
-  color: #fff;
+  bottom: -20px; /* Below the cam */
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: var(--tx1);
   font-size: var(--fz-xs);
-  padding: 2px 6px;
-  border-radius: var(--r1);
+  padding: 4px 0;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+  background: transparent;
 }

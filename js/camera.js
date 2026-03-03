@@ -398,6 +398,19 @@ export function handleCamRequest(payload) {
     return;
   }
 
+  /* Events room: auto-accept public camera requests (cameras are public) */
+  if (payload.reqType === 'public' && payload.room_id === state.activeRoom) {
+    const availableRooms = getAvailableRooms();
+    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+    const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
+    
+    if (isEventsRoom) {
+      /* Auto-accept in Events room - cameras are public */
+      sharePublicCameraTo(fromId);
+      return;
+    }
+  }
+
   if (payload.reqType === 'public') {
     dom.camReqBody.textContent   = `${fromName} wants to see your camera.`;
     dom.camReqOverlay.hidden     = false;

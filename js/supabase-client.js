@@ -124,8 +124,23 @@ export async function connectSupabase() {
         else if (inMyRoom) ensureUser(fromId, payload.fromName, { hasCamera: true, online: true });
         renderUsers();
         
-        /* Update events cam grid if active room has max_cams */
-        if (camRoom === state.activeRoom) {
+        /* Events room: automatically request camera (public, no request needed) */
+        if (camRoom === state.activeRoom && inMyRoom) {
+          const { getAvailableRooms } = await import('./rooms.js');
+          const availableRooms = getAvailableRooms();
+          const roomData = availableRooms.find(r => String(r.id) === String(camRoom));
+          const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
+          
+          if (isEventsRoom) {
+            /* Automatically accept and show camera in Events room */
+            const { requestPublicCamera } = await import('./camera.js');
+            /* Small delay to ensure user is ready */
+            setTimeout(() => {
+              requestPublicCamera(fromId);
+            }, 200);
+          }
+          
+          /* Update events cam grid */
           const { updateEventsCamGrid } = await import('./rooms.js');
           updateEventsCamGrid();
         }
