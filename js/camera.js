@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260431 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260432 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -822,14 +822,16 @@ export async function handleWebRTCSignal(payload) {
       }
     } else if (sigType === 'ice') {
       /* Route ICE candidate to correct PC based on 'dir' field:
-         - dir:'out' means sender sent from their outgoingPC → goes to our outgoingPC (same connection, opposite side)
-         - dir:'in'  means sender sent from their incomingPC → goes to our incomingPC (same connection, opposite side)
+         - dir:'out' means sender sent from their outgoingPC (sharing their cam TO us)
+           → goes to our incomingPC (the one receiving their cam)
+         - dir:'in'  means sender sent from their incomingPC (receiving our cam FROM us)
+           → goes to our outgoingPC (the one sharing our cam)
          - no dir (legacy): try outgoingPC first, then incomingPC */
       let pc;
       if (dir === 'out') {
-        pc = state.outgoingPCs[from]; /* Their outgoing → our outgoing (they answer our offer) */
+        pc = state.incomingPCs[from]; /* Their outgoing shares to us → our incoming receives */
       } else if (dir === 'in') {
-        pc = state.incomingPCs[from]; /* Their incoming → our incoming (they answer our receive) */
+        pc = state.outgoingPCs[from]; /* Their incoming receives from us → our outgoing shares */
       } else {
         pc = state.outgoingPCs[from] || state.incomingPCs[from]; /* Legacy fallback */
       }
@@ -1078,7 +1080,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260431] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260432] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
