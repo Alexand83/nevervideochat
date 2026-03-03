@@ -755,8 +755,8 @@
 /* Events Room Camera Grid - Dynamic autoresize */
 .events-cam-grid {
   display: grid;
-  gap: 6px; /* Smaller gap */
-  padding: 8px 8px 36px 8px; /* Smaller padding, extra bottom for labels */
+  gap: 8px; /* Balanced gap */
+  padding: 10px 10px 38px 10px; /* Balanced padding, extra bottom for labels */
   background: transparent; /* No background */
   width: 100%;
   overflow: visible; /* Allow labels to be visible */
@@ -765,7 +765,7 @@
 
 .events-cam-grid[data-cols='1'] { 
   grid-template-columns: 1fr;
-  max-width: 200px; /* Smaller single cam */
+  max-width: 320px; /* Balanced single cam size */
   margin: 0 auto; /* Center single cam */
 }
 .events-cam-grid[data-cols='2'] { grid-template-columns: repeat(2, 1fr); }
