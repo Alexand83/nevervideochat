@@ -170,7 +170,7 @@ export function switchRoom(roomId) {
       /* Request cameras from all users who have them open in this room */
       /* Increased delay to ensure WebRTC connections are ready */
       setTimeout(async () => {
-        const { requestPublicCamera } = await import('./camera.js?v=20260426');
+        const { requestPublicCamera } = await import('./camera.js?v=20260427');
         const allUsers = Object.values(room.users);
         console.log('[Events Room] All users in room:', allUsers.map(u => ({ id: u.id, name: u.name, hasCamera: u.hasCamera, online: u.online })));
         const usersWithCam = allUsers.filter(user => 

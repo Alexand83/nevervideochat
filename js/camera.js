@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260426 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260427 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -611,22 +611,30 @@ export async function handleWebRTCSignal(payload) {
       /* Prevent duplicate PC creation — if we're already processing an offer for this user, ignore */
       if (state.incomingPCs[from]) {
         const existingPc = state.incomingPCs[from];
-        /* If PC is already in a stable/connected state, close it and create new one */
+        const existingCw = state.cameraWindows[from];
+        const hasWorkingVideo = existingCw?.isEventsGrid && existingCw.el?.querySelector('video')?.srcObject;
+        
+        /* If PC is already connected and video is working, IGNORE new offer (guest probably just riactivated cam) */
+        if (existingPc.connectionState === 'connected' && hasWorkingVideo) {
+          console.log('[WebRTC] Ignoring new offer from', from, '— incoming PC already connected with working video');
+          return;
+        }
+        
+        /* If PC is in stable state but not connected, or connected but video not working, close and recreate */
         if (existingPc.signalingState === 'stable' || existingPc.connectionState === 'connected') {
-          console.log('[WebRTC] Closing existing incoming peer connection for', from, 'state:', existingPc.signalingState, existingPc.connectionState);
+          console.log('[WebRTC] Closing existing incoming peer connection for', from, 'state:', existingPc.signalingState, existingPc.connectionState, 'hasWorkingVideo:', hasWorkingVideo);
           existingPc.close();
           delete state.incomingPCs[from];
           
           /* Remove old slot from Events grid to avoid black screen with dead video */
-          const oldCw = state.cameraWindows[from];
-          if (oldCw?.isEventsGrid && oldCw.el && oldCw.el.parentNode) {
+          if (existingCw?.isEventsGrid && existingCw.el && existingCw.el.parentNode) {
             console.log('[WebRTC] Removing old slot for', from, 'before creating new connection');
-            const oldVideo = oldCw.el.querySelector('video');
+            const oldVideo = existingCw.el.querySelector('video');
             if (oldVideo) {
               oldVideo.pause();
               oldVideo.srcObject = null; /* Abort any pending play() */
             }
-            oldCw.el.remove();
+            existingCw.el.remove();
             delete state.cameraWindows[from];
             /* Delay to ensure DOM cleanup completes before new stream arrives */
             await new Promise(r => setTimeout(r, 100));
@@ -653,9 +661,10 @@ export async function handleWebRTCSignal(payload) {
           }
           console.log('[WebRTC] Outgoing PC state after wait:', outgoingPc.connectionState, 'waited:', waited, 'ms');
         } else if (outgoingState === 'connected') {
-          /* Outgoing PC is already connected — add small delay to let ICE resources free up */
-          console.log('[WebRTC] Outgoing PC connected for', from, '— delaying incoming PC by 300ms');
-          await new Promise(r => setTimeout(r, 300));
+          /* Outgoing PC is already connected — add delay to let ICE resources free up
+             When outgoing PC is connected, incoming PC might struggle to connect due to resource contention */
+          console.log('[WebRTC] Outgoing PC connected for', from, '— delaying incoming PC by 500ms to free ICE resources');
+          await new Promise(r => setTimeout(r, 500));
         }
       }
       
@@ -1066,7 +1075,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260426] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260427] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
