@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260429 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260430 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -612,69 +612,26 @@ export async function handleWebRTCSignal(payload) {
       if (state.incomingPCs[from]) {
         const existingPc = state.incomingPCs[from];
         const existingCw = state.cameraWindows[from];
-        const hasWorkingVideo = existingCw?.isEventsGrid && existingCw.el?.querySelector('video')?.srcObject;
+        /* Always close old incoming PC and accept the new offer.
+           Whether it's a duplicate or a new camera activation, we need to process it.
+           ICE candidate buffering (below) ensures candidates are applied correctly. */
+        console.log('[WebRTC] Closing existing incoming PC for', from, 'to accept new offer. state:', existingPc.signalingState, existingPc.connectionState);
+        existingPc.close();
+        delete state.incomingPCs[from];
         
-        /* If PC is already connected and video is working, IGNORE new offer (guest probably just riactivated cam) */
-        if (existingPc.connectionState === 'connected' && hasWorkingVideo) {
-          console.log('[WebRTC] Ignoring new offer from', from, '— incoming PC already connected with working video');
-          return;
-        }
-        
-        /* If PC is in stable state but not connected, or connected but video not working, close and recreate */
-        if (existingPc.signalingState === 'stable' || existingPc.connectionState === 'connected') {
-          console.log('[WebRTC] Closing existing incoming peer connection for', from, 'state:', existingPc.signalingState, existingPc.connectionState, 'hasWorkingVideo:', hasWorkingVideo);
-          existingPc.close();
-          delete state.incomingPCs[from];
-          
-          /* Remove old slot from Events grid to avoid black screen with dead video */
-          if (existingCw?.isEventsGrid && existingCw.el && existingCw.el.parentNode) {
-            console.log('[WebRTC] Removing old slot for', from, 'before creating new connection');
-            const oldVideo = existingCw.el.querySelector('video');
-            if (oldVideo) {
-              oldVideo.pause();
-              oldVideo.srcObject = null; /* Abort any pending play() */
-            }
-            existingCw.el.remove();
-            delete state.cameraWindows[from];
-            /* Delay to ensure DOM cleanup completes before new stream arrives */
-            await new Promise(r => setTimeout(r, 100));
-          }
-        } else {
-          /* PC is still being set up — ignore duplicate offer */
-          console.warn('[WebRTC] Ignoring duplicate offer from', from, '— PC already exists in state:', existingPc.signalingState);
-          return;
+        /* Remove old slot from Events grid to avoid stale video */
+        if (existingCw?.isEventsGrid && existingCw.el && existingCw.el.parentNode) {
+          const oldVideo = existingCw.el.querySelector('video');
+          if (oldVideo) { oldVideo.pause(); oldVideo.srcObject = null; }
+          existingCw.el.remove();
+          delete state.cameraWindows[from];
+          await new Promise(r => setTimeout(r, 50));
         }
       }
-      
-      /* If we have an active outgoing PC for this user, it might interfere with incoming PC ICE negotiation.
-         Close it temporarily to give incoming PC priority, then recreate it after incoming PC connects. */
-      const outgoingPc = state.outgoingPCs[from];
-      if (outgoingPc) {
-        const outgoingState = outgoingPc.connectionState;
-        if (outgoingState === 'connecting' || outgoingState === 'new') {
-          console.log('[WebRTC] Outgoing PC exists for', from, 'in state', outgoingState, '— waiting for stabilization');
-          /* Wait up to 500ms for outgoing PC to connect, then proceed anyway */
-          let waited = 0;
-          while (waited < 500 && (outgoingPc.connectionState === 'connecting' || outgoingPc.connectionState === 'new')) {
-            await new Promise(r => setTimeout(r, 50));
-            waited += 50;
-          }
-          console.log('[WebRTC] Outgoing PC state after wait:', outgoingPc.connectionState, 'waited:', waited, 'ms');
-          if (outgoingPc.connectionState === 'connected') {
-            /* Outgoing PC connected during wait — close it temporarily */
-            outgoingPc.close();
-            delete state.outgoingPCs[from];
-            console.log('[WebRTC] Outgoing PC closed for', from, '— will recreate after incoming PC connects');
-          }
-        } else if (outgoingState === 'connected') {
-          /* Outgoing PC is already connected — close it temporarily to free ICE resources
-             We'll recreate it after incoming PC connects */
-          console.log('[WebRTC] Outgoing PC connected for', from, '— closing temporarily to prioritize incoming PC');
-          outgoingPc.close();
-          delete state.outgoingPCs[from];
-          console.log('[WebRTC] Outgoing PC closed for', from, '— will recreate after incoming PC connects');
-        }
-      }
+      /* NOTE: We intentionally do NOT close the outgoing PC when an offer arrives.
+         Both incoming and outgoing PCs can coexist independently.
+         ICE candidate buffering below handles the case where candidates arrive
+         before setRemoteDescription is called. */
       
       console.log('[WebRTC] Creating new incoming peer connection for', from);
       const pc = new RTCPeerConnection(ICE_SERVERS);
@@ -718,20 +675,6 @@ export async function handleWebRTCSignal(payload) {
 
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
-        
-        /* If incoming PC connects and we don't have outgoing PC but should (we have camera), recreate it */
-        if (pc.connectionState === 'connected' && !state.outgoingPCs[from]) {
-          /* Check if we still have local stream and user still has camera — if so, we closed outgoing PC earlier */
-          if (state.localStream && state.currentUser?.hasCamera) {
-            console.log('[WebRTC] Incoming PC connected for', from, '— recreating outgoing PC');
-            setTimeout(() => {
-              /* Recreate outgoing PC to share our camera with the guest */
-              sharePublicCameraTo(from).catch(err => {
-                console.warn('[WebRTC] Failed to recreate outgoing PC for', from, ':', err);
-              });
-            }, 300); /* Delay to let incoming PC fully stabilize */
-          }
-        }
         
         if (pc.connectionState === 'failed') {
           /* Only act if this PC is still the current one */
@@ -1121,7 +1064,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260429] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260430] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
