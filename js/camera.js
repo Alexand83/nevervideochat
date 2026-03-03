@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260420 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260421 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -619,8 +619,15 @@ export async function handleWebRTCSignal(payload) {
         const oldCw = state.cameraWindows[from];
         if (oldCw?.isEventsGrid && oldCw.el && oldCw.el.parentNode) {
           console.log('[WebRTC] Removing old slot for', from, 'before creating new connection');
+          const oldVideo = oldCw.el.querySelector('video');
+          if (oldVideo) {
+            oldVideo.pause();
+            oldVideo.srcObject = null; /* Abort any pending play() */
+          }
           oldCw.el.remove();
           delete state.cameraWindows[from];
+          /* Small delay to ensure DOM cleanup completes before new stream arrives */
+          await new Promise(r => setTimeout(r, 50));
         }
       }
       console.log('[WebRTC] Creating new incoming peer connection for', from);
@@ -941,7 +948,13 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           /* Same stream ID but dead — remove and rebuild */
           console.log('[Events Grid] Old stream is dead for', uid, '— rebuilding slot');
         }
+      } else if (oldStream && oldStream.id !== stream.id) {
+        /* Different stream — always rebuild when stream ID changes */
+        console.log('[Events Grid] Different stream ID for', uid, 'old:', oldStream.id, 'new:', stream.id);
       }
+    } else if (existingVideo && !existingVideo.srcObject) {
+      /* Video exists but no stream — dead slot, rebuild */
+      console.log('[Events Grid] Slot has video but no stream for', uid, '— rebuilding');
     }
     /* New/different stream OR stream is null/undefined OR video is missing OR old stream is dead
        — MUST rebuild slot completely to avoid black screen */
@@ -994,7 +1007,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260420] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260421] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
