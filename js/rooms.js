@@ -162,8 +162,24 @@ export function switchRoom(roomId) {
   /* Update camera button to reflect whether cam is active in this room */
   _updateCamBtn();
   
-  /* Events room: cameras are automatically shared when opened, no request needed */
-  /* The cam-opened broadcast handler will trigger automatic connection */
+  /* Events room: automatically request cameras from users who already have them open */
+  if (maxCams && maxCams >= 1 && maxCams <= 8) {
+    const room = state.rooms[roomIdStr];
+    if (room) {
+      /* Request cameras from all users who have them open in this room */
+      setTimeout(async () => {
+        const { requestPublicCamera } = await import('./camera.js');
+        Object.values(room.users).forEach(user => {
+          if (user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)) {
+            if (!state.cameraWindows[user.id]) {
+              /* Request camera - will be auto-accepted in Events room */
+              requestPublicCamera(user.id);
+            }
+          }
+        });
+      }, 500); /* Small delay to ensure room is fully set up */
+    }
+  }
 }
 
 function _updateCamBtn() {

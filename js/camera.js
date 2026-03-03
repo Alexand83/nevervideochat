@@ -555,7 +555,15 @@ export async function handleWebRTCSignal(payload) {
       const pc = new RTCPeerConnection(ICE_SERVERS);
       state.incomingPCs[from] = pc;
       pc.onicecandidate = ({ candidate: c }) => { if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public' }); };
-      pc.ontrack = ({ streams }) => { ensureUser(from, payload.fromName); openRemoteCamWindow(from, streams[0]); };
+      pc.ontrack = ({ streams }) => {
+        if (streams && streams[0]) {
+          ensureUser(from, payload.fromName);
+          /* Small delay to ensure stream is ready */
+          setTimeout(() => {
+            openRemoteCamWindow(from, streams[0]);
+          }, 100);
+        }
+      };
       await pc.setRemoteDescription({ type: 'offer', sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -596,6 +604,16 @@ export async function handleWebRTCSignal(payload) {
 function openRemoteCamWindow(uid, stream) {
   clearPendingCamRequest(String(uid));
   const user = findUser(uid);
+  
+  /* Check if we're in Events room - if so, ensure grid is visible */
+  const availableRooms = getAvailableRooms();
+  const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+  const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
+  
+  if (isEventsRoom && dom.eventsCamGrid) {
+    dom.eventsCamGrid.hidden = false;
+  }
+  
   createCameraWindow(uid, stream, user?.name || uid, false);
 }
 
