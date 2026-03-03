@@ -1,0 +1,76 @@
+﻿@media (max-width: 768px) {
+
+  /* Show mobile toggle */
+  .users-toggle-btn { display: flex; }
+  .close-panel-btn  { display: flex; }
+
+  /* Hide camera button label on small viewport */
+  .camera-btn .hdr-btn-label { display: none; }
+
+  /* Users panel becomes a slide-in drawer */
+  .users-panel {
+    position: fixed;
+    top: var(--hdr-h);
+    right: 0;
+    height: calc(100dvh - var(--hdr-h));
+    transform: translateX(100%);
+    transition: transform var(--ts);
+    z-index: 200;
+    box-shadow: var(--sh-xl);
+  }
+  .users-panel.open { transform: translateX(0); }
+
+  /* Panel overlay */
+  .panel-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 190;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--ts);
+  }
+  .panel-overlay.show { opacity: 1; pointer-events: all; }
+
+  /* Wider message bubbles on mobile */
+  .msg-content { max-width: 86%; }
+
+  /* Floating private chats stack on top of each other */
+  .private-chat-cont {
+    left: var(--s2);
+    right: var(--s2);
+    bottom: 62px;
+  }
+  .pchat-popup {
+    width: 100%;
+    max-width: 340px;
+  }
+
+  /* Video call full-width */
+  .vcall-win {
+    width: calc(100vw - 32px);
+    right: 16px;
+    left: 16px;
+    top: 70px;
+  }
+
+  /* Emoji panel full width */
+  .emoji-panel { left: 0; right: 0; width: auto; border-radius: 0; bottom: calc(100% + 1px); }
+  .emoji-grid  { grid-template-columns: repeat(7, 1fr); }
+}
+
+@media (max-width: 440px) {
+  .emoji-grid { grid-template-columns: repeat(6, 1fr); }
+  .logo-text  { font-size: var(--fz-base); }
+  .logo-img   { height: 30px; }
+  .logo-icon-svg { width: 30px; height: 30px; }
+}
+
+/* iOS safe-area bottom insets */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .chat-input-area { padding-bottom: env(safe-area-inset-bottom); }
+  .minimised-bar   { padding-bottom: calc(var(--s2) + env(safe-area-inset-bottom)); }
+}
+
+/* ─── 16. CAMERA WINDOWS (multi-window system) ─────────────────────
