@@ -1,0 +1,164 @@
+/* ================================================================
+   games.css  — Stili per il pannello giochi
+================================================================ */
+
+.games-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 320px;
+  background: var(--bg-secondary, #1e1e2e);
+  border-left: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.3);
+}
+
+.games-panel.open {
+  transform: translateX(0);
+}
+
+.games-panel .panel-hdr {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-primary, #0f0f1e);
+}
+
+.games-panel .panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin: 0;
+}
+
+.games-panel-content-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.games-panel-body {
+  min-height: 100%;
+}
+
+.games-panel-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-secondary, rgba(255,255,255,0.6));
+  font-size: 14px;
+}
+
+.games-panel-header {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--clr-primary, #6a1b9a);
+}
+
+.games-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-hint,
+.game-stats,
+.game-instruction,
+.game-host,
+.game-statement,
+.game-question-number,
+.game-question,
+.game-option {
+  padding: 8px 12px;
+  background: var(--bg-tertiary, rgba(255,255,255,0.05));
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-primary, #fff);
+  line-height: 1.5;
+}
+
+.game-hint {
+  background: linear-gradient(135deg, rgba(106,27,154,0.2), rgba(156,39,176,0.2));
+  border-left: 3px solid var(--clr-primary, #6a1b9a);
+}
+
+.game-stats {
+  background: rgba(76,175,80,0.15);
+  border-left: 3px solid #4caf50;
+  font-weight: 600;
+}
+
+.game-instruction {
+  background: rgba(33,150,243,0.15);
+  border-left: 3px solid #2196f3;
+  font-size: 13px;
+}
+
+.game-instruction code {
+  background: rgba(0,0,0,0.3);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.game-host {
+  background: rgba(255,193,7,0.15);
+  border-left: 3px solid #ffc107;
+  font-weight: 600;
+}
+
+.game-statement {
+  background: rgba(255,255,255,0.08);
+  border-left: 3px solid rgba(255,255,255,0.3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.game-statement:hover {
+  background: rgba(255,255,255,0.12);
+  transform: translateX(4px);
+}
+
+.game-question-number {
+  background: rgba(106,27,154,0.2);
+  border-left: 3px solid var(--clr-primary, #6a1b9a);
+  font-weight: 600;
+  text-align: center;
+}
+
+.game-question {
+  background: rgba(33,150,243,0.15);
+  border-left: 3px solid #2196f3;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.game-option {
+  background: rgba(255,255,255,0.05);
+  border-left: 3px solid rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.game-option:hover {
+  background: rgba(255,255,255,0.1);
+  transform: translateX(4px);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .games-panel {
+    width: 100%;
+    z-index: 1000;
+  }
+}

@@ -150,6 +150,22 @@ export function switchRoom(roomId) {
   const roomData = availableRoomsCache.find(r => String(r.id) === roomIdStr);
   const maxCams = roomData?.max_cams;
   const isEventsRoom = !!(maxCams && maxCams >= 1 && maxCams <= 8);
+  const isGamesRoom = roomData?.is_games_room === true;
+  
+  /* Show/hide games panel */
+  if (dom.gamesPanel) {
+    if (isGamesRoom) {
+      dom.gamesPanel.hidden = false;
+      dom.gamesPanel.classList.add('open');
+      /* Re-check active game when entering games room */
+      import('./games.js').then(({ checkActiveGame }) => {
+        checkActiveGame();
+      });
+    } else {
+      dom.gamesPanel.hidden = true;
+      dom.gamesPanel.classList.remove('open');
+    }
+  }
   
   if (isEventsRoom) {
     /* ENTERING Events room — cancel any pending camera-off timer */

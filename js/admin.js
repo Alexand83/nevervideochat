@@ -163,6 +163,7 @@ function openRoomEditModal(room = null) {
   const isEventsCheckbox = document.getElementById('roomEditIsEventsRoom');
   const eventsOptions = document.getElementById('roomEditEventsOptions');
   const maxCamsInput = document.getElementById('roomEditMaxCams');
+  const isGamesCheckbox = document.getElementById('roomEditIsGamesRoom');
   
   /* Toggle events options visibility */
   const toggleEventsOptions = () => {
@@ -191,6 +192,7 @@ function openRoomEditModal(room = null) {
     document.getElementById('roomEditPassword').placeholder = 'Leave empty to keep current password';
     isEventsCheckbox.checked = !!(room.max_cams && room.max_cams >= 1 && room.max_cams <= 8);
     maxCamsInput.value = room.max_cams || '';
+    isGamesCheckbox.checked = room.is_games_room === true;
     toggleEventsOptions();
   } else {
     title.textContent = 'Create New Room';
@@ -202,6 +204,7 @@ function openRoomEditModal(room = null) {
     }
     document.getElementById('roomEditPassword').placeholder = 'Leave empty for no password';
     isEventsCheckbox.checked = false;
+    isGamesCheckbox.checked = false;
     toggleEventsOptions();
   }
   dom.roomEditModal.hidden = false;
@@ -219,6 +222,7 @@ async function saveRoom() {
   const isEventsRoom = document.getElementById('roomEditIsEventsRoom').checked;
   const maxCamsInput = document.getElementById('roomEditMaxCams').value.trim();
   const maxCams = isEventsRoom && maxCamsInput ? parseInt(maxCamsInput, 10) : null;
+  const isGamesRoom = document.getElementById('roomEditIsGamesRoom').checked;
   
   if (!name) {
     showToast('⚠️ Room Name is required.');
@@ -233,6 +237,7 @@ async function saveRoom() {
       created_by: state.currentUser.id,
       password: password ? await hashPassword(password) : null,
       max_cams: (isEventsRoom && maxCams && maxCams >= 1 && maxCams <= 8) ? maxCams : null,
+      is_games_room: isGamesRoom,
     };
     
     // Se è un edit, aggiungi l'ID

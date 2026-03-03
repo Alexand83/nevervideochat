@@ -18,6 +18,7 @@ import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initPanelResize, initMobilePanel, setUIDeps } from './ui.js';
 import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
+import { initGames, handleGameCommand } from './games.js';
 
 /* ── Wire cross-module forward references ── */
 setOpenContextMenu(openContextMenu);   /* users.js → context menu */
@@ -25,7 +26,7 @@ setRenderMessage(renderMessage);       /* rooms.js → chat renderer */
 setLoadRoomMessages(connectRoom);      /* rooms.js → supabase room loader */
 
 const supabaseReady = () => !!state.supa;
-setChatDeps(openContextMenu, uploadToStorage, supabaseReady, renderRoomTabs, broadcast);
+setChatDeps(openContextMenu, uploadToStorage, supabaseReady, renderRoomTabs, broadcast, handleGameCommand);
 setPChatDeps(supabaseReady);
 setUIDeps(uploadToStorage, supabaseReady);
 
@@ -111,6 +112,7 @@ export async function finishInit() {
   renderUsers();
   updateHeaderUser();
   updateAdminButton(); /* Check admin access and show/hide button */
+  initGames(); /* Initialize games system */
   connectSupabase().catch(err => console.error('[NVC]', err));
   dom.msgInput?.focus();
 }

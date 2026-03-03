@@ -67,6 +67,11 @@ export const dom = {
   closePanelBtn:    $('closePanelBtn'),
   panelOverlay:     $('panelOverlay'),
 
+  /* Games panel */
+  gamesPanel:       $('gamesPanel'),
+  gamesPanelBody:   $('gamesPanelBody'),
+  closeGamesPanelBtn: $('closeGamesPanelBtn'),
+
   /* Private chat */
   privateChatCont: $('privateChatCont'),
   minimisedBar:    $('minimisedBar'),

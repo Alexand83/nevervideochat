@@ -12,12 +12,14 @@ let _uploadToStorage = null;
 let _supabaseReady   = null;
 let _renderRoomTabs  = null;
 let _broadcast       = null;
-export function setChatDeps(openCtx, uploadStorage, supaReady, renderTabs, broadcast) {
+let _handleGameCommand = null;
+export function setChatDeps(openCtx, uploadStorage, supaReady, renderTabs, broadcast, handleGameCmd) {
   _openContextMenu = openCtx;
   _uploadToStorage = uploadStorage;
   _supabaseReady   = supaReady;
   _renderRoomTabs  = renderTabs;
   _broadcast       = broadcast;
+  _handleGameCommand = handleGameCmd;
 }
 
 /* ── Extract quote metadata from persisted message content ── */
@@ -224,6 +226,17 @@ export async function sendMessage() {
     showToast(`🔇 You are muted ${scope} and cannot send messages.`);
     return;
   }
+  
+  /* Check for game commands BEFORE processing message */
+  const textContent = dom.msgInput.textContent || dom.msgInput.innerText || '';
+  if (_handleGameCommand && textContent.trim().startsWith('/game')) {
+    const handled = _handleGameCommand(textContent);
+    if (handled) {
+      dom.msgInput.innerHTML = '';
+      return; /* Don't send as regular message */
+    }
+  }
+  
   let html = dom.msgInput.innerHTML.trim().replace(/^(<br\s*\/?>)+|(<br\s*\/?>)+$/gi, '').trim();
   const hasText  = html.length > 0 && html !== '<br>';
   const hasImage = !!state.pendingImage;

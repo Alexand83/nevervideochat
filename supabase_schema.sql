@@ -416,6 +416,64 @@ CREATE POLICY "Admin manage themes" ON public.themes FOR ALL USING (
 -- Add column to rooms for max_cams
 ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS max_cams INTEGER DEFAULT NULL;
 
+-- Add column to rooms for is_games_room
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS is_games_room BOOLEAN DEFAULT FALSE;
+
+-- ── Tabella giochi attivi ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.active_games (
+  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  room_id     TEXT        NOT NULL,
+  game_type   TEXT        NOT NULL,  -- 'song', 'truth_lie', 'quiz'
+  game_state  JSONB       DEFAULT '{}'::jsonb,  -- stato del gioco (domande, risposte, timer, etc.)
+  host_id     TEXT        NOT NULL,  -- chi ha avviato il gioco
+  started_at  TIMESTAMPTZ DEFAULT NOW(),
+  ended_at    TIMESTAMPTZ DEFAULT NULL,
+  is_active   BOOLEAN     DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS active_games_room_id_idx ON public.active_games (room_id);
+CREATE INDEX IF NOT EXISTS active_games_is_active_idx ON public.active_games (is_active);
+
+-- RLS for active_games
+ALTER TABLE public.active_games ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read active games" ON public.active_games;
+DROP POLICY IF EXISTS "Public insert active games" ON public.active_games;
+DROP POLICY IF EXISTS "Public update active games" ON public.active_games;
+
+CREATE POLICY "Public read active games" ON public.active_games FOR SELECT USING (true);
+CREATE POLICY "Public insert active games" ON public.active_games FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update active games" ON public.active_games FOR UPDATE USING (true) WITH CHECK (true);
+
+-- ── Tabella punteggi giochi ────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.game_scores (
+  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id     TEXT        NOT NULL,
+  username    TEXT        NOT NULL,
+  room_id     TEXT        NOT NULL,
+  game_type   TEXT        NOT NULL,  -- 'song', 'truth_lie', 'quiz'
+  score       INTEGER     DEFAULT 0,
+  games_played INTEGER    DEFAULT 0,
+  wins        INTEGER     DEFAULT 0,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, room_id, game_type)
+);
+
+CREATE INDEX IF NOT EXISTS game_scores_user_id_idx ON public.game_scores (user_id);
+CREATE INDEX IF NOT EXISTS game_scores_room_id_idx ON public.game_scores (room_id);
+CREATE INDEX IF NOT EXISTS game_scores_game_type_idx ON public.game_scores (game_type);
+CREATE INDEX IF NOT EXISTS game_scores_score_idx ON public.game_scores (score DESC);
+
+-- RLS for game_scores
+ALTER TABLE public.game_scores ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read game scores" ON public.game_scores;
+DROP POLICY IF EXISTS "Public insert game scores" ON public.game_scores;
+DROP POLICY IF EXISTS "Public update game scores" ON public.game_scores;
+
+CREATE POLICY "Public read game scores" ON public.game_scores FOR SELECT USING (true);
+CREATE POLICY "Public insert game scores" ON public.game_scores FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update game scores" ON public.game_scores FOR UPDATE USING (true) WITH CHECK (true);
+
 -- ================================================================
 --  STORAGE — bucket "chat-media"
 --
