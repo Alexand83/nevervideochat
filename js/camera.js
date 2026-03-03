@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260424 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260425 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -1044,7 +1044,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260424] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260425] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
@@ -1072,18 +1072,32 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
       const playPromise = video.play();
       if (playPromise && typeof playPromise.then === 'function') {
         /* Set a timeout to detect if play() is hanging (common on Edge/Windows when ICE not connected) */
+        let playRetryCount = 0;
+        const MAX_PLAY_RETRIES = 5;
         const playTimeout = setTimeout(() => {
+          /* Check if play() is still pending (video is paused and has srcObject) */
           if (!playStarted && video.parentNode && video.paused && video.srcObject) {
-            console.log('[Events Grid] play() hanging for', uid, '— forcing retry after 1s');
+            playRetryCount++;
+            console.log('[Events Grid] play() hanging for', uid, `— forcing retry ${playRetryCount}/${MAX_PLAY_RETRIES} after 1s`);
             /* Force retry — play() might be waiting for ICE connection */
             video.play().then(() => {
               if (!playStarted) {
                 playStarted = true;
-                console.log('[Events Grid] Playing for', uid, '(forced retry) — unmuting:', !isOwn);
+                console.log('[Events Grid] Playing for', uid, `(forced retry ${playRetryCount}) — unmuting:`, !isOwn);
                 if (!isOwn) video.muted = false;
               }
             }).catch(err => {
-              if (err.name !== 'AbortError') console.warn('[Events Grid] Forced retry play() failed:', err.name);
+              if (err.name !== 'AbortError') {
+                console.warn('[Events Grid] Forced retry play() failed:', err.name);
+                /* If retry failed and we haven't reached max, schedule another retry */
+                if (playRetryCount < MAX_PLAY_RETRIES && video.parentNode && video.srcObject) {
+                  setTimeout(() => {
+                    if (!playStarted && video.paused && video.srcObject) {
+                      video.play().catch(console.warn);
+                    }
+                  }, 1000);
+                }
+              }
             });
           }
         }, 1000);
@@ -1126,6 +1140,49 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           });
         }
       }, 3000);
+      
+      /* Continuous retry: force play() every 2 seconds until video starts playing
+         This handles cases where play() hangs indefinitely on Edge/Windows */
+      const continuousRetry = setInterval(() => {
+        if (playStarted) {
+          clearInterval(continuousRetry);
+          return;
+        }
+        if (!video.parentNode || !video.srcObject) {
+          clearInterval(continuousRetry);
+          return;
+        }
+        /* If video is paused, force play() */
+        if (video.paused) {
+          console.log('[Events Grid] Continuous retry — forcing play() for', uid);
+          video.play().then(() => {
+            if (!playStarted) {
+              playStarted = true;
+              clearInterval(continuousRetry);
+              console.log('[Events Grid] Playing for', uid, '(continuous retry) — unmuting:', !isOwn);
+              if (!isOwn) video.muted = false;
+            }
+          }).catch(err => {
+            if (err.name !== 'AbortError') {
+              console.warn('[Events Grid] Continuous retry play() failed:', err.name);
+            }
+          });
+        } else {
+          /* Video is playing — mark as started and stop retry */
+          playStarted = true;
+          clearInterval(continuousRetry);
+          console.log('[Events Grid] Playing for', uid, '(detected playing) — unmuting:', !isOwn);
+          if (!isOwn) video.muted = false;
+        }
+      }, 2000);
+      
+      /* Stop continuous retry after 30 seconds */
+      setTimeout(() => {
+        clearInterval(continuousRetry);
+        if (!playStarted) {
+          console.warn('[Events Grid] Continuous retry stopped for', uid, '— video still not playing after 30s');
+        }
+      }, 30000);
     };
 
     const activeTracks = stream.getTracks().filter(t => t.readyState === 'live');

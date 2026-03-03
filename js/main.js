@@ -12,7 +12,7 @@ import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomT
 import { renderUsers, setOpenContextMenu } from './users.js';
 import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate } from './chat.js';
 import { setPChatDeps } from './private-chat.js';
-import { initCameraSystem, initCallControls } from './camera.js?v=20260424';
+import { initCameraSystem, initCallControls } from './camera.js?v=20260425';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initContextMenu, openContextMenu,
          initPanelResize, initMobilePanel, setUIDeps } from './ui.js';
