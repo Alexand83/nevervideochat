@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260417 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260418 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -764,8 +764,16 @@ export async function handleWebRTCSignal(payload) {
     } else if (sigType === 'ice') {
       const pc = state.outgoingPCs[from] || state.incomingPCs[from];
       if (pc && candidate) {
-        console.log('[WebRTC] Remote ICE candidate type:', candidate.type, 'protocol:', candidate.protocol, 'from', from);
-        await pc.addIceCandidate(candidate).catch(console.warn);
+        /* candidate may be deserialized as plain object — reconstruct RTCIceCandidate for logging */
+        const candType = candidate.type || (candidate.candidate?.includes(' typ relay ') ? 'relay' : 
+                                          candidate.candidate?.includes(' typ srflx ') ? 'srflx' : 
+                                          candidate.candidate?.includes(' typ host ') ? 'host' : 'unknown');
+        const candProto = candidate.protocol || (candidate.candidate?.includes(' UDP ') ? 'udp' : 
+                                                 candidate.candidate?.includes(' TCP ') ? 'tcp' : 'unknown');
+        console.log('[WebRTC] Remote ICE candidate type:', candType, 'protocol:', candProto, 'from', from);
+        /* Reconstruct RTCIceCandidate if needed (WebRTC accepts plain objects too, but safer) */
+        const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidate);
+        await pc.addIceCandidate(iceCandidate).catch(console.warn);
       }
     }
   }
@@ -905,16 +913,20 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
         if (existingVideo.paused) existingVideo.play().catch(() => {});
         return;
       }
-      /* New/different stream — MUST abort any pending play before touching srcObject
-         to avoid AbortError "play interrupted because media was removed from document" */
-      console.log('[Events Grid] Updating stream for', uid);
+    }
+    /* New/different stream OR stream is null/undefined OR video is missing
+       — MUST rebuild slot completely to avoid black screen */
+    console.log('[Events Grid] Rebuilding slot for', uid, 'stream:', stream ? 'new' : 'null', 'existingVideo:', !!existingVideo);
+    if (existingVideo) {
       existingVideo.pause();
       existingVideo.srcObject = null;   /* ← aborts pending play cleanly */
-      /* Fall through to rebuild slot content with new stream (cleaner than re-use) */
     }
-    /* Slot exists (video missing or stream replaced) — rebuild content */
-    /* (no early-return: code continues below to rebuild targetSlot) */
-  } else {
+    /* Remove old slot completely and create fresh one */
+    targetSlot.remove();
+    targetSlot = null;
+  }
+  
+  if (!targetSlot) {
     /* Check max_cams limit */
     const availableRooms = getAvailableRooms();
     const maxCams = availableRooms.find(r => String(r.id) === String(state.activeRoom))?.max_cams;
@@ -953,7 +965,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260416] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260418] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
