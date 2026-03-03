@@ -476,14 +476,23 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
     /* If kicked user is current user, handle it */
     if (String(userId) === String(state.currentUser?.id)) {
       if (isGlobal) {
-        showToast(`👢 You have been kicked from all rooms for ${mins} minutes.`);
-        setTimeout(() => location.reload(), 2000);
+        /* Leave all rooms and show kick overlay */
+        const { leaveRoom } = await import('./rooms.js');
+        const { renderRoomTabs } = await import('./rooms.js');
+        for (const rId of Object.keys(state.rooms)) {
+          await leaveRoom(rId);
+        }
+        renderRoomTabs();
+        const { showKickOverlay } = await import('./kick-ban.js');
+        await showKickOverlay(null, expiresAt, true);
       } else {
-        showToast(`👢 You have been kicked from this room for ${mins} minutes.`);
+        /* Leave this room and show kick overlay */
         const { leaveRoom } = await import('./rooms.js');
         const { renderRoomTabs } = await import('./rooms.js');
         await leaveRoom(state.activeRoom);
         renderRoomTabs();
+        const { showKickOverlay } = await import('./kick-ban.js');
+        await showKickOverlay(state.activeRoom, expiresAt, false);
       }
     }
     return true;
@@ -545,10 +554,17 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
     /* Broadcast ban event - user must leave ALL rooms */
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin/mod', expires_at: expiresAt });
     
-    /* If banned user is current user, force disconnect */
+    /* If banned user is current user, show ban overlay */
     if (String(userId) === String(state.currentUser?.id)) {
-      showToast(`🚫 You have been banned. Reason: ${reason || 'No reason provided'}`);
-      setTimeout(() => location.reload(), 2000);
+      /* Leave all rooms and show ban overlay */
+      const { leaveRoom } = await import('./rooms.js');
+      const { renderRoomTabs } = await import('./rooms.js');
+      for (const rId of Object.keys(state.rooms)) {
+        await leaveRoom(rId);
+      }
+      renderRoomTabs();
+      const { showBanOverlay } = await import('./kick-ban.js');
+      showBanOverlay(reason || 'No reason provided', expiresAt);
     }
     return true;
   } catch (err) {

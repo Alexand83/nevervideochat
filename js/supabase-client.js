@@ -149,17 +149,25 @@ export async function connectSupabase() {
             for (const roomId of Object.keys(state.rooms)) {
               state.kickedUsers[targetId][roomId] = payload.expires_at;
             }
-            showToast(`👢 You have been kicked from all rooms until ${new Date(payload.expires_at).toLocaleTimeString()}.`);
-            setTimeout(() => location.reload(), 2000);
+            /* Leave all rooms and show kick overlay */
+            const { leaveRoom } = await import('./rooms.js');
+            const { renderRoomTabs } = await import('./rooms.js');
+            for (const rId of Object.keys(state.rooms)) {
+              await leaveRoom(rId);
+            }
+            renderRoomTabs();
+            const { showKickOverlay } = await import('./kick-ban.js');
+            await showKickOverlay(null, payload.expires_at, true);
           } else {
             state.kickedUsers[targetId][roomId] = payload.expires_at;
-            /* If in that room, leave it */
+            /* If in that room, leave it and show kick overlay */
             if (state.activeRoom === roomId) {
               const { leaveRoom } = await import('./rooms.js');
               const { renderRoomTabs } = await import('./rooms.js');
               await leaveRoom(roomId);
               renderRoomTabs();
-              showToast(`👢 You have been kicked from this room until ${new Date(payload.expires_at).toLocaleTimeString()}.`);
+              const { showKickOverlay } = await import('./kick-ban.js');
+              await showKickOverlay(roomId, payload.expires_at, false);
             }
           }
         }
@@ -177,8 +185,15 @@ export async function connectSupabase() {
         if (isCurrentUser) {
           /* Add to banned cache */
           state.bannedUsers[targetId] = { expires_at: payload.expires_at };
-          showToast('🚫 You have been banned. Reason: ' + (payload.reason || 'No reason provided'));
-          setTimeout(() => location.reload(), 2000);
+          /* Leave all rooms and show ban overlay */
+          const { leaveRoom } = await import('./rooms.js');
+          const { renderRoomTabs } = await import('./rooms.js');
+          for (const rId of Object.keys(state.rooms)) {
+            await leaveRoom(rId);
+          }
+          renderRoomTabs();
+          const { showBanOverlay } = await import('./kick-ban.js');
+          showBanOverlay(payload.reason || 'No reason provided', payload.expires_at);
         }
       })
       .on('broadcast', { event: 'user-muted' }, async ({ payload }) => {

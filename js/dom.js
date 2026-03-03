@@ -193,4 +193,14 @@ export const dom = {
   banDays:             $('banDays'),
   banConfirmBtn:       $('banConfirmBtn'),
   banCancelBtn:        $('banCancelBtn'),
+  
+  /* Kick/Ban overlay */
+  kickBanOverlay:      $('kickBanOverlay'),
+  kickBanIcon:         $('kickBanIcon'),
+  kickBanTitle:        $('kickBanTitle'),
+  kickBanMessage:      $('kickBanMessage'),
+  kickBanMinutes:      $('kickBanMinutes'),
+  kickBanExpires:      $('kickBanExpires'),
+  kickBanActions:      $('kickBanActions'),
+  kickBanEnterBtn:     $('kickBanEnterBtn'),
 };

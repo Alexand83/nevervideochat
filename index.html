@@ -876,6 +876,18 @@
   </div>
 </div>
 
+<!-- Kick/Ban Overlay -->
+<div class="kick-ban-overlay" id="kickBanOverlay" hidden>
+  <div class="kick-ban-content">
+    <div class="kick-ban-icon" id="kickBanIcon">👢</div>
+    <h1 class="kick-ban-title" id="kickBanTitle">You have been kicked</h1>
+    <p class="kick-ban-message" id="kickBanMessage">You cannot rejoin for <span id="kickBanMinutes">X</span> minutes.</p>
+    <p class="kick-ban-expires" id="kickBanExpires"></p>
+    <div class="kick-ban-actions" id="kickBanActions" hidden>
+      <button class="auth-btn-primary" id="kickBanEnterBtn">Enter available room</button>
+    </div>
+  </div>
+</div>
 
 <!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
