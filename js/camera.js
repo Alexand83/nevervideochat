@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260428 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260429 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -612,17 +612,23 @@ export async function handleWebRTCSignal(payload) {
       if (state.incomingPCs[from]) {
         const existingPc = state.incomingPCs[from];
         const existingCw = state.cameraWindows[from];
-        const hasWorkingVideo = existingCw?.isEventsGrid && existingCw.el?.querySelector('video')?.srcObject;
+        const existingVideo = existingCw?.isEventsGrid ? existingCw.el?.querySelector('video') : null;
+        const hasVideoElement = !!existingVideo;
+        const hasStream = !!existingVideo?.srcObject;
+        /* Check if video is actually playing (not paused) and has live tracks */
+        const isVideoPlaying = hasVideoElement && !existingVideo.paused && existingVideo.readyState >= 2; /* HAVE_CURRENT_DATA or higher */
+        const hasLiveTracks = existingVideo?.srcObject?.getTracks().some(t => t.readyState === 'live');
+        const hasWorkingVideo = hasVideoElement && hasStream && isVideoPlaying && hasLiveTracks;
         
         /* If PC is already connected and video is working, IGNORE new offer (guest probably just riactivated cam) */
         if (existingPc.connectionState === 'connected' && hasWorkingVideo) {
-          console.log('[WebRTC] Ignoring new offer from', from, '— incoming PC already connected with working video');
+          console.log('[WebRTC] Ignoring new offer from', from, '— incoming PC already connected with working video (playing:', isVideoPlaying, 'liveTracks:', hasLiveTracks, ')');
           return;
         }
         
         /* If PC is in stable state but not connected, or connected but video not working, close and recreate */
         if (existingPc.signalingState === 'stable' || existingPc.connectionState === 'connected') {
-          console.log('[WebRTC] Closing existing incoming peer connection for', from, 'state:', existingPc.signalingState, existingPc.connectionState, 'hasWorkingVideo:', hasWorkingVideo);
+          console.log('[WebRTC] Closing existing incoming peer connection for', from, 'state:', existingPc.signalingState, existingPc.connectionState, 'hasWorkingVideo:', hasWorkingVideo, 'playing:', isVideoPlaying, 'liveTracks:', hasLiveTracks);
           existingPc.close();
           delete state.incomingPCs[from];
           
@@ -869,9 +875,21 @@ export async function handleWebRTCSignal(payload) {
         const candProto = candidate.protocol || (candidate.candidate?.includes(' UDP ') ? 'udp' : 
                                                  candidate.candidate?.includes(' TCP ') ? 'tcp' : 'unknown');
         console.log('[WebRTC] Remote ICE candidate type:', candType, 'protocol:', candProto, 'from', from);
+        
+        /* Check if PC has remote description — if not, candidate arrived too early (before offer processed) */
+        if (!pc.remoteDescription) {
+          console.warn('[WebRTC] Ignoring ICE candidate from', from, '— PC has no remote description yet (offer not processed)');
+          return;
+        }
+        
         /* Reconstruct RTCIceCandidate if needed (WebRTC accepts plain objects too, but safer) */
         const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidate);
-        await pc.addIceCandidate(iceCandidate).catch(console.warn);
+        await pc.addIceCandidate(iceCandidate).catch(err => {
+          /* Only log if it's not the "remote description null" error (already handled above) */
+          if (err.message && !err.message.includes('remote description')) {
+            console.warn('[WebRTC] Failed to add ICE candidate:', err.message);
+          }
+        });
       }
     }
   }
@@ -1098,7 +1116,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260428] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260429] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
