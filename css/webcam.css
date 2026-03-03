@@ -191,7 +191,8 @@
   transition: opacity var(--tf);
   touch-action: none;
 }
-.cam-resize-handle:hover { opacity: 1; }
+.cam-resize-handle:hover,
+.cam-resize-handle:active { opacity: 1; }
 
 /* ─── Cam viewers panel (on own cam window) ─── */
 .cam-viewers-btn {

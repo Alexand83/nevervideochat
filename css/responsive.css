@@ -72,5 +72,3 @@
   .chat-input-area { padding-bottom: env(safe-area-inset-bottom); }
   .minimised-bar   { padding-bottom: calc(var(--s2) + env(safe-area-inset-bottom)); }
 }
-
-/* ─── 16. CAMERA WINDOWS (multi-window system) ─────────────────────
