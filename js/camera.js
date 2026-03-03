@@ -679,7 +679,7 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   label.title = `Click to view ${name}'s profile`;
   
   /* Add context menu on click */
-  label.addEventListener('click', (e) => {
+  label.addEventListener('click', async (e) => {
     e.stopPropagation();
     const { openContextMenu } = await import('./ui.js');
     state.contextTargetUID = uid;
