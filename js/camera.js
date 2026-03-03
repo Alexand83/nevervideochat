@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260415 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260416 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -575,22 +575,27 @@ export async function sharePublicCameraTo(toUid) {
     broadcast('webrtc', toUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'public' });
     broadcast('cam-accepted', toUid, {});
     
-    /* Monitor connection state */
-    pc.addEventListener('connectionstatechange', () => {
-      console.log('[WebRTC] Outgoing connection state changed:', pc.connectionState, 'for', toUid);
-    });
-    pc.addEventListener('iceconnectionstatechange', () => {
-      console.log('[WebRTC] Outgoing ICE connection state changed:', pc.iceConnectionState, 'for', toUid);
-    });
-
     const viewerUser = findUser(toUid);
     state.camViewers[toUid] = viewerUser?.username || viewerUser?.name || toUid;
     refreshViewersPanel(state.currentUser.id);
 
+    /* Monitor outgoing connection — attempt ICE restart on disconnect before giving up */
     pc.addEventListener('connectionstatechange', () => {
+      console.log('[WebRTC] Outgoing connection state changed:', pc.connectionState, 'for', toUid);
+      if (pc.connectionState === 'disconnected') {
+        /* Try ICE restart — creates new ICE candidates without changing media */
+        console.log('[WebRTC] Outgoing disconnected for', toUid, '— sending ICE restart offer');
+        pc.createOffer({ iceRestart: true })
+          .then(offer => pc.setLocalDescription(offer))
+          .then(() => broadcast('webrtc', toUid, { sigType: 'offer', sdp: pc.localDescription.sdp, ctx: 'public' }))
+          .catch(err => console.warn('[WebRTC] ICE restart offer failed:', err));
+      }
       if (['disconnected','failed','closed'].includes(pc.connectionState)) {
         delete state.camViewers[toUid]; refreshViewersPanel(state.currentUser?.id);
       }
+    });
+    pc.addEventListener('iceconnectionstatechange', () => {
+      console.log('[WebRTC] Outgoing ICE connection state changed:', pc.iceConnectionState, 'for', toUid);
     });
   } catch (err) { showToast('⚠️ Could not share camera: ' + err.message); }
 }
@@ -641,11 +646,67 @@ export async function handleWebRTCSignal(payload) {
         openRemoteCamWindow(from, stream, payload.fromName);
       };
       
-      /* Also listen for connection state changes */
+      /* Monitor incoming connection — auto-reconnect if it fails */
+      let reconnectAttempts = 0;
+      const MAX_RECONNECT = 3;
+
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
+        if (pc.connectionState === 'failed') {
+          /* Only act if this PC is still the current one */
+          if (state.incomingPCs[from] !== pc) return;
+          delete state.incomingPCs[from];
+
+          /* Blank out the dead video so user sees a spinner instead of frozen frame */
+          const cw = state.cameraWindows[from];
+          if (cw?.isEventsGrid && cw.el) {
+            const deadVideo = cw.el.querySelector('video');
+            if (deadVideo) { deadVideo.pause(); deadVideo.srcObject = null; }
+          }
+
+          if (reconnectAttempts < MAX_RECONNECT) {
+            reconnectAttempts++;
+            const delay = reconnectAttempts * 2000; /* 2s, 4s, 6s */
+            console.log('[WebRTC] Incoming failed for', from,
+              '— reconnect attempt', reconnectAttempts, 'of', MAX_RECONNECT, 'in', delay, 'ms');
+
+            setTimeout(() => {
+              const user = findUser(from);
+              const currentCw = state.cameraWindows[from];
+              const streamAlive = currentCw?.stream?.active &&
+                currentCw.stream.getTracks().some(t => t.readyState === 'live');
+              /* Only reconnect if: user still online with cam, stream is dead, no PC already active */
+              if (user?.hasCamera && user?.online && !streamAlive && !state.incomingPCs[from]) {
+                console.log('[WebRTC] Re-requesting camera from', from);
+                /* Remove dead slot so it gets created fresh */
+                if (currentCw?.isEventsGrid && currentCw.el?.parentNode) {
+                  currentCw.el.remove();
+                }
+                delete state.cameraWindows[from];
+                /* Clear stale pending flag so request goes through */
+                delete state.pendingCamRequests[from];
+                requestPublicCamera(from);
+              } else {
+                console.log('[WebRTC] Skipping reconnect for', from,
+                  '— user online:', user?.online, 'hasCamera:', user?.hasCamera,
+                  'streamAlive:', streamAlive, 'pcExists:', !!state.incomingPCs[from]);
+              }
+            }, delay);
+          } else {
+            console.error('[WebRTC] Max reconnect attempts reached for', from);
+            /* Show error indicator on slot */
+            const currentCw = state.cameraWindows[from];
+            if (currentCw?.isEventsGrid && currentCw.el) {
+              const err = document.createElement('div');
+              err.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;' +
+                'justify-content:center;background:rgba(0,0,0,0.75);color:#fff;font-size:11px;text-align:center;padding:4px;';
+              err.textContent = '❌ Connection failed\nTry refreshing';
+              currentCw.el.style.position = 'relative';
+              currentCw.el.appendChild(err);
+            }
+          }
+        }
       });
-      
       pc.addEventListener('iceconnectionstatechange', () => {
         console.log('[WebRTC] ICE connection state changed:', pc.iceConnectionState, 'for', from);
       });
@@ -812,27 +873,25 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
 
   dom.eventsCamGrid.hidden = false;
 
-  /* ── If slot already exists with the same stream, just ensure it's playing ── */
+  /* ── If slot already exists ── */
   let targetSlot = dom.eventsCamGrid.querySelector(`[data-user-id="${uid}"]`);
   if (targetSlot) {
     const existingVideo = targetSlot.querySelector('video');
     if (existingVideo && stream) {
       if (existingVideo.srcObject?.id === stream.id) {
         /* Same stream — just make sure it's playing */
-        existingVideo.play().catch(() => {});
+        if (existingVideo.paused) existingVideo.play().catch(() => {});
         return;
       }
-      /* New stream — update without destroying element */
+      /* New/different stream — MUST abort any pending play before touching srcObject
+         to avoid AbortError "play interrupted because media was removed from document" */
       console.log('[Events Grid] Updating stream for', uid);
-      existingVideo.srcObject = stream;
-      existingVideo.muted = true; /* Muted for autoplay guarantee */
-      existingVideo.play().then(() => {
-        if (!isOwn) existingVideo.muted = false; /* Unmute after play starts */
-      }).catch(console.warn);
-      /* Update state */
-      if (state.cameraWindows[uid]) state.cameraWindows[uid].stream = stream;
-      return;
+      existingVideo.pause();
+      existingVideo.srcObject = null;   /* ← aborts pending play cleanly */
+      /* Fall through to rebuild slot content with new stream (cleaner than re-use) */
     }
+    /* Slot exists (video missing or stream replaced) — rebuild content */
+    /* (no early-return: code continues below to rebuild targetSlot) */
   } else {
     /* Check max_cams limit */
     const availableRooms = getAvailableRooms();
