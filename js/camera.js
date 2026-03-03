@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260416 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260417 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -564,7 +564,7 @@ export async function sharePublicCameraTo(toUid) {
     tracks.forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
-        console.log('[WebRTC] Sending ICE candidate to', toUid);
+        console.log('[WebRTC] Outgoing ICE candidate type:', candidate.type, 'protocol:', candidate.protocol, 'to', toUid);
         broadcast('webrtc', toUid, { sigType: 'ice', candidate, ctx: 'public' });
       }
     };
@@ -618,7 +618,12 @@ export async function handleWebRTCSignal(payload) {
       console.log('[WebRTC] Creating new incoming peer connection for', from);
       const pc = new RTCPeerConnection(ICE_SERVERS);
       state.incomingPCs[from] = pc;
-      pc.onicecandidate = ({ candidate: c }) => { if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public' }); };
+      pc.onicecandidate = ({ candidate: c }) => {
+        if (c) {
+          console.log('[WebRTC] Local ICE candidate type:', c.type, 'protocol:', c.protocol, 'for incoming from', from);
+          broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public' });
+        }
+      };
       
       /* Flag to prevent openRemoteCamWindow from being called multiple times
          (ontrack fires once per track: audio + video = 2 times for the same stream) */
@@ -709,6 +714,20 @@ export async function handleWebRTCSignal(payload) {
       });
       pc.addEventListener('iceconnectionstatechange', () => {
         console.log('[WebRTC] ICE connection state changed:', pc.iceConnectionState, 'for', from);
+        /* When ICE actually connects, retry play() in case it was pending/hanging */
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          const cw = state.cameraWindows[from];
+          if (cw?.isEventsGrid && cw.el) {
+            const vid = cw.el.querySelector('video');
+            if (vid && vid.paused && vid.srcObject) {
+              console.log('[WebRTC] ICE connected for', from, '— triggering video play()');
+              vid.play().then(() => {
+                console.log('[Events Grid] Playing for', from, '(ICE-triggered) — unmuting:', !cw.isOwn);
+                if (!cw.isOwn) vid.muted = false;
+              }).catch(console.warn);
+            }
+          }
+        }
       });
       await pc.setRemoteDescription({ type: 'offer', sdp });
       const answer = await pc.createAnswer();
@@ -744,7 +763,10 @@ export async function handleWebRTCSignal(payload) {
       }
     } else if (sigType === 'ice') {
       const pc = state.outgoingPCs[from] || state.incomingPCs[from];
-      if (pc && candidate) await pc.addIceCandidate(candidate).catch(console.warn);
+      if (pc && candidate) {
+        console.log('[WebRTC] Remote ICE candidate type:', candidate.type, 'protocol:', candidate.protocol, 'from', from);
+        await pc.addIceCandidate(candidate).catch(console.warn);
+      }
     }
   }
 
@@ -931,23 +953,43 @@ function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260415] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260416] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {
     const assignAndPlay = () => {
       video.srcObject = stream;
-      video.play().then(() => {
-        console.log('[Events Grid] Playing for', uid, '— unmuting:', !isOwn);
-        if (!isOwn) {
-          /* Unmute remote streams after play starts — audio will work */
-          video.muted = false;
-        }
-      }).catch(err => {
-        console.warn('[Events Grid] play() failed for', uid, ':', err.name);
-        /* Even muted play failed (very rare) — keep trying */
-        setTimeout(() => video.play().catch(console.warn), 500);
-      });
+
+      /* play() may hang forever on Edge/Windows when ICE hasn't connected yet.
+         We use a canplay/loadeddata fallback so playback starts once frames flow,
+         regardless of whether play() resolves. */
+      let playStarted = false;
+
+      const onFrames = () => {
+        if (playStarted) return;
+        playStarted = true;
+        video.play().then(() => {
+          console.log('[Events Grid] Playing for', uid, '(via frame event) — unmuting:', !isOwn);
+          if (!isOwn) video.muted = false;
+        }).catch(console.warn);
+      };
+      video.addEventListener('canplay',     onFrames, { once: true });
+      video.addEventListener('loadeddata',  onFrames, { once: true });
+
+      const playPromise = video.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.then(() => {
+          if (playStarted) return; /* already handled by frame event */
+          playStarted = true;
+          console.log('[Events Grid] Playing for', uid, '— unmuting:', !isOwn);
+          if (!isOwn) video.muted = false;
+        }).catch(err => {
+          console.warn('[Events Grid] play() failed for', uid, ':', err.name);
+          if (err.name !== 'AbortError') {
+            setTimeout(() => { if (!playStarted) video.play().catch(console.warn); }, 500);
+          }
+        });
+      }
     };
 
     const activeTracks = stream.getTracks().filter(t => t.readyState === 'live');

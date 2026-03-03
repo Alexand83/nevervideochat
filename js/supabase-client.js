@@ -9,7 +9,7 @@ import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers 
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
-         closeCameraWindow, endCall } from './camera.js?v=20260416';
+         closeCameraWindow, endCall } from './camera.js?v=20260417';
 import { clearPendingCamRequest } from './storage.js';
 
 export function initSupabaseClient() {
@@ -144,7 +144,7 @@ export async function connectSupabase() {
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
         /* Close all cameras for the kicked user */
-        const { closeAllCamerasForUser } = await import('./camera.js?v=20260416');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260417');
         if (isCurrentUser || state.cameraWindows[targetId]) {
           await closeAllCamerasForUser(targetId);
         }
@@ -186,7 +186,7 @@ export async function connectSupabase() {
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
         /* Close all cameras for the banned user */
-        const { closeAllCamerasForUser } = await import('./camera.js?v=20260416');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260417');
         if (isCurrentUser || state.cameraWindows[targetId]) {
           await closeAllCamerasForUser(targetId);
         }
@@ -213,7 +213,7 @@ export async function connectSupabase() {
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
         /* Close all cameras for the muted user - always close if we're viewing their cam */
-        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260416');
+        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260417');
         if (isCurrentUser) {
           await closeAllCamerasForUser(targetId);
         } else if (state.cameraWindows[targetId]) {
