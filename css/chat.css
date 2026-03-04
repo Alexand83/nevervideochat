@@ -7,18 +7,8 @@
   overflow: hidden;
   background: var(--bg0);
   position: relative;
-  transition: padding-right 0.3s ease;
-}
-
-/* Quando il pannello giochi è aperto, aggiungi padding per non coprire la text area */
-.app-main:has(.games-panel.open) .chat-section {
-  padding-right: var(--games-panel-width, 320px);
-}
-
-/* Fallback per browser che non supportano :has() */
-.games-panel.open ~ * .chat-section,
-body:has(.games-panel.open) .chat-section {
-  padding-right: var(--games-panel-width, 320px);
+  transition: margin-right 0.3s ease;
+  margin-right: var(--games-panel-width, 0px);
 }
 
 /* Messages container */

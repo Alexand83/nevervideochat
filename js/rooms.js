@@ -157,6 +157,11 @@ export function switchRoom(roomId) {
     if (isGamesRoom) {
       dom.gamesPanel.hidden = false;
       dom.gamesPanel.classList.add('open');
+      /* Aggiorna CSS variable per il padding della chat */
+      setTimeout(() => {
+        const panelWidth = dom.gamesPanel.offsetWidth || 320;
+        document.documentElement.style.setProperty('--games-panel-width', panelWidth + 'px');
+      }, 100);
       /* Re-check active game when entering games room */
       import('./games.js').then(({ checkActiveGame }) => {
         checkActiveGame();
@@ -164,6 +169,7 @@ export function switchRoom(roomId) {
     } else {
       dom.gamesPanel.hidden = true;
       dom.gamesPanel.classList.remove('open');
+      document.documentElement.style.setProperty('--games-panel-width', '0px');
     }
   }
   
