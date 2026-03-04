@@ -207,7 +207,7 @@ export function switchRoom(roomId) {
     /* Show events cam grid */
     if (dom.eventsCamGrid) {
       dom.eventsCamGrid.hidden = false;
-      dom.eventsCamGrid.setAttribute('data-cols', maxCams);
+      dom.eventsCamGrid.setAttribute('data-max-cams', String(maxCams));
       renderEventsCamGrid(maxCams);
     }
     /* Re-insert own camera into Events grid if it was active in this room */
@@ -451,8 +451,8 @@ function renderEventsCamGrid(maxCams) {
   /* Don't create empty slots - they will be created dynamically */
   dom.eventsCamGrid.innerHTML = '';
   
-  /* Set max columns for autoresize */
-  dom.eventsCamGrid.setAttribute('data-max-cols', maxCams);
+  /* Set max_cams attribute for CSS to calculate width automatically */
+  dom.eventsCamGrid.setAttribute('data-max-cams', String(maxCams));
   
   /* Populate with active cameras in this room */
   updateEventsCamGrid();
@@ -501,15 +501,9 @@ export function updateEventsCamGrid() {
   
   dom.eventsCamGrid.hidden = false;
   
-  /* Autoresize grid columns based on ACTUAL number of cameras present */
-  /* 1 cam = large (1 column), 2-3 cams = medium (2 columns), 4+ cams = small (4 columns) */
-  /* This ensures cameras shrink as more are added */
-  let cols = 1;
-  if (numCams >= 4) cols = 4;      /* 4+ cams: 4 columns (smallest cams) */
-  else if (numCams >= 2) cols = 2; /* 2-3 cams: 2 columns (medium cams) */
-  else cols = 1;                   /* 1 cam: 1 column (largest cam) */
-  
-  dom.eventsCamGrid.setAttribute('data-cols', String(cols));
+  /* Set max_cams attribute for CSS to calculate width automatically */
+  /* The CSS will use data-max-cams to determine the width of each camera slot */
+  dom.eventsCamGrid.setAttribute('data-max-cams', String(maxCams));
 }
 
 /* Called when a remote cam is closed - removes their slot from grid */
