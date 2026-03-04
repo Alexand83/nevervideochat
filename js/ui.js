@@ -697,14 +697,65 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
 /* ── Update users panel width CSS variable ── */
 export function updateUsersPanelWidthCSS() {
   const isMobile = window.innerWidth <= 768;
-  if (!dom.usersPanel) return;
+  if (!dom.usersPanel) {
+    console.log('[UI] updateUsersPanelWidthCSS: usersPanel not found');
+    return;
+  }
   
-  if (isMobile && dom.usersPanel.classList.contains('open')) {
-    const width = dom.usersPanel.getBoundingClientRect().width || 280;
+  const isOpen = dom.usersPanel.classList.contains('open');
+  const width = dom.usersPanel.getBoundingClientRect().width || 280;
+  const chatSection = document.querySelector('.chat-section');
+  
+  console.log('[UI] updateUsersPanelWidthCSS:', { isMobile, isOpen, width, windowWidth: window.innerWidth });
+  
+  if (isMobile && isOpen) {
+    // Set CSS variable
     document.documentElement.style.setProperty('--users-panel-width', width + 'px');
+    console.log('[UI] Set --users-panel-width to:', width + 'px');
+    
+    // Also apply directly to chat section as fallback
+    if (chatSection) {
+      const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
+      const totalMargin = gamesPanelWidth + width;
+      chatSection.style.marginRight = totalMargin + 'px';
+      console.log('[UI] Applied inline margin-right to chat section:', totalMargin + 'px');
+    }
   } else {
     document.documentElement.style.setProperty('--users-panel-width', '0px');
+    if (chatSection && isMobile) {
+      // Only reset if we're on mobile, otherwise let CSS handle it
+      const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
+      chatSection.style.marginRight = gamesPanelWidth + 'px';
+      console.log('[UI] Reset margin-right to games panel width only:', gamesPanelWidth + 'px');
+    }
   }
+  
+  // Debug: check computed style
+  if (chatSection) {
+    const computedMargin = window.getComputedStyle(chatSection).marginRight;
+    const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--users-panel-width');
+    console.log('[UI] Chat section margin-right (computed):', computedMargin);
+    console.log('[UI] Chat section margin-right (inline):', chatSection.style.marginRight);
+    console.log('[UI] CSS variable --users-panel-width:', cssVar);
+  }
+}
+
+/* Debug function - expose to window for console testing */
+if (typeof window !== 'undefined') {
+  window.debugUsersPanel = () => {
+    console.log('=== Users Panel Debug ===');
+    console.log('Panel element:', dom.usersPanel);
+    console.log('Is mobile:', window.innerWidth <= 768);
+    console.log('Panel open:', dom.usersPanel?.classList.contains('open'));
+    console.log('Panel width:', dom.usersPanel?.getBoundingClientRect().width);
+    console.log('CSS variable:', getComputedStyle(document.documentElement).getPropertyValue('--users-panel-width'));
+    const chatSection = document.querySelector('.chat-section');
+    if (chatSection) {
+      console.log('Chat section margin-right:', window.getComputedStyle(chatSection).marginRight);
+      console.log('Chat section computed styles:', window.getComputedStyle(chatSection));
+    }
+    updateUsersPanelWidthCSS();
+  };
 }
 
 /* ── Panel resize (desktop + mobile) ────────────────────────────────────── */
