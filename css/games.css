@@ -512,6 +512,77 @@
   font-size: 14px;
 }
 
+/* Final leaderboard styles */
+.game-leaderboard-final {
+  padding: 16px;
+  background: rgba(106,27,154,0.1);
+  border-radius: 8px;
+  border: 2px solid var(--clr-primary, #6a1b9a);
+}
+
+.game-leaderboard-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  text-align: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--clr-primary, #6a1b9a);
+}
+
+.game-leaderboard-empty {
+  text-align: center;
+  color: var(--text-secondary, rgba(255,255,255,0.6));
+  padding: 24px;
+  font-style: italic;
+}
+
+.game-leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-leaderboard-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.game-leaderboard-item:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.game-leaderboard-me {
+  background: rgba(106,27,154,0.2) !important;
+  border-left: 3px solid var(--clr-primary, #6a1b9a);
+  font-weight: 600;
+}
+
+.game-leaderboard-rank {
+  font-size: 18px;
+  min-width: 32px;
+  text-align: center;
+}
+
+.game-leaderboard-name {
+  flex: 1;
+  color: var(--text-primary, #fff);
+  font-size: 14px;
+}
+
+.game-leaderboard-score {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--clr-primary, #6a1b9a);
+  min-width: 60px;
+  text-align: right;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .games-panel {

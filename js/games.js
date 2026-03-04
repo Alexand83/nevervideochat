@@ -11,6 +11,8 @@ import { getAvailableRooms } from './rooms.js';
 /* ── Stato giochi ────────────────────────────────────────────── */
 let activeGame = null;
 let gameTimer = null;
+let finalLeaderboardTimer = null;
+let showingFinalLeaderboard = false;
 let gameData = {
   song: {
     currentSong: null,
@@ -323,6 +325,13 @@ function showGameHelp() {
 
 /* ── Avvia gioco: Indovina la canzone ────────────────────────── */
 async function startSongGame() {
+  /* Rimuovi classifica finale se visibile */
+  if (finalLeaderboardTimer) {
+    clearTimeout(finalLeaderboardTimer);
+    finalLeaderboardTimer = null;
+  }
+  showingFinalLeaderboard = false;
+  
   if (activeGame) {
     showToast('⚠️ C\'è già un gioco in corso! Usa /game stop per terminarlo.');
     return;
@@ -482,6 +491,13 @@ async function endSongGame(winner = false, winnerId = null) {
 
 /* ── Avvia gioco: Due verità e una bugia ─────────────────────── */
 async function startTruthLieGame() {
+  /* Rimuovi classifica finale se visibile */
+  if (finalLeaderboardTimer) {
+    clearTimeout(finalLeaderboardTimer);
+    finalLeaderboardTimer = null;
+  }
+  showingFinalLeaderboard = false;
+  
   if (activeGame) {
     showToast('⚠️ C\'è già un gioco in corso! Usa /game stop per terminarlo.');
     return;
@@ -608,6 +624,13 @@ async function endTruthLieGame() {
 
 /* ── Avvia gioco: Quiz a tempo ────────────────────────────────── */
 async function startQuizGame() {
+  /* Rimuovi classifica finale se visibile */
+  if (finalLeaderboardTimer) {
+    clearTimeout(finalLeaderboardTimer);
+    finalLeaderboardTimer = null;
+  }
+  showingFinalLeaderboard = false;
+  
   if (activeGame) {
     showToast('⚠️ C\'è già un gioco in corso! Usa /game stop per terminarlo.');
     return;
@@ -763,11 +786,28 @@ async function endQuizGame() {
   
   const isInActiveRoom = String(state.activeRoom) === String(activeGame.room_id);
   
+  /* Mostra classifica finale nel pannello */
+  showingFinalLeaderboard = true;
+  await renderFinalLeaderboard('quiz');
+  
   if (isInActiveRoom) {
-    showToast(`🎉 Quiz completato! Controlla la classifica con /game scores`);
+    showToast(`🎉 Quiz completato! Classifica finale mostrata.`);
   }
   
-  await stopGame();
+  /* Timer per rimuovere la classifica dopo 1 minuto */
+  if (finalLeaderboardTimer) {
+    clearTimeout(finalLeaderboardTimer);
+  }
+  finalLeaderboardTimer = setTimeout(() => {
+    if (showingFinalLeaderboard) {
+      showingFinalLeaderboard = false;
+      updateGamesPanel();
+      renderGamesUsersList();
+    }
+  }, 60000); // 1 minuto
+  
+  /* Non chiudere il gioco subito, lascia la classifica visibile */
+  /* await stopGame(); */
 }
 
 /* ── Termina gioco corrente ──────────────────────────────────── */
@@ -904,6 +944,51 @@ async function updateScore(userId, gameType, points) {
   }
 }
 
+/* ── Render classifica finale nel pannello ───────────────────── */
+async function renderFinalLeaderboard(gameType) {
+  if (!state.supa || !dom.gamesPanelBody) return;
+  
+  try {
+    const { data, error } = await state.supa
+      .from('game_scores')
+      .select('*')
+      .eq('room_id', state.activeRoom)
+      .eq('game_type', gameType)
+      .order('score', { ascending: false })
+      .limit(10);
+    
+    if (error) throw error;
+    
+    let leaderboardHtml = '<div class="games-panel-content"><div class="game-leaderboard-final">';
+    leaderboardHtml += '<div class="game-leaderboard-title">🏆 Classifica Finale</div>';
+    
+    if (!data || data.length === 0) {
+      leaderboardHtml += '<div class="game-leaderboard-empty">Nessun punteggio ancora!</div>';
+    } else {
+      leaderboardHtml += '<div class="game-leaderboard-list">';
+      data.forEach((entry, index) => {
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+        const isMe = entry.user_id === state.currentUser?.id;
+        leaderboardHtml += `
+          <div class="game-leaderboard-item ${isMe ? 'game-leaderboard-me' : ''}">
+            <span class="game-leaderboard-rank">${medal}</span>
+            <span class="game-leaderboard-name">${escHtml(entry.username)}${isMe ? ' (Tu)' : ''}</span>
+            <span class="game-leaderboard-score">${entry.score} punti</span>
+          </div>
+        `;
+      });
+      leaderboardHtml += '</div>';
+    }
+    
+    leaderboardHtml += '</div></div>';
+    dom.gamesPanelBody.innerHTML = leaderboardHtml;
+    renderGamesUsersList();
+  } catch (err) {
+    console.error('[Games] Error fetching final leaderboard:', err);
+    showToast('⚠️ Errore nel caricamento della classifica.');
+  }
+}
+
 /* ── Mostra classifica ────────────────────────────────────────── */
 async function showScores() {
   if (!state.supa) return;
@@ -944,6 +1029,11 @@ function startGameUI(gameType, gameState) {
 /* ── Aggiorna pannello giochi ──────────────────────────────────── */
 function updateGamesPanel() {
   if (!dom.gamesPanelBody) return;
+  
+  /* Se stiamo mostrando la classifica finale, non aggiornare */
+  if (showingFinalLeaderboard) {
+    return;
+  }
   
   if (!activeGame) {
     dom.gamesPanelBody.innerHTML = '<div class="games-panel-empty">🎮 Nessun gioco attivo. Usa <code>/giochi</code> per iniziare!</div>';

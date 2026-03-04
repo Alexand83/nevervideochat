@@ -434,13 +434,14 @@
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: var(--r5);
-  padding: 9px var(--s4);
+  padding: 9px 12px;
   line-height: 1.5;
   font-size: var(--fz-base);
   color: var(--tx0);
   word-break: break-word;
   outline: none;
   transition: border-color var(--tf), box-shadow var(--tf);
+  direction: ltr;
 }
 .msg-input:focus {
   border-color: var(--accent);
