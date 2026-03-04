@@ -328,16 +328,45 @@ export async function checkActiveGame() {
           ])),
           timeLimit: gameState.timeLimit || 15000,
           questions: gameState.questions || defaultQuestions,
+          questionStartTime: gameState.questionStartTime || null,
         };
-        /* Se c'è una domanda attiva, ripristina il timer */
-        if (gameData.quiz.currentQuestion) {
-          /* Calcola tempo rimanente (approssimativo) */
-          const timeElapsed = Date.now() - (gameState.questionStartTime || Date.now());
+        /* Se c'è una domanda attiva, ripristina il timer SOLO se non è già scaduto */
+        if (gameData.quiz.currentQuestion && gameData.quiz.questionStartTime) {
+          /* Cancella timer esistente se presente */
+          if (gameTimer) {
+            clearTimeout(gameTimer);
+            gameTimer = null;
+          }
+          /* Calcola tempo rimanente basato sul timestamp salvato */
+          const timeElapsed = Date.now() - gameData.quiz.questionStartTime;
           const timeRemaining = Math.max(1000, gameData.quiz.timeLimit - timeElapsed);
-          gameTimer = setTimeout(() => {
-            checkQuizAnswers();
-            setTimeout(() => askNextQuestion(), 2000);
-          }, timeRemaining);
+          
+          /* Se il tempo è già scaduto, processa immediatamente */
+          if (timeRemaining <= 1000) {
+            /* Tempo scaduto: processa risposte e passa alla prossima domanda */
+            setTimeout(() => {
+              if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
+                checkQuizAnswers();
+                setTimeout(() => {
+                  if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
+                    askNextQuestion();
+                  }
+                }, 2000);
+              }
+            }, 100);
+          } else {
+            /* Timer ancora attivo: ripristina */
+            gameTimer = setTimeout(() => {
+              if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
+                checkQuizAnswers();
+                setTimeout(() => {
+                  if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
+                    askNextQuestion();
+                  }
+                }, 2000);
+              }
+            }, timeRemaining);
+          }
         }
       }
       
@@ -1040,6 +1069,7 @@ function checkQuizAnswers() {
   
   /* INCREMENTA questionIndex per la prossima domanda */
   gameData.quiz.questionIndex++;
+  gameData.quiz.questionStartTime = null; /* Reset timestamp */
   saveActiveGame();
 }
 
@@ -1179,6 +1209,7 @@ async function saveActiveGame() {
         answers: Object.fromEntries(gameData.quiz.answers),
         timeLimit: gameData.quiz.timeLimit,
         questions: gameData.quiz.questions,
+        questionStartTime: gameData.quiz.questionStartTime || null,
       };
     }
     
