@@ -8,9 +8,9 @@
   background: var(--bg0);
   position: relative;
   transition: margin-right 0.3s ease;
-  margin-right: var(--games-panel-width, 0px);
+  /* Account for games panel (fixed right) + users panel when open in games room */
+  margin-right: calc(var(--games-panel-width, 0px) + var(--users-panel-width, 0px));
 }
-/* On mobile, users panel width is handled by responsive.css */
 
 /* Messages container */
 .msgs-container {

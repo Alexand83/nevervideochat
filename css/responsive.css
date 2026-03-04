@@ -1,7 +1,7 @@
 @media (max-width: 768px) {
 
-  /* Hide users toggle button on mobile (resize handle is used instead) */
-  .users-toggle-btn { display: none !important; }
+  /* Users toggle button visible on mobile (original behavior) */
+  .users-toggle-btn { display: flex; }
   .close-panel-btn  { display: flex; }
 
   /* Hide camera button label on small viewport */

@@ -91,30 +91,33 @@ export function initGames() {
         dom.usersPanel.classList.remove('open');
         dom.usersPanel.classList.add('hidden');
         if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
+        /* Reset CSS variable — chat torna a larghezza piena */
+        document.documentElement.style.setProperty('--users-panel-width', '0px');
+        dom.usersPanel.style.cssText = '';
       } else {
         dom.usersPanel.classList.remove('hidden');
         dom.usersPanel.classList.add('open');
         if (dom.panelOverlay) dom.panelOverlay.classList.add('show');
         
-        /* Imposta larghezza e posizione di default quando si apre dalla barra giochi */
+        /* Imposta larghezza di default se non già impostata */
         const gamesPanelWidth = dom.gamesPanel.offsetWidth || 320;
-        const defaultUsersPanelWidth = 240; // Larghezza di default per il pannello utenti
+        const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
+        const defaultW = (savedW >= 200 && savedW <= 480) ? savedW : 240;
         
         if (!dom.usersPanel.style.width || dom.usersPanel.style.width === '') {
-          dom.usersPanel.style.width = defaultUsersPanelWidth + 'px';
+          dom.usersPanel.style.width = defaultW + 'px';
         }
         
-        /* Posiziona il pannello utenti a sinistra della barra giochi */
-        if (dom.usersPanel.style.position !== 'fixed') {
-          dom.usersPanel.style.position = 'fixed';
-          dom.usersPanel.style.top = 'var(--hdr-h, 60px)';
-          dom.usersPanel.style.bottom = '0';
-          dom.usersPanel.style.right = gamesPanelWidth + 'px';
-          dom.usersPanel.style.zIndex = '399'; // Sotto la barra giochi (400) ma sopra il contenuto
-        } else {
-          // Aggiorna la posizione right in base alla larghezza attuale della barra giochi
-          dom.usersPanel.style.right = gamesPanelWidth + 'px';
-        }
+        /* Posiziona il pannello utenti a sinistra della barra giochi (sempre fixed) */
+        dom.usersPanel.style.position = 'fixed';
+        dom.usersPanel.style.top = 'var(--hdr-h, 60px)';
+        dom.usersPanel.style.bottom = '0';
+        dom.usersPanel.style.right = gamesPanelWidth + 'px';
+        dom.usersPanel.style.zIndex = '399';
+        
+        /* Aggiorna CSS variable: la chat si restringe per non essere coperta */
+        const panelW = parseInt(dom.usersPanel.style.width, 10) || defaultW;
+        document.documentElement.style.setProperty('--users-panel-width', panelW + 'px');
       }
       updateButtonText();
     });

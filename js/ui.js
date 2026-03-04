@@ -8,7 +8,7 @@ import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js'
 import { findUser, checkIsMuted, renderUsers } from './users.js';
 import { addIgnoredUser, removeIgnoredUser } from './storage.js';
 import { broadcast }         from './broadcast.js';
-import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260439';
+import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260440';
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
@@ -694,12 +694,13 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
   }
 }
 
-/* ── Update users panel width CSS variable (solo stanza giochi su mobile) ── */
+/* ── Update users panel width CSS variable ── */
+/* Solo stanza giochi: aggiorna --users-panel-width per spingere la chat a sinistra.
+   Stanze normali: pannello fixed overlay (UX drawer standard) → variabile sempre 0px */
 export async function updateUsersPanelWidthCSS() {
-  const isMobile = window.innerWidth <= 768;
-  if (!dom.usersPanel || !isMobile) return;
+  if (!dom.usersPanel) return;
 
-  /* Verifica stanza giochi */
+  /* In stanze normali su mobile il pannello è un overlay fixed: non toccare la chat */
   let isGamesRoom = false;
   try {
     const { getAvailableRooms } = await import('./rooms.js');
@@ -709,37 +710,21 @@ export async function updateUsersPanelWidthCSS() {
   } catch (e) { /* ignore */ }
 
   if (!isGamesRoom) {
-    /* Stanze normali: nessuna modifica al layout, variabile CSS a 0 */
+    /* Stanze normali: assicurati che la variabile sia 0 (no effetti sul layout) */
     document.documentElement.style.setProperty('--users-panel-width', '0px');
     return;
   }
 
+  /* Stanza giochi: aggiorna variabile in base allo stato del pannello.
+     La posizione (fixed/right) è gestita dal toggle button in games.js */
   const isOpen = dom.usersPanel.classList.contains('open');
-  const chatSection = document.querySelector('.chat-section');
-
   if (isOpen) {
-    const width = dom.usersPanel.getBoundingClientRect().width || 280;
+    /* Aspetta che il pannello sia renderizzato prima di leggere la larghezza */
+    await new Promise(r => setTimeout(r, 50));
+    const width = dom.usersPanel.getBoundingClientRect().width || 240;
     document.documentElement.style.setProperty('--users-panel-width', width + 'px');
-    /* In stanza giochi il pannello è relativo (non fixed) */
-    dom.usersPanel.style.position = 'relative';
-    dom.usersPanel.style.top = 'auto';
-    dom.usersPanel.style.right = 'auto';
-    dom.usersPanel.style.height = '100%';
-    if (chatSection) {
-      const gw = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
-      chatSection.style.flex = `0 1 calc(100% - ${gw + width}px)`;
-      chatSection.style.minWidth = '0';
-    }
   } else {
     document.documentElement.style.setProperty('--users-panel-width', '0px');
-    dom.usersPanel.style.position = '';
-    dom.usersPanel.style.top = '';
-    dom.usersPanel.style.right = '';
-    dom.usersPanel.style.height = '';
-    if (chatSection) {
-      chatSection.style.flex = '';
-      chatSection.style.minWidth = '';
-    }
   }
 }
 
@@ -798,7 +783,15 @@ export function initPanelResize() {
     document.body.style.userSelect = '';
     const finalWidth = parseInt(panel.style.width, 10);
     if (finalWidth >= 160 && finalWidth <= 480) localStorage.setItem('nvc_panel_w', finalWidth);
-    if (isMobile && panel.classList.contains('open')) updateUsersPanelWidthCSS();
+    /* Aggiorna CSS var quando pannello è aperto (sia mobile che desktop in stanza giochi) */
+    if (panel.classList.contains('open')) {
+      updateUsersPanelWidthCSS();
+      /* Aggiorna anche la posizione right del pannello utenti in stanza giochi */
+      if (dom.gamesPanel && !dom.gamesPanel.hidden && dom.usersPanel.style.position === 'fixed') {
+        const gamesPanelWidth = dom.gamesPanel.offsetWidth || 320;
+        dom.usersPanel.style.right = gamesPanelWidth + 'px';
+      }
+    }
   };
 
   handle.addEventListener('mousedown', onStart);
