@@ -719,6 +719,9 @@ export function updateUsersPanelWidthCSS() {
       const totalMargin = gamesPanelWidth + width;
       chatSection.style.marginRight = totalMargin + 'px';
       console.log('[UI] Applied inline margin-right to chat section:', totalMargin + 'px');
+      
+      // Show debug info on screen (only on mobile)
+      showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalMargin, cssVar: width + 'px' });
     }
   } else {
     document.documentElement.style.setProperty('--users-panel-width', '0px');
@@ -727,6 +730,7 @@ export function updateUsersPanelWidthCSS() {
       const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
       chatSection.style.marginRight = gamesPanelWidth + 'px';
       console.log('[UI] Reset margin-right to games panel width only:', gamesPanelWidth + 'px');
+      hideDebugInfo();
     }
   }
   
@@ -737,6 +741,47 @@ export function updateUsersPanelWidthCSS() {
     console.log('[UI] Chat section margin-right (computed):', computedMargin);
     console.log('[UI] Chat section margin-right (inline):', chatSection.style.marginRight);
     console.log('[UI] CSS variable --users-panel-width:', cssVar);
+  }
+}
+
+/* Debug info overlay - visible on mobile */
+let debugOverlay = null;
+function showDebugInfo(info) {
+  if (!debugOverlay) {
+    debugOverlay = document.createElement('div');
+    debugOverlay.id = 'usersPanelDebug';
+    debugOverlay.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.8);
+      color: #0f0;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-family: monospace;
+      z-index: 9999;
+      max-width: 200px;
+      line-height: 1.4;
+      pointer-events: none;
+    `;
+    document.body.appendChild(debugOverlay);
+  }
+  debugOverlay.innerHTML = `
+    <div><strong>Users Panel Debug</strong></div>
+    <div>Mobile: ${info.isMobile ? 'YES' : 'NO'}</div>
+    <div>Open: ${info.isOpen ? 'YES' : 'NO'}</div>
+    <div>Panel: ${info.panelWidth}px</div>
+    <div>Games: ${info.gamesWidth}px</div>
+    <div>Total: ${info.totalMargin}px</div>
+    <div>CSS Var: ${info.cssVar}</div>
+  `;
+  debugOverlay.style.display = 'block';
+}
+
+function hideDebugInfo() {
+  if (debugOverlay) {
+    debugOverlay.style.display = 'none';
   }
 }
 
