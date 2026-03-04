@@ -69,13 +69,46 @@ export function initGames() {
     });
   }
   
-  /* Rendi draggabile il pannello giochi */
+  /* Rendi draggabile e ridimensionabile il pannello giochi */
   if (dom.gamesPanel) {
     const panelHeader = dom.gamesPanel.querySelector('.panel-hdr');
+    const resizeHandle = document.getElementById('gamesPanelResizeHandle');
+    
     if (panelHeader) {
-      import('./utils.js').then(({ makeDraggable }) => {
+      import('./utils.js').then(({ makeDraggable, makeResizable }) => {
         makeDraggable(dom.gamesPanel, panelHeader);
+        
+        /* Rendi ridimensionabile */
+        if (resizeHandle) {
+          makeResizable(dom.gamesPanel, resizeHandle);
+          
+          /* Salva larghezza quando viene ridimensionato */
+          const updateWidth = () => {
+            const w = dom.gamesPanel.offsetWidth;
+            if (w >= 200 && w <= 800) {
+              localStorage.setItem('nvc_games_panel_w', w);
+              document.documentElement.style.setProperty('--games-panel-width', w + 'px');
+            }
+          };
+          
+          /* Observer per cambiamenti di width */
+          const observer = new MutationObserver(updateWidth);
+          observer.observe(dom.gamesPanel, { attributes: true, attributeFilter: ['style'] });
+          
+          /* Aggiorna anche quando il resize finisce */
+          resizeHandle.addEventListener('mouseup', updateWidth);
+          resizeHandle.addEventListener('touchend', updateWidth);
+        }
       });
+    }
+    
+    /* Carica larghezza salvata */
+    const savedW = parseInt(localStorage.getItem('nvc_games_panel_w'), 10);
+    if (savedW >= 200 && savedW <= 800) {
+      dom.gamesPanel.style.width = savedW + 'px';
+      document.documentElement.style.setProperty('--games-panel-width', savedW + 'px');
+    } else {
+      document.documentElement.style.setProperty('--games-panel-width', '320px');
     }
   }
 }
