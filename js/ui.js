@@ -713,23 +713,30 @@ export function updateUsersPanelWidthCSS() {
     document.documentElement.style.setProperty('--users-panel-width', width + 'px');
     console.log('[UI] Set --users-panel-width to:', width + 'px');
     
-    // Also apply directly to chat section as fallback
-    if (chatSection) {
+    // Also apply directly to chat section as fallback (use width instead of margin on mobile)
+    if (chatSection && isMobile) {
       const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
-      const totalMargin = gamesPanelWidth + width;
-      chatSection.style.marginRight = totalMargin + 'px';
-      console.log('[UI] Applied inline margin-right to chat section:', totalMargin + 'px');
+      const totalWidth = gamesPanelWidth + width;
+      const newWidth = `calc(100% - ${totalWidth}px)`;
+      chatSection.style.width = newWidth;
+      chatSection.style.marginRight = '0px';
+      console.log('[UI] Applied inline width to chat section:', newWidth);
       
       // Show debug info on screen (only on mobile)
-      showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalMargin, cssVar: width + 'px' });
+      showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalWidth, cssVar: width + 'px' });
     }
   } else {
     document.documentElement.style.setProperty('--users-panel-width', '0px');
     if (chatSection && isMobile) {
-      // Only reset if we're on mobile, otherwise let CSS handle it
+      // Reset width on mobile when panel is closed
       const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
-      chatSection.style.marginRight = gamesPanelWidth + 'px';
-      console.log('[UI] Reset margin-right to games panel width only:', gamesPanelWidth + 'px');
+      if (gamesPanelWidth > 0) {
+        chatSection.style.width = `calc(100% - ${gamesPanelWidth}px)`;
+      } else {
+        chatSection.style.width = '';
+      }
+      chatSection.style.marginRight = '';
+      console.log('[UI] Reset chat section width');
       hideDebugInfo();
     }
   }
@@ -833,8 +840,9 @@ function showDebugInfoNow() {
   const usersPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--users-panel-width') || '0', 10);
   const totalMargin = gamesPanelWidth + usersPanelWidth;
   const chatSection = document.querySelector('.chat-section');
+  const computedWidth = chatSection ? window.getComputedStyle(chatSection).width : 'N/A';
+  const inlineWidth = chatSection?.style.width || 'N/A';
   const computedMargin = chatSection ? window.getComputedStyle(chatSection).marginRight : 'N/A';
-  const inlineMargin = chatSection?.style.marginRight || 'N/A';
   
   debugOverlay.innerHTML = `
     <div style="margin-bottom: 8px;"><strong style="color: #0ff;">Users Panel Debug</strong></div>
@@ -843,9 +851,10 @@ function showDebugInfoNow() {
     <div>Panel Width: <span style="color: #ff0">${panelWidth}px</span></div>
     <div>Games Panel: <span style="color: #ff0">${gamesPanelWidth}px</span></div>
     <div>Users Panel CSS: <span style="color: #ff0">${usersPanelWidth}px</span></div>
-    <div>Total Margin: <span style="color: #0ff">${totalMargin}px</span></div>
-    <div>Computed: <span style="color: #f0f">${computedMargin}</span></div>
-    <div>Inline: <span style="color: #f0f">${inlineMargin}</span></div>
+    <div>Total Width: <span style="color: #0ff">${totalMargin}px</span></div>
+    <div>Chat Width: <span style="color: #f0f">${computedWidth}</span></div>
+    <div>Chat Width (inline): <span style="color: #f0f">${inlineWidth}</span></div>
+    <div>Chat Margin: <span style="color: #f0f">${computedMargin}</span></div>
     <div style="margin-top: 8px; font-size: 10px; color: #888;">Window: ${window.innerWidth}x${window.innerHeight}</div>
   `;
   const closeBtn = document.createElement('button');
