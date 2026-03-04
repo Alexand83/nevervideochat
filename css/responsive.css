@@ -27,7 +27,9 @@
   
   /* When users panel is open on mobile, reduce chat section width */
   .chat-section {
+    flex: 0 0 auto !important; /* Override flex: 1 to allow width control */
     width: calc(100% - var(--users-panel-width, 0px) - var(--games-panel-width, 0px)) !important;
+    max-width: calc(100% - var(--users-panel-width, 0px) - var(--games-panel-width, 0px)) !important;
     margin-right: 0 !important;
     transition: width 0.3s ease;
   }

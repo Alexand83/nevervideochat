@@ -718,7 +718,10 @@ export function updateUsersPanelWidthCSS() {
       const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
       const totalWidth = gamesPanelWidth + width;
       const newWidth = `calc(100% - ${totalWidth}px)`;
+      // Override flex to allow width control
+      chatSection.style.flex = '0 0 auto';
       chatSection.style.width = newWidth;
+      chatSection.style.maxWidth = newWidth;
       chatSection.style.marginRight = '0px';
       console.log('[UI] Applied inline width to chat section:', newWidth);
       
@@ -731,9 +734,13 @@ export function updateUsersPanelWidthCSS() {
       // Reset width on mobile when panel is closed
       const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
       if (gamesPanelWidth > 0) {
+        chatSection.style.flex = '0 0 auto';
         chatSection.style.width = `calc(100% - ${gamesPanelWidth}px)`;
+        chatSection.style.maxWidth = `calc(100% - ${gamesPanelWidth}px)`;
       } else {
+        chatSection.style.flex = '';
         chatSection.style.width = '';
+        chatSection.style.maxWidth = '';
       }
       chatSection.style.marginRight = '';
       console.log('[UI] Reset chat section width');
