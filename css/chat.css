@@ -243,9 +243,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--s2) var(--s3);
+  padding: var(--s1) var(--s3);
   border-bottom: 1px solid var(--border-subtle);
-  gap: var(--s2);
+  gap: var(--s1);
   touch-action: none;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -424,20 +424,20 @@
   align-items: flex-end;
   gap: var(--s2);
   touch-action: none;
-  padding: var(--s3);
+  padding: var(--s2) var(--s3);
 }
 
 .msg-input {
   text-align: left;
   flex: 1;
-  min-height: 40px;
-  max-height: 150px;
+  min-height: 36px;
+  max-height: 120px;
   overflow-y: auto;
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: var(--r5);
-  padding: 9px 12px;
-  line-height: 1.5;
+  padding: 6px 10px;
+  line-height: 1.4;
   font-size: var(--fz-base);
   color: var(--tx0);
   word-break: break-word;
@@ -457,7 +457,7 @@
 }
 
 .send-btn {
-  width: 40px; height: 40px;
+  width: 36px; height: 36px;
   border-radius: var(--r-pill);
   background: var(--accent);
   color: #fff;
@@ -469,7 +469,7 @@
 }
 .send-btn:hover  { background: var(--accent-h); transform: scale(1.05); }
 .send-btn:active { transform: scale(.95); }
-.send-btn svg { width: 18px; height: 18px; }
+.send-btn svg { width: 16px; height: 16px; }
 
 /* ─── SEARCH BAR ─── */
 .search-bar {
