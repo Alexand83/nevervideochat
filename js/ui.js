@@ -694,23 +694,68 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
   }
 }
 
-/* ── Panel resize (desktop) ────────────────────────────────────── */
+/* ── Panel resize (desktop + mobile) ────────────────────────────────────── */
 export function initPanelResize() {
   const handle = document.getElementById('panelResizeHandle');
   const panel  = dom.usersPanel;
   if (!handle || !panel) return;
+  
+  /* Load saved width (desktop) or set default (mobile) */
+  const isMobile = window.innerWidth <= 768;
   const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
-  if (savedW >= 160 && savedW <= 480) panel.style.width = savedW + 'px';
+  if (isMobile) {
+    /* On mobile, set default width if not already set */
+    if (!panel.style.width || panel.style.width === '') {
+      panel.style.width = savedW >= 200 && savedW <= 480 ? savedW + 'px' : '280px';
+    }
+  } else {
+    /* On desktop, use saved width */
+    if (savedW >= 160 && savedW <= 480) panel.style.width = savedW + 'px';
+  }
+  
   let dragging = false, startX = 0, startW = 0;
-  const onStart = e => { dragging = true; startX = e.touches?.[0]?.clientX ?? e.clientX; startW = panel.getBoundingClientRect().width; handle.classList.add('is-resizing'); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; e.preventDefault(); };
-  const onMove  = e => { if (!dragging) return; const x = e.touches?.[0]?.clientX ?? e.clientX; panel.style.width = Math.min(480, Math.max(160, startW + (startX - x))) + 'px'; };
-  const onEnd   = () => { if (!dragging) return; dragging = false; handle.classList.remove('is-resizing'); document.body.style.cursor = ''; document.body.style.userSelect = ''; localStorage.setItem('nvc_panel_w', parseInt(panel.style.width, 10)); };
+  
+  const onStart = e => {
+    dragging = true;
+    startX = e.touches?.[0]?.clientX ?? e.clientX;
+    startW = panel.getBoundingClientRect().width;
+    handle.classList.add('is-resizing');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  
+  const onMove = e => {
+    if (!dragging) return;
+    const x = e.touches?.[0]?.clientX ?? e.clientX;
+    const deltaX = startX - x; /* On mobile (right side), dragging left increases width */
+    const newWidth = isMobile 
+      ? Math.min(480, Math.max(200, startW + deltaX))  /* Mobile: min 200px, max 480px */
+      : Math.min(480, Math.max(160, startW + deltaX)); /* Desktop: min 160px, max 480px */
+    panel.style.width = newWidth + 'px';
+    e.preventDefault();
+  };
+  
+  const onEnd = () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('is-resizing');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    const finalWidth = parseInt(panel.style.width, 10);
+    if (finalWidth >= 160 && finalWidth <= 480) {
+      localStorage.setItem('nvc_panel_w', finalWidth);
+    }
+  };
+  
   handle.addEventListener('mousedown', onStart);
   handle.addEventListener('touchstart', onStart, { passive: false });
   document.addEventListener('mousemove', onMove);
   document.addEventListener('touchmove', onMove, { passive: false });
   document.addEventListener('mouseup',   onEnd);
   document.addEventListener('touchend',  onEnd);
+  document.addEventListener('touchcancel', onEnd);
 }
 
 /* ── Mobile panel (e desktop toggle) ──────────────────────────── */
