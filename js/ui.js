@@ -713,11 +713,17 @@ export function initPanelResize() {
   document.addEventListener('touchend',  onEnd);
 }
 
-/* ── Mobile panel ──────────────────────────────────────────────── */
+/* ── Mobile panel (e desktop toggle) ──────────────────────────── */
 export function initMobilePanel() {
-  const open  = () => { dom.usersPanel.classList.add('open'); dom.panelOverlay.classList.add('show'); dom.mobileUsersToggle.setAttribute('aria-expanded','true'); };
-  const close = () => { dom.usersPanel.classList.remove('open'); dom.panelOverlay.classList.remove('show'); dom.mobileUsersToggle.setAttribute('aria-expanded','false'); };
-  dom.mobileUsersToggle.addEventListener('click', () => dom.usersPanel.classList.contains('open') ? close() : open());
-  dom.closePanelBtn.addEventListener('click', close);
-  dom.panelOverlay.addEventListener('click', close);
+  const open  = () => { dom.usersPanel.classList.add('open'); dom.panelOverlay.classList.add('show'); if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','true'); };
+  const close = () => { dom.usersPanel.classList.remove('open'); dom.panelOverlay.classList.remove('show'); if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','false'); };
+  if (dom.mobileUsersToggle) {
+    dom.mobileUsersToggle.addEventListener('click', () => dom.usersPanel.classList.contains('open') ? close() : open());
+  }
+  if (dom.closePanelBtn) {
+    dom.closePanelBtn.addEventListener('click', close);
+  }
+  if (dom.panelOverlay) {
+    dom.panelOverlay.addEventListener('click', close);
+  }
 }

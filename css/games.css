@@ -5,7 +5,7 @@
 .games-panel {
   position: fixed;
   right: 0;
-  top: 0;
+  top: var(--hdr-h, 60px);
   bottom: 0;
   width: 320px;
   min-width: 200px;
@@ -26,7 +26,6 @@
 }
 
 .games-panel .panel-hdr {
-  cursor: move;
   user-select: none;
 }
 
