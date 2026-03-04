@@ -14,12 +14,11 @@
   /* Allow JS to override width via inline style */
   min-width: 160px;
   max-width: 480px;
-  /* Hidden by default, shown via .open class */
-  display: none;
 }
 
-.users-panel.open {
-  display: flex;
+/* Hidden on desktop when not in games room (handled by JS) */
+.users-panel.hidden {
+  display: none;
 }
 
 .panel-hdr {

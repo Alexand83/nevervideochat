@@ -175,6 +175,12 @@ export function switchRoom(roomId) {
       dom.gamesPanel.hidden = true;
       dom.gamesPanel.classList.remove('open');
       document.documentElement.style.setProperty('--games-panel-width', '0px');
+      /* Ripristina usersPanel visibile nelle altre stanze */
+      if (dom.usersPanel) {
+        dom.usersPanel.classList.remove('hidden');
+        dom.usersPanel.classList.add('open');
+        if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
+      }
     }
   }
   

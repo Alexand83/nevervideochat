@@ -17,9 +17,10 @@
     transition: transform var(--ts);
     z-index: 200;
     box-shadow: var(--sh-xl);
-    display: flex !important; /* Override desktop hidden state */
+    display: flex !important; /* Override desktop state */
   }
   .users-panel.open { transform: translateX(0); }
+  .users-panel.hidden { display: none !important; }
 
   /* Panel overlay */
   .panel-overlay {
