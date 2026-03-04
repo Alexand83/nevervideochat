@@ -676,6 +676,9 @@ async function startQuizGame() {
 function askNextQuestion() {
   if (!activeGame || activeGame.game_type !== 'quiz') return;
   
+  /* Se stiamo mostrando la classifica finale, non fare nulla */
+  if (showingFinalLeaderboard) return;
+  
   if (gameData.quiz.questionIndex >= gameData.quiz.questions.length) {
     endQuizGame();
     return;
@@ -702,11 +705,28 @@ function askNextQuestion() {
     showToast(`❓ Domanda ${gameData.quiz.questionIndex + 1}/${gameData.quiz.questions.length}: ${gameData.quiz.currentQuestion.q}`);
   }
   
-  /* Timer per risposta */
-  gameTimer = setTimeout(() => {
-    checkQuizAnswers();
-    setTimeout(() => askNextQuestion(), 2000);
-  }, gameData.quiz.timeLimit);
+  /* Timer per risposta - solo se il gioco è ancora attivo */
+  if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
+    gameTimer = setTimeout(() => {
+      /* Verifica che il gioco sia ancora attivo prima di procedere */
+      if (!activeGame || activeGame.game_type !== 'quiz' || showingFinalLeaderboard) return;
+      if (gameData.quiz.questionIndex >= gameData.quiz.questions.length) {
+        /* Gioco finito, non chiamare askNextQuestion */
+        endQuizGame();
+        return;
+      }
+      checkQuizAnswers();
+      setTimeout(() => {
+        /* Verifica di nuovo prima di chiedere la prossima domanda */
+        if (!activeGame || activeGame.game_type !== 'quiz' || showingFinalLeaderboard) return;
+        if (gameData.quiz.questionIndex >= gameData.quiz.questions.length) {
+          endQuizGame();
+          return;
+        }
+        askNextQuestion();
+      }, 2000);
+    }, gameData.quiz.timeLimit);
+  }
 }
 
 /* ── Gestisce risposta quiz ───────────────────────────────────── */
