@@ -903,10 +903,13 @@ export function initMobilePanel() {
   if (dom.usersPanel) {
     const observer = new MutationObserver(() => {
       if (window.innerWidth <= 768) {
-        setTimeout(() => updateUsersPanelWidthCSS(), 50);
+        setTimeout(() => {
+          updateUsersPanelWidthCSS();
+          updateFloatingButtonPosition();
+        }, 50);
       }
     });
-    observer.observe(dom.usersPanel, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(dom.usersPanel, { attributes: true, attributeFilter: ['class', 'style'] });
   }
 
   /* Aggiorna su resize finestra */
@@ -916,8 +919,10 @@ export function initMobilePanel() {
     resizeTimeout = setTimeout(() => {
       if (window.innerWidth <= 768 && dom.usersPanel?.classList.contains('open')) {
         updateUsersPanelWidthCSS();
+        updateFloatingButtonPosition();
       } else if (window.innerWidth > 768) {
         document.documentElement.style.setProperty('--users-panel-width', '0px');
+        if (dom.floatingUsersBtn) dom.floatingUsersBtn.style.right = '16px';
       }
     }, 150);
   });
