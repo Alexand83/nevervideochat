@@ -213,7 +213,6 @@ export async function checkActiveGame() {
       }
       
       startGameUI(data.game_type, gameData[data.game_type]);
-      renderGamesUsersList(); /* Assicurati che la lista utenti sia sempre renderizzata */
       console.log('[Games] Reloaded active game:', data.game_type, 'in room', state.activeRoom);
     } else {
       /* Nessun gioco attivo - reset */
@@ -1287,54 +1286,7 @@ function renderGamesPanel() {
   updateGamesPanel();
 }
 
-/* ── Render lista utenti online nella stanza giochi ──────────── */
-export function updateGamesUsersList() {
-  renderGamesUsersList();
-}
-
-function renderGamesUsersList() {
-  if (!dom.gamesPanelBody) return;
-  
-  const room = state.rooms[state.activeRoom];
-  const roomUsers = room ? Object.values(room.users || {}) : [];
-  
-  /* Stesso comportamento di renderUsers() - include sempre currentUser come primo */
-  const all = [state.currentUser, ...roomUsers.filter(u => u && u.id !== state.currentUser?.id && u.online)];
-  const online = all.filter(u => u && u.online).length;
-  
-  let usersHtml = '';
-  if (online > 0) {
-    usersHtml = '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza (' + online + ')</div><div class="games-users-list">';
-    all.forEach(user => {
-      if (!user || !user.online) return;
-      const displayName = user.username || user.name;
-      const color = avatarColor(displayName);
-      const init = initials(displayName);
-      const isMe = user.id === state.currentUser?.id;
-      /* Per currentUser: mostra cam solo se attiva in questa stanza */
-      const hasCamHere = isMe 
-        ? (state.cameraRoom === state.activeRoom)
-        : (user.hasCamera && user.online);
-      
-      usersHtml += `<div class="games-user-item ${isMe ? 'games-user-me' : ''}" title="${escHtml(displayName)}">
-        <span class="games-user-avatar" style="background: ${color};">${init}</span>
-        <span class="games-user-name">${escHtml(displayName)}${isMe ? ' (Tu)' : ''}</span>
-        ${hasCamHere ? '<span class="games-user-cam">📹</span>' : ''}
-      </div>`;
-    });
-    usersHtml += '</div></div>';
-  } else {
-    usersHtml = '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza (0)</div><div class="games-users-empty">Nessun utente online</div></div>';
-  }
-  
-  /* Aggiungi/aggiorna la lista utenti al pannello (sotto il contenuto del gioco) */
-  const existingUsersSection = dom.gamesPanelBody.querySelector('.games-users-section');
-  if (existingUsersSection) {
-    existingUsersSection.outerHTML = usersHtml;
-  } else {
-    dom.gamesPanelBody.insertAdjacentHTML('beforeend', usersHtml);
-  }
-}
+/* ── Rimossa: lista utenti ora gestita dal usersPanel separato ──── */
 
 /* ── Nome gioco ──────────────────────────────────────────────── */
 function getGameName(gameType) {
