@@ -50,6 +50,10 @@ let gameData = {
 /* ── Inizializza sistema giochi ───────────────────────────────── */
 export function initGames() {
   if (!dom.gamesPanel) return;
+  
+  /* Reset games panel width CSS variable first, before any other operations */
+  document.documentElement.style.setProperty('--games-panel-width', '0px');
+  
   renderGamesPanel();
   checkActiveGame();
   
