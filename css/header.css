@@ -124,9 +124,7 @@
 }
 
 /* Users toggle only visible on mobile */
-.users-toggle-btn { 
-  display: flex; /* Visibile anche su desktop per aprire/chiudere colonna utenti */
-}
+.users-toggle-btn { display: none; }
 
 /* ─── Header User Chip (left column, shows current user) ─── */
 .header-user {
