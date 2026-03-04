@@ -111,6 +111,9 @@ export async function finishInit() {
 
   /* Init room system (joins general room, subscribes presence + DB) */
   await initRooms();
+  
+  /* Reset games panel width CSS variable after rooms are loaded */
+  document.documentElement.style.setProperty('--games-panel-width', '0px');
 
   renderUsers();
   updateHeaderUser();

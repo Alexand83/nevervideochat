@@ -44,6 +44,10 @@ function mkRoom(id, name = null, icon = '💬', maxCams = null) {
 /* ── Join a room (subscribe presence + DB, load messages) ── */
 export async function joinRoom(roomId) {
   const roomIdStr = String(roomId);
+  
+  /* Reset games panel width CSS variable when joining a room */
+  document.documentElement.style.setProperty('--games-panel-width', '0px');
+  
   if (state.rooms[roomIdStr]) {
     switchRoom(roomIdStr);
     return;
