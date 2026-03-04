@@ -746,7 +746,40 @@ export function updateUsersPanelWidthCSS() {
 
 /* Debug info overlay - visible on mobile */
 let debugOverlay = null;
-function showDebugInfo(info) {
+let debugButton = null;
+
+function createDebugUI() {
+  // Create debug button
+  if (!debugButton) {
+    debugButton = document.createElement('button');
+    debugButton.id = 'usersPanelDebugBtn';
+    debugButton.textContent = '🐛 DEBUG';
+    debugButton.style.cssText = `
+      position: fixed;
+      bottom: 80px;
+      right: 10px;
+      background: #ff0000;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: bold;
+      z-index: 10000;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    `;
+    debugButton.addEventListener('click', () => {
+      if (debugOverlay && debugOverlay.style.display === 'none') {
+        showDebugInfoNow();
+      } else {
+        hideDebugInfo();
+      }
+    });
+    document.body.appendChild(debugButton);
+  }
+  
+  // Create debug overlay
   if (!debugOverlay) {
     debugOverlay = document.createElement('div');
     debugOverlay.id = 'usersPanelDebug';
@@ -754,29 +787,91 @@ function showDebugInfo(info) {
       position: fixed;
       top: 10px;
       left: 10px;
-      background: rgba(0,0,0,0.8);
+      background: rgba(0,0,0,0.9);
       color: #0f0;
-      padding: 10px;
+      padding: 12px;
       border-radius: 5px;
-      font-size: 11px;
+      font-size: 12px;
       font-family: monospace;
-      z-index: 9999;
-      max-width: 200px;
-      line-height: 1.4;
-      pointer-events: none;
+      z-index: 10001;
+      max-width: 250px;
+      line-height: 1.5;
+      pointer-events: auto;
+      border: 2px solid #0f0;
     `;
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background: transparent;
+      color: #0f0;
+      border: 1px solid #0f0;
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+    `;
+    closeBtn.addEventListener('click', () => hideDebugInfo());
+    debugOverlay.appendChild(closeBtn);
     document.body.appendChild(debugOverlay);
+    debugOverlay.style.display = 'none';
   }
+}
+
+function showDebugInfoNow() {
+  if (!debugOverlay) createDebugUI();
+  
+  const isMobile = window.innerWidth <= 768;
+  const panel = dom.usersPanel;
+  const isOpen = panel?.classList.contains('open') || false;
+  const panelWidth = panel?.getBoundingClientRect().width || 0;
+  const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
+  const usersPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--users-panel-width') || '0', 10);
+  const totalMargin = gamesPanelWidth + usersPanelWidth;
+  const chatSection = document.querySelector('.chat-section');
+  const computedMargin = chatSection ? window.getComputedStyle(chatSection).marginRight : 'N/A';
+  const inlineMargin = chatSection?.style.marginRight || 'N/A';
+  
   debugOverlay.innerHTML = `
-    <div><strong>Users Panel Debug</strong></div>
-    <div>Mobile: ${info.isMobile ? 'YES' : 'NO'}</div>
-    <div>Open: ${info.isOpen ? 'YES' : 'NO'}</div>
-    <div>Panel: ${info.panelWidth}px</div>
-    <div>Games: ${info.gamesWidth}px</div>
-    <div>Total: ${info.totalMargin}px</div>
-    <div>CSS Var: ${info.cssVar}</div>
+    <div style="margin-bottom: 8px;"><strong style="color: #0ff;">Users Panel Debug</strong></div>
+    <div>Mobile: <span style="color: ${isMobile ? '#0f0' : '#f00'}">${isMobile ? 'YES' : 'NO'}</span></div>
+    <div>Panel Open: <span style="color: ${isOpen ? '#0f0' : '#f00'}">${isOpen ? 'YES' : 'NO'}</span></div>
+    <div>Panel Width: <span style="color: #ff0">${panelWidth}px</span></div>
+    <div>Games Panel: <span style="color: #ff0">${gamesPanelWidth}px</span></div>
+    <div>Users Panel CSS: <span style="color: #ff0">${usersPanelWidth}px</span></div>
+    <div>Total Margin: <span style="color: #0ff">${totalMargin}px</span></div>
+    <div>Computed: <span style="color: #f0f">${computedMargin}</span></div>
+    <div>Inline: <span style="color: #f0f">${inlineMargin}</span></div>
+    <div style="margin-top: 8px; font-size: 10px; color: #888;">Window: ${window.innerWidth}x${window.innerHeight}</div>
   `;
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = `
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: transparent;
+    color: #0f0;
+    border: 1px solid #0f0;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+  `;
+  closeBtn.addEventListener('click', () => hideDebugInfo());
+  debugOverlay.appendChild(closeBtn);
   debugOverlay.style.display = 'block';
+}
+
+function showDebugInfo(info) {
+  if (!debugOverlay) createDebugUI();
+  showDebugInfoNow();
 }
 
 function hideDebugInfo() {
@@ -883,6 +978,14 @@ export function initPanelResize() {
 
 /* ── Mobile panel (e desktop toggle) ──────────────────────────── */
 export function initMobilePanel() {
+  // Create debug UI on mobile
+  if (window.innerWidth <= 768) {
+    setTimeout(() => {
+      createDebugUI();
+      // Auto-show debug on mobile for testing
+      setTimeout(() => showDebugInfoNow(), 1000);
+    }, 500);
+  }
   const open  = () => { 
     dom.usersPanel.classList.add('open'); 
     dom.panelOverlay.classList.add('show'); 
