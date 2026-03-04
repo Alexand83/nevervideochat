@@ -78,8 +78,16 @@ export function openPrivateChat(uid) {
 
   const input = popup.querySelector(`#pchat-input-${uid}`);
   const sBtn  = popup.querySelector(`#pchat-send-${uid}`);
-  function doSend() {
+  async function doSend() {
     const txt = input.value.trim(); if (!txt) return;
+    
+    /* Security: Validate message length */
+    const { MAX_MESSAGE_LENGTH } = await import('./config.js');
+    if (txt.length > MAX_MESSAGE_LENGTH) {
+      showToast(`⚠️ Message too long (max ${MAX_MESSAGE_LENGTH} characters).`);
+      return;
+    }
+    
     const msg = { from: 'me', text: txt, ts: Date.now() };
     chat.msgs.push(msg); renderPMsg(uid, msg); input.value = '';
     broadcast('pm', uid, { text: txt, ts: msg.ts });

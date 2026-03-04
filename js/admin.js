@@ -284,7 +284,20 @@ async function saveRoom() {
 }
 
 async function deleteRoom(roomId) {
-  if (!confirm(`Delete room "${roomId}"? This cannot be undone.`)) return;
+  /* Security: Verify admin access */
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    showToast('🚫 Admin access required.');
+    return;
+  }
+  
+  /* Security: Validate roomId */
+  if (!roomId || (typeof roomId !== 'string' && typeof roomId !== 'number')) {
+    showToast('⚠️ Invalid room ID.');
+    return;
+  }
+  
+  if (!confirm(`Delete room "${escHtml(String(roomId))}"? This cannot be undone.`)) return;
   if (!state.supa) return;
   
   try {
@@ -349,16 +362,29 @@ async function kickUser(userId, userName) {
 }
 
 async function muteUser(userId, userName) {
-  const duration = prompt(`Mute ${userName} for how many minutes? (0 = permanent)`);
+  /* Security: Verify admin access */
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    showToast('🚫 Admin access required.');
+    return;
+  }
+  
+  /* Security: Validate userId */
+  if (!userId || (typeof userId !== 'string' && typeof userId !== 'number')) {
+    showToast('⚠️ Invalid user ID.');
+    return;
+  }
+  
+  const duration = prompt(`Mute ${escHtml(userName)} for how many minutes? (0 = permanent)`);
   if (duration === null) return;
-  const mins = parseInt(duration) || 0;
+  const mins = Math.max(0, Math.min(10080, parseInt(duration) || 0)); /* Max 1 week */
   if (!state.supa) return;
   
   try {
     const expiresAt = mins > 0 ? new Date(Date.now() + mins * 60 * 1000).toISOString() : null;
     const { error } = await state.supa.from('muted_users').upsert({
-      user_id: userId,
-      muted_by: state.currentUser.id,
+      user_id: String(userId), /* Security: Ensure string */
+      muted_by: String(state.currentUser.id), /* Security: Ensure string */
       expires_at: expiresAt,
     }, { onConflict: 'user_id' });
     
@@ -439,9 +465,22 @@ async function loadBannedUsers() {
 }
 
 async function unbanUser(userId) {
+  /* Security: Verify admin access */
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    showToast('🚫 Admin access required.');
+    return;
+  }
+  
+  /* Security: Validate userId */
+  if (!userId || (typeof userId !== 'string' && typeof userId !== 'number')) {
+    showToast('⚠️ Invalid user ID.');
+    return;
+  }
+  
   if (!state.supa) return;
   try {
-    const { error } = await state.supa.from('banned_users').delete().eq('user_id', userId);
+    const { error } = await state.supa.from('banned_users').delete().eq('user_id', String(userId));
     if (error) throw error;
     showToast('✅ User unbanned.');
     loadBannedUsers();
