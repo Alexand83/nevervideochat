@@ -12,7 +12,7 @@ import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomT
 import { renderUsers, setOpenContextMenu } from './users.js';
 import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate } from './chat.js';
 import { setPChatDeps } from './private-chat.js';
-import { initCameraSystem, initCallControls } from './camera.js?v=20260438';
+import { initCameraSystem, initCallControls } from './camera.js?v=20260439';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initContextMenu, openContextMenu,
          initPanelResize, initMobilePanel, setUIDeps } from './ui.js';
@@ -123,22 +123,8 @@ export async function finishInit() {
   initGames(); /* Initialize games system */
   connectSupabase().catch(err => console.error('[NVC]', err));
   
-  /* Initialize users panel width CSS variable on mobile if panel is open - ONLY in games room */
-  if (window.innerWidth <= 768 && dom.usersPanel && dom.usersPanel.classList.contains('open')) {
-    import('./rooms.js').then(({ getAvailableRooms }) => {
-      const availableRooms = getAvailableRooms?.() || [];
-      const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-      const isGamesRoom = roomData?.is_games_room === true;
-      if (isGamesRoom) {
-        import('./ui.js').then(({ updateUsersPanelWidthCSS }) => {
-          setTimeout(updateUsersPanelWidthCSS, 200);
-        });
-      } else {
-        // In normal rooms, ensure no modifications
-        document.documentElement.style.setProperty('--users-panel-width', '0px');
-      }
-    });
-  }
+  /* Su mobile, assicura che il pannello utenti parta chiuso nelle stanze normali */
+  document.documentElement.style.setProperty('--users-panel-width', '0px');
   
   dom.msgInput?.focus();
 }

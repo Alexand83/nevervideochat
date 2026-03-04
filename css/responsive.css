@@ -1,4 +1,4 @@
-﻿@media (max-width: 768px) {
+@media (max-width: 768px) {
 
   /* Hide users toggle button on mobile (resize handle is used instead) */
   .users-toggle-btn { display: none !important; }

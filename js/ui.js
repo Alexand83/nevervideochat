@@ -8,7 +8,7 @@ import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js'
 import { findUser, checkIsMuted, renderUsers } from './users.js';
 import { addIgnoredUser, removeIgnoredUser } from './storage.js';
 import { broadcast }         from './broadcast.js';
-import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260438';
+import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260439';
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
@@ -694,280 +694,53 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
   }
 }
 
-/* ── Update users panel width CSS variable ── */
+/* ── Update users panel width CSS variable (solo stanza giochi su mobile) ── */
 export async function updateUsersPanelWidthCSS() {
   const isMobile = window.innerWidth <= 768;
-  if (!dom.usersPanel) {
-    console.log('[UI] updateUsersPanelWidthCSS: usersPanel not found');
-    return;
-  }
-  
-  const isOpen = dom.usersPanel.classList.contains('open');
-  const width = dom.usersPanel.getBoundingClientRect().width || 280;
-  const chatSection = document.querySelector('.chat-section');
-  
-  console.log('[UI] updateUsersPanelWidthCSS:', { isMobile, isOpen, width, windowWidth: window.innerWidth });
-  
-  // Check if we're in games room - only apply special handling there
+  if (!dom.usersPanel || !isMobile) return;
+
+  /* Verifica stanza giochi */
   let isGamesRoom = false;
   try {
     const { getAvailableRooms } = await import('./rooms.js');
     const availableRooms = getAvailableRooms?.() || [];
     const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
     isGamesRoom = roomData?.is_games_room === true;
-  } catch (e) {
-    console.warn('[UI] Could not check games room status:', e);
+  } catch (e) { /* ignore */ }
+
+  if (!isGamesRoom) {
+    /* Stanze normali: nessuna modifica al layout, variabile CSS a 0 */
+    document.documentElement.style.setProperty('--users-panel-width', '0px');
+    return;
   }
-  
-  if (isMobile && isOpen) {
-    // Only apply special handling in games room
-    if (isGamesRoom) {
-      // Set CSS variable (only used in games room)
-      document.documentElement.style.setProperty('--users-panel-width', width + 'px');
-      console.log('[UI] Set --users-panel-width to:', width + 'px');
-      
-      const appMain = document.querySelector('.app-main');
-      if (appMain) {
-        appMain.style.display = 'flex';
-        appMain.style.flexDirection = 'row';
-      }
-      // Panel should be relative when open in games room
-      dom.usersPanel.style.position = 'relative';
-      dom.usersPanel.style.top = 'auto';
-      dom.usersPanel.style.right = 'auto';
-      dom.usersPanel.style.height = '100%';
-      
-      // Chat should flex shrink in games room
-      if (chatSection) {
-        const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
-        const totalWidth = gamesPanelWidth + width;
-        chatSection.style.flex = `0 1 calc(100% - ${totalWidth}px)`;
-        chatSection.style.minWidth = '0';
-        console.log('[UI] Applied flex shrink to chat section (games room)');
-      }
-    } else {
-      // In normal rooms, DO NOTHING - keep original behavior
-      // Reset any CSS variable that might have been set
-      document.documentElement.style.setProperty('--users-panel-width', '0px');
-      // Ensure no inline styles are applied
-      if (chatSection) {
-        chatSection.style.flex = '';
-        chatSection.style.minWidth = '';
-        chatSection.style.width = '';
-        chatSection.style.maxWidth = '';
-      }
-      const appMain = document.querySelector('.app-main');
-      if (appMain) {
-        appMain.style.display = '';
-        appMain.style.flexDirection = '';
-      }
-      console.log('[UI] Normal room - keeping original fixed panel behavior, no modifications');
-    }
-    
-    // Show debug info on screen (only on mobile)
-    if (isGamesRoom && chatSection) {
-      const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
-      showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalWidth: gamesPanelWidth + width, cssVar: width + 'px' });
+
+  const isOpen = dom.usersPanel.classList.contains('open');
+  const chatSection = document.querySelector('.chat-section');
+
+  if (isOpen) {
+    const width = dom.usersPanel.getBoundingClientRect().width || 280;
+    document.documentElement.style.setProperty('--users-panel-width', width + 'px');
+    /* In stanza giochi il pannello è relativo (non fixed) */
+    dom.usersPanel.style.position = 'relative';
+    dom.usersPanel.style.top = 'auto';
+    dom.usersPanel.style.right = 'auto';
+    dom.usersPanel.style.height = '100%';
+    if (chatSection) {
+      const gw = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
+      chatSection.style.flex = `0 1 calc(100% - ${gw + width}px)`;
+      chatSection.style.minWidth = '0';
     }
   } else {
-    // Panel is closed - reset everything
     document.documentElement.style.setProperty('--users-panel-width', '0px');
-    if (isMobile) {
-      // Reset panel to fixed when closed (always fixed in normal rooms)
-      dom.usersPanel.style.position = '';
-      dom.usersPanel.style.top = '';
-      dom.usersPanel.style.right = '';
-      dom.usersPanel.style.height = '';
-      
-      // Reset chat section (remove any inline styles)
-      if (chatSection) {
-        chatSection.style.flex = '';
-        chatSection.style.minWidth = '';
-        chatSection.style.width = '';
-        chatSection.style.maxWidth = '';
-      }
-      
-      // Reset app-main
-      const appMain = document.querySelector('.app-main');
-      if (appMain) {
-        appMain.style.display = '';
-        appMain.style.flexDirection = '';
-      }
-      
-      console.log('[UI] Reset panel - removed all inline styles');
-      hideDebugInfo();
-    }
-  }
-  
-  // Debug: check computed style
-  if (chatSection) {
-    const computedMargin = window.getComputedStyle(chatSection).marginRight;
-    const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--users-panel-width');
-    console.log('[UI] Chat section margin-right (computed):', computedMargin);
-    console.log('[UI] Chat section margin-right (inline):', chatSection.style.marginRight);
-    console.log('[UI] CSS variable --users-panel-width:', cssVar);
-  }
-}
-
-/* Debug info overlay - visible on mobile */
-let debugOverlay = null;
-let debugButton = null;
-
-function createDebugUI() {
-  // Create debug button
-  if (!debugButton) {
-    debugButton = document.createElement('button');
-    debugButton.id = 'usersPanelDebugBtn';
-    debugButton.textContent = '🐛 DEBUG';
-    debugButton.style.cssText = `
-      position: fixed;
-      bottom: 80px;
-      right: 10px;
-      background: #ff0000;
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 5px;
-      font-size: 12px;
-      font-weight: bold;
-      z-index: 10000;
-      cursor: pointer;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-    `;
-    debugButton.addEventListener('click', () => {
-      if (debugOverlay && debugOverlay.style.display === 'none') {
-        showDebugInfoNow();
-      } else {
-        hideDebugInfo();
-      }
-    });
-    document.body.appendChild(debugButton);
-  }
-  
-  // Create debug overlay
-  if (!debugOverlay) {
-    debugOverlay = document.createElement('div');
-    debugOverlay.id = 'usersPanelDebug';
-    debugOverlay.style.cssText = `
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.9);
-      color: #0f0;
-      padding: 12px;
-      border-radius: 5px;
-      font-size: 12px;
-      font-family: monospace;
-      z-index: 10001;
-      max-width: 250px;
-      line-height: 1.5;
-      pointer-events: auto;
-      border: 2px solid #0f0;
-    `;
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '✕';
-    closeBtn.style.cssText = `
-      position: absolute;
-      top: 5px;
-      right: 5px;
-      background: transparent;
-      color: #0f0;
-      border: 1px solid #0f0;
-      width: 20px;
-      height: 20px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 12px;
-      line-height: 1;
-    `;
-    closeBtn.addEventListener('click', () => hideDebugInfo());
-    debugOverlay.appendChild(closeBtn);
-    document.body.appendChild(debugOverlay);
-    debugOverlay.style.display = 'none';
-  }
-}
-
-function showDebugInfoNow() {
-  if (!debugOverlay) createDebugUI();
-  
-  const isMobile = window.innerWidth <= 768;
-  const panel = dom.usersPanel;
-  const isOpen = panel?.classList.contains('open') || false;
-  const panelWidth = panel?.getBoundingClientRect().width || 0;
-  const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
-  const usersPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--users-panel-width') || '0', 10);
-  const totalMargin = gamesPanelWidth + usersPanelWidth;
-  const chatSection = document.querySelector('.chat-section');
-  const computedWidth = chatSection ? window.getComputedStyle(chatSection).width : 'N/A';
-  const inlineWidth = chatSection?.style.width || 'N/A';
-  const computedMargin = chatSection ? window.getComputedStyle(chatSection).marginRight : 'N/A';
-  const computedFlex = chatSection ? window.getComputedStyle(chatSection).flex : 'N/A';
-  const appMain = document.querySelector('.app-main');
-  const appMainOverflow = appMain ? window.getComputedStyle(appMain).overflowX : 'N/A';
-  
-  debugOverlay.innerHTML = `
-    <div style="margin-bottom: 8px;"><strong style="color: #0ff;">Users Panel Debug</strong></div>
-    <div>Mobile: <span style="color: ${isMobile ? '#0f0' : '#f00'}">${isMobile ? 'YES' : 'NO'}</span></div>
-    <div>Panel Open: <span style="color: ${isOpen ? '#0f0' : '#f00'}">${isOpen ? 'YES' : 'NO'}</span></div>
-    <div>Panel Width: <span style="color: #ff0">${panelWidth}px</span></div>
-    <div>Games Panel: <span style="color: #ff0">${gamesPanelWidth}px</span></div>
-    <div>Users Panel CSS: <span style="color: #ff0">${usersPanelWidth}px</span></div>
-    <div>Total Width: <span style="color: #0ff">${totalMargin}px</span></div>
-    <div>Chat Width: <span style="color: #f0f">${computedWidth}</span></div>
-    <div>Chat Width (inline): <span style="color: #f0f">${inlineWidth}</span></div>
-    <div>Chat Flex: <span style="color: #f0f">${computedFlex}</span></div>
-    <div>Chat Margin: <span style="color: #f0f">${computedMargin}</span></div>
-    <div>App Main Overflow: <span style="color: #f0f">${appMainOverflow}</span></div>
-    <div style="margin-top: 8px; font-size: 10px; color: #888;">Window: ${window.innerWidth}x${window.innerHeight}</div>
-  `;
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕';
-  closeBtn.style.cssText = `
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: transparent;
-    color: #0f0;
-    border: 1px solid #0f0;
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
-    line-height: 1;
-  `;
-  closeBtn.addEventListener('click', () => hideDebugInfo());
-  debugOverlay.appendChild(closeBtn);
-  debugOverlay.style.display = 'block';
-}
-
-function showDebugInfo(info) {
-  if (!debugOverlay) createDebugUI();
-  showDebugInfoNow();
-}
-
-function hideDebugInfo() {
-  if (debugOverlay) {
-    debugOverlay.style.display = 'none';
-  }
-}
-
-/* Debug function - expose to window for console testing */
-if (typeof window !== 'undefined') {
-  window.debugUsersPanel = () => {
-    console.log('=== Users Panel Debug ===');
-    console.log('Panel element:', dom.usersPanel);
-    console.log('Is mobile:', window.innerWidth <= 768);
-    console.log('Panel open:', dom.usersPanel?.classList.contains('open'));
-    console.log('Panel width:', dom.usersPanel?.getBoundingClientRect().width);
-    console.log('CSS variable:', getComputedStyle(document.documentElement).getPropertyValue('--users-panel-width'));
-    const chatSection = document.querySelector('.chat-section');
+    dom.usersPanel.style.position = '';
+    dom.usersPanel.style.top = '';
+    dom.usersPanel.style.right = '';
+    dom.usersPanel.style.height = '';
     if (chatSection) {
-      console.log('Chat section margin-right:', window.getComputedStyle(chatSection).marginRight);
-      console.log('Chat section computed styles:', window.getComputedStyle(chatSection));
+      chatSection.style.flex = '';
+      chatSection.style.minWidth = '';
     }
-    updateUsersPanelWidthCSS();
-  };
+  }
 }
 
 /* ── Panel resize (desktop + mobile) ────────────────────────────────────── */
@@ -975,26 +748,21 @@ export function initPanelResize() {
   const handle = document.getElementById('panelResizeHandle');
   const panel  = dom.usersPanel;
   if (!handle || !panel) return;
-  
-  /* Load saved width (desktop) or set default (mobile) */
+
   const isMobile = window.innerWidth <= 768;
   const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
+
   if (isMobile) {
-    /* On mobile, set default width if not already set */
-    if (!panel.style.width || panel.style.width === '') {
+    /* Imposta larghezza iniziale su mobile */
+    if (!panel.style.width) {
       panel.style.width = savedW >= 200 && savedW <= 480 ? savedW + 'px' : '280px';
     }
-    /* Update CSS variable if panel is open */
-    if (panel.classList.contains('open')) {
-      updateUsersPanelWidthCSS();
-    }
   } else {
-    /* On desktop, use saved width */
     if (savedW >= 160 && savedW <= 480) panel.style.width = savedW + 'px';
   }
-  
+
   let dragging = false, startX = 0, startW = 0;
-  
+
   const onStart = e => {
     dragging = true;
     startX = e.touches?.[0]?.clientX ?? e.clientX;
@@ -1005,24 +773,23 @@ export function initPanelResize() {
     e.preventDefault();
     e.stopPropagation();
   };
-  
+
   const onMove = e => {
     if (!dragging) return;
     const x = e.touches?.[0]?.clientX ?? e.clientX;
-    /* On mobile (right side), dragging left (x < startX) increases width */
-    const deltaX = startX - x;
+    const deltaX = startX - x; /* Su mobile (pannello a destra): trascina sinistra = più largo */
     const maxWidth = isMobile ? Math.min(480, Math.floor(window.innerWidth * 0.9)) : 480;
-    const newWidth = isMobile 
-      ? Math.min(maxWidth, Math.max(200, startW + deltaX))  /* Mobile: min 200px, max 480px or 90vw */
-      : Math.min(480, Math.max(160, startW + deltaX)); /* Desktop: min 160px, max 480px */
+    const newWidth = isMobile
+      ? Math.min(maxWidth, Math.max(200, startW + deltaX))
+      : Math.min(480, Math.max(160, startW + deltaX));
     panel.style.width = newWidth + 'px';
-    /* Update CSS variable on mobile while dragging */
+    /* Aggiorna CSS var solo in stanza giochi su mobile */
     if (isMobile && panel.classList.contains('open')) {
       document.documentElement.style.setProperty('--users-panel-width', newWidth + 'px');
     }
     e.preventDefault();
   };
-  
+
   const onEnd = () => {
     if (!dragging) return;
     dragging = false;
@@ -1030,15 +797,10 @@ export function initPanelResize() {
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
     const finalWidth = parseInt(panel.style.width, 10);
-    if (finalWidth >= 160 && finalWidth <= 480) {
-      localStorage.setItem('nvc_panel_w', finalWidth);
-    }
-    /* Update CSS variable on mobile */
-    if (isMobile && panel.classList.contains('open')) {
-      updateUsersPanelWidthCSS();
-    }
+    if (finalWidth >= 160 && finalWidth <= 480) localStorage.setItem('nvc_panel_w', finalWidth);
+    if (isMobile && panel.classList.contains('open')) updateUsersPanelWidthCSS();
   };
-  
+
   handle.addEventListener('mousedown', onStart);
   handle.addEventListener('touchstart', onStart, { passive: false });
   document.addEventListener('mousemove', onMove);
@@ -1050,123 +812,53 @@ export function initPanelResize() {
 
 /* ── Mobile panel (e desktop toggle) ──────────────────────────── */
 export function initMobilePanel() {
-  // Create debug UI on mobile
-  if (window.innerWidth <= 768) {
-    setTimeout(() => {
-      createDebugUI();
-      // Auto-show debug on mobile for testing
-      setTimeout(() => showDebugInfoNow(), 1000);
-    }, 500);
-  }
-  const open  = async () => { 
-    dom.usersPanel.classList.add('open'); 
-    dom.panelOverlay.classList.add('show'); 
-    if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','true');
-    /* Update CSS variable on mobile when opening - ONLY in games room */
+  const open = () => {
+    dom.usersPanel.classList.add('open');
+    dom.panelOverlay.classList.add('show');
+    if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded', 'true');
+    /* Su mobile aggiorna CSS var (updateUsersPanelWidthCSS gestisce il check stanza giochi) */
     if (window.innerWidth <= 768) {
-      setTimeout(async () => {
-        try {
-          const { getAvailableRooms } = await import('./rooms.js');
-          const availableRooms = getAvailableRooms?.() || [];
-          const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-          const isGamesRoom = roomData?.is_games_room === true;
-          if (isGamesRoom) {
-            updateUsersPanelWidthCSS();
-          } else {
-            // In normal rooms, do nothing - let CSS handle it
-            document.documentElement.style.setProperty('--users-panel-width', '0px');
-          }
-        } catch (e) {
-          console.warn('[UI] Could not check games room on open:', e);
-        }
-      }, 100); /* Delay to ensure width is calculated after transform */
+      setTimeout(() => updateUsersPanelWidthCSS(), 100);
     }
   };
-  const close = () => { 
-    dom.usersPanel.classList.remove('open'); 
-    dom.panelOverlay.classList.remove('show'); 
-    if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','false');
-    /* Reset CSS variable on mobile when closing */
-    if (window.innerWidth <= 768) {
-      document.documentElement.style.setProperty('--users-panel-width', '0px');
-    }
+
+  const close = () => {
+    dom.usersPanel.classList.remove('open');
+    dom.panelOverlay.classList.remove('show');
+    if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded', 'false');
+    document.documentElement.style.setProperty('--users-panel-width', '0px');
+    /* Reset stili inline (usati in stanza giochi) */
+    if (dom.usersPanel) dom.usersPanel.style.cssText = '';
+    const chatSection = document.querySelector('.chat-section');
+    if (chatSection) { chatSection.style.flex = ''; chatSection.style.minWidth = ''; }
   };
-  
-  /* Only enable toggle button if it's visible (desktop) */
-  /* On mobile, users can open panel by clicking on the resize handle area or other methods */
+
+  /* Toggle button visibile solo su desktop */
   if (dom.mobileUsersToggle && window.getComputedStyle(dom.mobileUsersToggle).display !== 'none') {
-    dom.mobileUsersToggle.addEventListener('click', () => dom.usersPanel.classList.contains('open') ? close() : open());
+    dom.mobileUsersToggle.addEventListener('click', () =>
+      dom.usersPanel.classList.contains('open') ? close() : open()
+    );
   }
-  
-  if (dom.closePanelBtn) {
-    dom.closePanelBtn.addEventListener('click', close);
-  }
-  if (dom.panelOverlay) {
-    dom.panelOverlay.addEventListener('click', close);
-  }
-  
-  /* Watch for class changes to update CSS variable - ONLY in games room */
+
+  if (dom.closePanelBtn)  dom.closePanelBtn.addEventListener('click', close);
+  if (dom.panelOverlay)   dom.panelOverlay.addEventListener('click', close);
+
+  /* Observer: aggiorna CSS var quando cambia classe (gestione stanza giochi) */
   if (dom.usersPanel) {
-    const observer = new MutationObserver(async () => {
+    const observer = new MutationObserver(() => {
       if (window.innerWidth <= 768) {
-        // Check if we're in games room before updating
-        try {
-          const { getAvailableRooms } = await import('./rooms.js');
-          const availableRooms = getAvailableRooms?.() || [];
-          const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-          const isGamesRoom = roomData?.is_games_room === true;
-          // Only update if in games room
-          if (isGamesRoom) {
-            setTimeout(updateUsersPanelWidthCSS, 50);
-          } else {
-            // In normal rooms, ensure no modifications
-            document.documentElement.style.setProperty('--users-panel-width', '0px');
-            const chatSection = document.querySelector('.chat-section');
-            if (chatSection) {
-              chatSection.style.flex = '';
-              chatSection.style.minWidth = '';
-              chatSection.style.width = '';
-              chatSection.style.maxWidth = '';
-            }
-            const appMain = document.querySelector('.app-main');
-            if (appMain) {
-              appMain.style.display = '';
-              appMain.style.flexDirection = '';
-            }
-          }
-        } catch (e) {
-          console.warn('[UI] Could not check games room in observer:', e);
-        }
+        setTimeout(() => updateUsersPanelWidthCSS(), 50);
       }
     });
     observer.observe(dom.usersPanel, { attributes: true, attributeFilter: ['class'] });
-    /* Initialize - but only if in games room */
-    if (window.innerWidth <= 768 && dom.usersPanel.classList.contains('open')) {
-      setTimeout(async () => {
-        try {
-          const { getAvailableRooms } = await import('./rooms.js');
-          const availableRooms = getAvailableRooms?.() || [];
-          const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-          const isGamesRoom = roomData?.is_games_room === true;
-          if (isGamesRoom) {
-            updateUsersPanelWidthCSS();
-          } else {
-            // Ensure no modifications in normal rooms
-            document.documentElement.style.setProperty('--users-panel-width', '0px');
-          }
-        } catch (e) {
-          console.warn('[UI] Could not check games room on init:', e);
-        }
-      }, 200);
-    }
   }
-  
-  /* Update CSS variable on window resize */
+
+  /* Aggiorna su resize finestra */
   let resizeTimeout;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      if (window.innerWidth <= 768 && dom.usersPanel && dom.usersPanel.classList.contains('open')) {
+      if (window.innerWidth <= 768 && dom.usersPanel?.classList.contains('open')) {
         updateUsersPanelWidthCSS();
       } else if (window.innerWidth > 768) {
         document.documentElement.style.setProperty('--users-panel-width', '0px');
