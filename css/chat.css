@@ -249,6 +249,7 @@
   touch-action: none;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  min-height: 36px;
 }
 .fmt-left, .fmt-right {
   display: flex;
@@ -424,7 +425,7 @@
   align-items: flex-end;
   gap: var(--s2);
   touch-action: none;
-  padding: var(--s1) var(--s3);
+  padding: var(--s1) var(--s3) var(--s2);
 }
 
 .msg-input {
