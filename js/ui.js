@@ -8,7 +8,7 @@ import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js'
 import { findUser, checkIsMuted, renderUsers } from './users.js';
 import { addIgnoredUser, removeIgnoredUser } from './storage.js';
 import { broadcast }         from './broadcast.js';
-import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260443';
+import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260444';
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
@@ -830,14 +830,14 @@ export function initMobilePanel() {
       if (isGamesRoom && dom.gamesPanel && !dom.gamesPanel.hidden) {
         /* In stanza giochi: bottone a sinistra del pannello utenti (che è a sinistra della barra giochi) */
         const gamesPanelWidth = dom.gamesPanel.offsetWidth || 260;
-        dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${panelWidth}px + 16px)`;
+        dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${panelWidth}px + 12px)`;
       } else {
         /* Stanze normali: bottone a sinistra del pannello */
-        dom.floatingUsersBtn.style.right = `calc(${panelWidth}px + 16px)`;
+        dom.floatingUsersBtn.style.right = `calc(${panelWidth}px + 12px)`;
       }
     } else {
-      /* Quando pannello chiuso: bottone a destra */
-      dom.floatingUsersBtn.style.right = '16px';
+      /* Quando pannello chiuso: bottone in alto a destra */
+      dom.floatingUsersBtn.style.right = '12px';
     }
   };
 
@@ -922,7 +922,7 @@ export function initMobilePanel() {
         updateFloatingButtonPosition();
       } else if (window.innerWidth > 768) {
         document.documentElement.style.setProperty('--users-panel-width', '0px');
-        if (dom.floatingUsersBtn) dom.floatingUsersBtn.style.right = '16px';
+        if (dom.floatingUsersBtn) dom.floatingUsersBtn.style.right = '12px';
       }
     }, 150);
   });

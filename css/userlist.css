@@ -201,60 +201,63 @@
   line-height: 1.2;
 }
 
-/* Floating users button (mobile only) */
+/* Floating users button (mobile only) - minimal style, top position */
 .floating-users-btn {
   display: none; /* Shown on mobile via responsive.css */
   position: fixed;
-  bottom: 80px; /* Above chat input area */
-  right: 16px;
-  width: 56px;
-  height: 56px;
+  top: calc(var(--hdr-h, 60px) + 8px); /* Below header */
+  right: 12px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: var(--accent);
-  border: none;
+  background: rgba(var(--accent-rgb, 31, 111, 235), 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.1);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
   cursor: pointer;
   z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   touch-action: none;
 }
 
 .floating-users-btn:hover,
 .floating-users-btn:active {
-  background: var(--accent-h);
-  transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+  background: rgba(var(--accent-rgb, 31, 111, 235), 0.95);
+  transform: scale(1.05);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
 }
 
 .floating-users-btn[aria-expanded="true"] {
-  background: var(--clr-success);
-  right: calc(var(--users-panel-width, 280px) + 16px); /* Sposta a sinistra quando pannello aperto */
+  background: rgba(var(--clr-success-rgb, 35, 134, 54), 0.85);
+  right: calc(var(--users-panel-width, 280px) + 12px); /* Sposta a sinistra quando pannello aperto */
 }
 
 .floating-btn-icon {
-  width: 24px;
-  height: 24px;
-  stroke-width: 2;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.5;
 }
 
 .floating-btn-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 4px;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
   border-radius: var(--r-pill);
   background: var(--clr-danger);
   color: #fff;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--bg0);
+  border: 1.5px solid var(--bg0);
+  line-height: 1;
 }

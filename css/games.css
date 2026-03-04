@@ -622,4 +622,35 @@
     width: 95%;
     padding: 20px;
   }
+  
+  /* Fix text overflow in game content on mobile */
+  .users-panel-game-content {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+  
+  .users-panel-game-content .game-hint,
+  .users-panel-game-content .game-stats,
+  .users-panel-game-content .game-instruction,
+  .users-panel-game-content .game-host,
+  .users-panel-game-content .game-statement,
+  .users-panel-game-content .game-question-number,
+  .users-panel-game-content .game-question,
+  .users-panel-game-content .game-option,
+  .users-panel-game-content .game-option-text,
+  .users-panel-game-content .game-statement-text {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+    overflow-x: hidden;
+    white-space: normal;
+  }
+  
+  .users-panel-game-content .game-leaderboard-name,
+  .users-panel-game-content .game-leaderboard-score {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
 }
