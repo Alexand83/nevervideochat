@@ -70,22 +70,29 @@ export function initGames() {
   }
   
   /* Toggle users list button handler */
-  if (dom.toggleUsersListBtn) {
+  if (dom.toggleUsersListBtn && dom.usersPanel) {
+    const updateButtonText = () => {
+      const isVisible = dom.usersPanel.classList.contains('open');
+      dom.toggleUsersListBtn.textContent = '👥';
+      dom.toggleUsersListBtn.title = isVisible ? 'Nascondi utenti online' : 'Visualizza utenti online';
+    };
+    
     dom.toggleUsersListBtn.addEventListener('click', () => {
-      if (!dom.usersPanel) return;
       const isVisible = dom.usersPanel.classList.contains('open');
       if (isVisible) {
         dom.usersPanel.classList.remove('open');
-        dom.panelOverlay.classList.remove('show');
-        dom.toggleUsersListBtn.textContent = '👥';
-        dom.toggleUsersListBtn.title = 'Visualizza utenti online';
+        if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
       } else {
         dom.usersPanel.classList.add('open');
-        dom.panelOverlay.classList.add('show');
-        dom.toggleUsersListBtn.textContent = '👥';
-        dom.toggleUsersListBtn.title = 'Nascondi utenti online';
+        if (dom.panelOverlay) dom.panelOverlay.classList.add('show');
       }
+      updateButtonText();
     });
+    
+    /* Aggiorna il testo del bottone quando il pannello viene aperto/chiuso da altri punti */
+    const observer = new MutationObserver(updateButtonText);
+    observer.observe(dom.usersPanel, { attributes: true, attributeFilter: ['class'] });
+    updateButtonText();
   }
   
   /* Rendi draggabile e ridimensionabile il pannello giochi */
