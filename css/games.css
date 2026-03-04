@@ -83,9 +83,9 @@
 
 .games-panel-empty {
   text-align: center;
-  padding: 32px 16px;
-  color: var(--text-secondary, rgba(255,255,255,0.6));
-  font-size: 14px;
+  padding: var(--s4);
+  color: var(--tx2);
+  font-size: var(--fz-sm);
 }
 
 .games-panel-header {
