@@ -791,21 +791,21 @@ export function initPanelResize() {
         const gamesPanelWidth = dom.gamesPanel.offsetWidth || 320;
         dom.usersPanel.style.right = gamesPanelWidth + 'px';
       }
-      /* Aggiorna posizione bottone floating su mobile */
-      if (window.innerWidth <= 768 && dom.floatingUsersBtn) {
-        setTimeout(() => {
-          const panelWidth = dom.usersPanel.getBoundingClientRect().width || 280;
-          const isGamesRoom = dom.usersPanel.style.position === 'fixed';
-          if (isGamesRoom) {
-            /* In stanza giochi: bottone a sinistra del pannello utenti */
-            const gamesPanelWidth = dom.gamesPanel?.offsetWidth || 260;
-            dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${panelWidth}px + 16px)`;
-          } else {
-            /* Stanze normali: bottone a sinistra del pannello */
-            dom.floatingUsersBtn.style.right = `calc(${panelWidth}px + 16px)`;
-          }
-        }, 50);
-      }
+        /* Aggiorna posizione bottone floating su mobile */
+        if (window.innerWidth <= 768 && dom.floatingUsersBtn) {
+          setTimeout(() => {
+            const panelWidth = dom.usersPanel.getBoundingClientRect().width || 280;
+            const isGamesRoom = dom.usersPanel.style.position === 'fixed';
+            if (isGamesRoom) {
+              /* In stanza giochi: bottone a sinistra del pannello utenti */
+              const gamesPanelWidth = dom.gamesPanel?.offsetWidth || 260;
+              dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${panelWidth}px + 12px)`;
+            } else {
+              /* Stanze normali: bottone a sinistra del pannello */
+              dom.floatingUsersBtn.style.right = `calc(${panelWidth}px + 12px)`;
+            }
+          }, 50);
+        }
     }
   };
 
