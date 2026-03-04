@@ -720,12 +720,12 @@ export async function updateUsersPanelWidthCSS() {
   }
   
   if (isMobile && isOpen) {
-    // Set CSS variable (only used in games room)
-    document.documentElement.style.setProperty('--users-panel-width', width + 'px');
-    console.log('[UI] Set --users-panel-width to:', width + 'px');
-    
-    // Only apply special layout changes in games room
+    // Only apply special handling in games room
     if (isGamesRoom) {
+      // Set CSS variable (only used in games room)
+      document.documentElement.style.setProperty('--users-panel-width', width + 'px');
+      console.log('[UI] Set --users-panel-width to:', width + 'px');
+      
       const appMain = document.querySelector('.app-main');
       if (appMain) {
         appMain.style.display = 'flex';
@@ -746,9 +746,22 @@ export async function updateUsersPanelWidthCSS() {
         console.log('[UI] Applied flex shrink to chat section (games room)');
       }
     } else {
-      // In normal rooms, keep panel fixed (original behavior)
-      // Don't modify chat section - it works fine as is
-      console.log('[UI] Normal room - keeping panel fixed');
+      // In normal rooms, DO NOTHING - keep original behavior
+      // Reset any CSS variable that might have been set
+      document.documentElement.style.setProperty('--users-panel-width', '0px');
+      // Ensure no inline styles are applied
+      if (chatSection) {
+        chatSection.style.flex = '';
+        chatSection.style.minWidth = '';
+        chatSection.style.width = '';
+        chatSection.style.maxWidth = '';
+      }
+      const appMain = document.querySelector('.app-main');
+      if (appMain) {
+        appMain.style.display = '';
+        appMain.style.flexDirection = '';
+      }
+      console.log('[UI] Normal room - keeping original fixed panel behavior, no modifications');
     }
     
     // Show debug info on screen (only on mobile)
@@ -757,18 +770,21 @@ export async function updateUsersPanelWidthCSS() {
       showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalWidth: gamesPanelWidth + width, cssVar: width + 'px' });
     }
   } else {
+    // Panel is closed - reset everything
     document.documentElement.style.setProperty('--users-panel-width', '0px');
     if (isMobile) {
       // Reset panel to fixed when closed (always fixed in normal rooms)
-      dom.usersPanel.style.position = 'fixed';
-      dom.usersPanel.style.top = 'var(--hdr-h)';
-      dom.usersPanel.style.right = '0';
-      dom.usersPanel.style.height = 'calc(100dvh - var(--hdr-h))';
+      dom.usersPanel.style.position = '';
+      dom.usersPanel.style.top = '';
+      dom.usersPanel.style.right = '';
+      dom.usersPanel.style.height = '';
       
-      // Reset chat section (only if was modified in games room)
+      // Reset chat section (remove any inline styles)
       if (chatSection) {
         chatSection.style.flex = '';
         chatSection.style.minWidth = '';
+        chatSection.style.width = '';
+        chatSection.style.maxWidth = '';
       }
       
       // Reset app-main
@@ -778,7 +794,7 @@ export async function updateUsersPanelWidthCSS() {
         appMain.style.flexDirection = '';
       }
       
-      console.log('[UI] Reset panel to fixed position');
+      console.log('[UI] Reset panel - removed all inline styles');
       hideDebugInfo();
     }
   }

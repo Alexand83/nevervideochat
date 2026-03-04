@@ -188,19 +188,46 @@ export function switchRoom(roomId) {
         dom.usersPanel.classList.remove('hidden');
         dom.usersPanel.classList.add('open');
         if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
-        /* Rimuovi stili inline se presenti (da stanza giochi) */
+        /* Rimuovi TUTTI gli stili inline se presenti (da stanza giochi) */
         dom.usersPanel.style.position = '';
         dom.usersPanel.style.top = '';
         dom.usersPanel.style.bottom = '';
         dom.usersPanel.style.right = '';
         dom.usersPanel.style.zIndex = '';
-        /* Update CSS variable on mobile when leaving games room */
+        dom.usersPanel.style.width = ''; /* Reset width */
+        dom.usersPanel.style.height = ''; /* Reset height */
+        
+        /* Reset chat section styles if modified */
+        const chatSection = document.querySelector('.chat-section');
+        if (chatSection) {
+          chatSection.style.flex = '';
+          chatSection.style.minWidth = '';
+          chatSection.style.width = '';
+          chatSection.style.maxWidth = '';
+        }
+        
+        /* Reset app-main styles */
+        const appMain = document.querySelector('.app-main');
+        if (appMain) {
+          appMain.style.display = '';
+          appMain.style.flexDirection = '';
+        }
+        
+        /* Reset CSS variables */
+        document.documentElement.style.setProperty('--users-panel-width', '0px');
+        
+        /* On mobile, ensure panel is back to fixed position (original behavior) */
         if (window.innerWidth <= 768) {
+          // Force reset to fixed position for mobile
           setTimeout(() => {
-            import('./ui.js').then(({ updateUsersPanelWidthCSS }) => {
-              updateUsersPanelWidthCSS();
-            });
-          }, 100);
+            if (dom.usersPanel && dom.usersPanel.classList.contains('open')) {
+              // Panel should be fixed on mobile (handled by CSS, but ensure no inline overrides)
+              dom.usersPanel.style.position = '';
+              dom.usersPanel.style.top = '';
+              dom.usersPanel.style.right = '';
+              dom.usersPanel.style.height = '';
+            }
+          }, 50);
         }
       }
     }
