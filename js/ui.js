@@ -713,45 +713,54 @@ export function updateUsersPanelWidthCSS() {
     document.documentElement.style.setProperty('--users-panel-width', width + 'px');
     console.log('[UI] Set --users-panel-width to:', width + 'px');
     
-    // Also apply directly to chat section as fallback (use width instead of margin on mobile)
-    if (chatSection && isMobile) {
-      const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
-      const totalWidth = gamesPanelWidth + width;
-      const newWidth = `calc(100% - ${totalWidth}px)`;
-      // Override flex to allow width control
-      chatSection.style.flex = '0 0 auto';
-      chatSection.style.width = newWidth;
-      chatSection.style.maxWidth = newWidth;
-      chatSection.style.marginRight = '0px';
-      chatSection.style.overflowX = 'hidden';
-      
-      // Also set overflow on app-main
+    // On mobile, when panel opens, change it from fixed to relative so it's part of flex layout
+    if (isMobile && isOpen) {
       const appMain = document.querySelector('.app-main');
       if (appMain) {
-        appMain.style.overflowX = 'hidden';
+        appMain.style.display = 'flex';
+        appMain.style.flexDirection = 'row';
       }
+      // Panel should be relative when open (handled by CSS, but ensure it)
+      dom.usersPanel.style.position = 'relative';
+      dom.usersPanel.style.top = 'auto';
+      dom.usersPanel.style.right = 'auto';
+      dom.usersPanel.style.height = '100%';
       
-      console.log('[UI] Applied inline width to chat section:', newWidth);
-      
-      // Show debug info on screen (only on mobile)
-      showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalWidth, cssVar: width + 'px' });
+      // Chat should flex shrink
+      if (chatSection) {
+        const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
+        const totalWidth = gamesPanelWidth + width;
+        chatSection.style.flex = `0 1 calc(100% - ${totalWidth}px)`;
+        chatSection.style.minWidth = '0';
+        console.log('[UI] Applied flex shrink to chat section');
+        
+        // Show debug info on screen (only on mobile)
+        showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalWidth, cssVar: width + 'px' });
+      }
     }
   } else {
     document.documentElement.style.setProperty('--users-panel-width', '0px');
-    if (chatSection && isMobile) {
-      // Reset width on mobile when panel is closed
-      const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
-      if (gamesPanelWidth > 0) {
-        chatSection.style.flex = '0 0 auto';
-        chatSection.style.width = `calc(100% - ${gamesPanelWidth}px)`;
-        chatSection.style.maxWidth = `calc(100% - ${gamesPanelWidth}px)`;
-      } else {
+    if (isMobile) {
+      // Reset panel to fixed when closed
+      dom.usersPanel.style.position = 'fixed';
+      dom.usersPanel.style.top = 'var(--hdr-h)';
+      dom.usersPanel.style.right = '0';
+      dom.usersPanel.style.height = 'calc(100dvh - var(--hdr-h))';
+      
+      // Reset chat section
+      if (chatSection) {
         chatSection.style.flex = '';
-        chatSection.style.width = '';
-        chatSection.style.maxWidth = '';
+        chatSection.style.minWidth = '';
       }
-      chatSection.style.marginRight = '';
-      console.log('[UI] Reset chat section width');
+      
+      // Reset app-main
+      const appMain = document.querySelector('.app-main');
+      if (appMain) {
+        appMain.style.display = '';
+        appMain.style.flexDirection = '';
+      }
+      
+      console.log('[UI] Reset panel to fixed position');
       hideDebugInfo();
     }
   }
