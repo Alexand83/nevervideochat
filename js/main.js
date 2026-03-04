@@ -122,6 +122,14 @@ export async function finishInit() {
   updateAdminButton(); /* Check admin access and show/hide button */
   initGames(); /* Initialize games system */
   connectSupabase().catch(err => console.error('[NVC]', err));
+  
+  /* Initialize users panel width CSS variable on mobile if panel is open */
+  if (window.innerWidth <= 768 && dom.usersPanel && dom.usersPanel.classList.contains('open')) {
+    import('./ui.js').then(({ updateUsersPanelWidthCSS }) => {
+      setTimeout(updateUsersPanelWidthCSS, 200);
+    });
+  }
+  
   dom.msgInput?.focus();
 }
 

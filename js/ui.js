@@ -793,7 +793,9 @@ export function initMobilePanel() {
     if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','true');
     /* Update CSS variable on mobile when opening */
     if (window.innerWidth <= 768) {
-      setTimeout(updateUsersPanelWidthCSS, 50); /* Small delay to ensure width is calculated */
+      setTimeout(() => {
+        updateUsersPanelWidthCSS();
+      }, 100); /* Delay to ensure width is calculated after transform */
     }
   };
   const close = () => { 
@@ -820,10 +822,29 @@ export function initMobilePanel() {
   }
   
   /* Watch for class changes to update CSS variable */
-  if (dom.usersPanel && window.innerWidth <= 768) {
+  if (dom.usersPanel) {
     const observer = new MutationObserver(() => {
-      updateUsersPanelWidthCSS();
+      if (window.innerWidth <= 768) {
+        setTimeout(updateUsersPanelWidthCSS, 50);
+      }
     });
     observer.observe(dom.usersPanel, { attributes: true, attributeFilter: ['class'] });
+    /* Initialize CSS variable if panel is already open on mobile */
+    if (window.innerWidth <= 768 && dom.usersPanel.classList.contains('open')) {
+      setTimeout(updateUsersPanelWidthCSS, 200);
+    }
   }
+  
+  /* Update CSS variable on window resize */
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      if (window.innerWidth <= 768 && dom.usersPanel && dom.usersPanel.classList.contains('open')) {
+        updateUsersPanelWidthCSS();
+      } else if (window.innerWidth > 768) {
+        document.documentElement.style.setProperty('--users-panel-width', '0px');
+      }
+    }, 150);
+  });
 }

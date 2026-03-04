@@ -27,7 +27,7 @@
   
   /* When users panel is open on mobile, add margin to chat section */
   .chat-section {
-    margin-right: var(--users-panel-width, 0px);
+    margin-right: calc(var(--games-panel-width, 0px) + var(--users-panel-width, 0px)) !important;
     transition: margin-right 0.3s ease;
   }
   
