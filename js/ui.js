@@ -694,6 +694,19 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
   }
 }
 
+/* ── Update users panel width CSS variable ── */
+export function updateUsersPanelWidthCSS() {
+  const isMobile = window.innerWidth <= 768;
+  if (!dom.usersPanel) return;
+  
+  if (isMobile && dom.usersPanel.classList.contains('open')) {
+    const width = dom.usersPanel.getBoundingClientRect().width || 280;
+    document.documentElement.style.setProperty('--users-panel-width', width + 'px');
+  } else {
+    document.documentElement.style.setProperty('--users-panel-width', '0px');
+  }
+}
+
 /* ── Panel resize (desktop + mobile) ────────────────────────────────────── */
 export function initPanelResize() {
   const handle = document.getElementById('panelResizeHandle');
@@ -707,6 +720,10 @@ export function initPanelResize() {
     /* On mobile, set default width if not already set */
     if (!panel.style.width || panel.style.width === '') {
       panel.style.width = savedW >= 200 && savedW <= 480 ? savedW + 'px' : '280px';
+    }
+    /* Update CSS variable if panel is open */
+    if (panel.classList.contains('open')) {
+      updateUsersPanelWidthCSS();
     }
   } else {
     /* On desktop, use saved width */
@@ -729,11 +746,17 @@ export function initPanelResize() {
   const onMove = e => {
     if (!dragging) return;
     const x = e.touches?.[0]?.clientX ?? e.clientX;
-    const deltaX = startX - x; /* On mobile (right side), dragging left increases width */
+    /* On mobile (right side), dragging left (x < startX) increases width */
+    const deltaX = startX - x;
+    const maxWidth = isMobile ? Math.min(480, Math.floor(window.innerWidth * 0.9)) : 480;
     const newWidth = isMobile 
-      ? Math.min(480, Math.max(200, startW + deltaX))  /* Mobile: min 200px, max 480px */
+      ? Math.min(maxWidth, Math.max(200, startW + deltaX))  /* Mobile: min 200px, max 480px or 90vw */
       : Math.min(480, Math.max(160, startW + deltaX)); /* Desktop: min 160px, max 480px */
     panel.style.width = newWidth + 'px';
+    /* Update CSS variable on mobile while dragging */
+    if (isMobile && panel.classList.contains('open')) {
+      document.documentElement.style.setProperty('--users-panel-width', newWidth + 'px');
+    }
     e.preventDefault();
   };
   
@@ -746,6 +769,10 @@ export function initPanelResize() {
     const finalWidth = parseInt(panel.style.width, 10);
     if (finalWidth >= 160 && finalWidth <= 480) {
       localStorage.setItem('nvc_panel_w', finalWidth);
+    }
+    /* Update CSS variable on mobile */
+    if (isMobile && panel.classList.contains('open')) {
+      updateUsersPanelWidthCSS();
     }
   };
   
@@ -760,8 +787,24 @@ export function initPanelResize() {
 
 /* ── Mobile panel (e desktop toggle) ──────────────────────────── */
 export function initMobilePanel() {
-  const open  = () => { dom.usersPanel.classList.add('open'); dom.panelOverlay.classList.add('show'); if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','true'); };
-  const close = () => { dom.usersPanel.classList.remove('open'); dom.panelOverlay.classList.remove('show'); if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','false'); };
+  const open  = () => { 
+    dom.usersPanel.classList.add('open'); 
+    dom.panelOverlay.classList.add('show'); 
+    if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','true');
+    /* Update CSS variable on mobile when opening */
+    if (window.innerWidth <= 768) {
+      setTimeout(updateUsersPanelWidthCSS, 50); /* Small delay to ensure width is calculated */
+    }
+  };
+  const close = () => { 
+    dom.usersPanel.classList.remove('open'); 
+    dom.panelOverlay.classList.remove('show'); 
+    if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','false');
+    /* Reset CSS variable on mobile when closing */
+    if (window.innerWidth <= 768) {
+      document.documentElement.style.setProperty('--users-panel-width', '0px');
+    }
+  };
   
   /* Only enable toggle button if it's visible (desktop) */
   /* On mobile, users can open panel by clicking on the resize handle area or other methods */
@@ -774,5 +817,13 @@ export function initMobilePanel() {
   }
   if (dom.panelOverlay) {
     dom.panelOverlay.addEventListener('click', close);
+  }
+  
+  /* Watch for class changes to update CSS variable */
+  if (dom.usersPanel && window.innerWidth <= 768) {
+    const observer = new MutationObserver(() => {
+      updateUsersPanelWidthCSS();
+    });
+    observer.observe(dom.usersPanel, { attributes: true, attributeFilter: ['class'] });
   }
 }

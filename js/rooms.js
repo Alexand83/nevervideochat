@@ -194,6 +194,14 @@ export function switchRoom(roomId) {
         dom.usersPanel.style.bottom = '';
         dom.usersPanel.style.right = '';
         dom.usersPanel.style.zIndex = '';
+        /* Update CSS variable on mobile when leaving games room */
+        if (window.innerWidth <= 768) {
+          setTimeout(() => {
+            import('./ui.js').then(({ updateUsersPanelWidthCSS }) => {
+              updateUsersPanelWidthCSS();
+            });
+          }, 100);
+        }
       }
     }
   }

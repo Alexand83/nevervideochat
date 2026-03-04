@@ -10,6 +10,7 @@
   transition: margin-right 0.3s ease;
   margin-right: var(--games-panel-width, 0px);
 }
+/* On mobile, users panel width is handled by responsive.css */
 
 /* Messages container */
 .msgs-container {

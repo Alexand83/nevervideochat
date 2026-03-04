@@ -77,6 +77,8 @@ export async function finishInit() {
   
   /* Reset games panel width CSS variable to 0 on init (unless in games room) */
   document.documentElement.style.setProperty('--games-panel-width', '0px');
+  /* Reset users panel width CSS variable on init */
+  document.documentElement.style.setProperty('--users-panel-width', '0px');
 
   /* Wire the auth module's finishInit reference */
   const { setFinishInit } = await import('./auth.js');
