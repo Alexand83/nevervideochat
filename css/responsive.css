@@ -28,11 +28,21 @@
   /* Show resize handle on mobile (on the left side since panel is on the right) */
   .panel-resize-handle {
     display: block !important;
+    position: absolute;
     left: 0;
     right: auto;
-    width: 6px;
+    top: 0;
+    bottom: 0;
+    width: 8px; /* Wider for easier touch on mobile */
     cursor: col-resize;
     touch-action: none;
+    z-index: 10;
+    background: transparent;
+  }
+  .panel-resize-handle:hover,
+  .panel-resize-handle.is-resizing {
+    background: var(--accent);
+    opacity: 0.6;
   }
 
   /* Panel overlay */
