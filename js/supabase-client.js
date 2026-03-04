@@ -264,10 +264,15 @@ export async function connectSupabase() {
         }
       })
       .on('broadcast', { event: 'game-question' }, async ({ payload }) => {
-        /* Aggiorna UI quando arriva una nuova domanda */
+        /* Aggiorna UI quando arriva una nuova domanda - SOLO se non siamo noi */
         if (payload.game_type === 'quiz' && payload.room_id === state.activeRoom) {
-          const { checkActiveGame } = await import('./games.js');
-          await checkActiveGame();
+          /* Se siamo noi ad aver inviato il broadcast, non fare nulla - abbiamo già aggiornato */
+          if (String(payload.from) === String(state.currentUser?.id)) {
+            return;
+          }
+          /* Aggiorna solo l'UI, NON ricaricare tutto il gioco per evitare conflitti con i timer */
+          const { updateGamesPanel } = await import('./games.js');
+          setTimeout(() => updateGamesPanel(), 100);
         }
       })
       .on('broadcast', { event: 'game-started' }, async ({ payload }) => {

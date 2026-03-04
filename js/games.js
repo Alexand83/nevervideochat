@@ -330,40 +330,45 @@ export async function checkActiveGame() {
           questions: gameState.questions || defaultQuestions,
           questionStartTime: gameState.questionStartTime || null,
         };
-        /* Se c'è una domanda attiva, ripristina il timer SOLO se non è già scaduto */
+        /* NON ripristinare il timer quando si ricarica il gioco - potrebbe causare conflitti */
+        /* Il timer originale gestirà il flusso, e se non c'è timer attivo, significa che */
+        /* la domanda è già stata processata o il gioco è finito */
         if (gameData.quiz.currentQuestion && gameData.quiz.questionStartTime) {
-          /* Cancella timer esistente se presente */
-          if (gameTimer) {
-            clearTimeout(gameTimer);
-            gameTimer = null;
-          }
           /* Calcola tempo rimanente basato sul timestamp salvato */
           const timeElapsed = Date.now() - gameData.quiz.questionStartTime;
-          const timeRemaining = Math.max(1000, gameData.quiz.timeLimit - timeElapsed);
+          const timeRemaining = gameData.quiz.timeLimit - timeElapsed;
           
-          /* Se il tempo è già scaduto, processa immediatamente */
-          if (timeRemaining <= 1000) {
-            /* Tempo scaduto: processa risposte e passa alla prossima domanda */
-            setTimeout(() => {
-              if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
-                checkQuizAnswers();
-                setTimeout(() => {
-                  if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
-                    askNextQuestion();
-                  }
-                }, 2000);
-              }
-            }, 100);
-          } else {
-            /* Timer ancora attivo: ripristina */
+          /* Se c'è già un timer attivo, NON crearne un altro */
+          if (gameTimer) {
+            console.log('[Games] Timer already active, not restoring');
+            return;
+          }
+          
+          /* Se il tempo è già scaduto, NON processare qui - potrebbe essere già stato processato */
+          if (timeRemaining <= 0) {
+            console.log('[Games] Time already expired, not processing on reload');
+            return;
+          }
+          
+          /* Solo se non c'è timer e il tempo non è scaduto, ripristina */
+          if (timeRemaining > 0 && timeRemaining <= gameData.quiz.timeLimit) {
+            console.log(`[Games] Restoring timer with ${timeRemaining}ms remaining`);
             gameTimer = setTimeout(() => {
               if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
-                checkQuizAnswers();
-                setTimeout(() => {
-                  if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
-                    askNextQuestion();
-                  }
-                }, 2000);
+                if (gameData.quiz.questionIndex < gameData.quiz.questions.length) {
+                  checkQuizAnswers();
+                  setTimeout(() => {
+                    if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
+                      if (gameData.quiz.questionIndex < gameData.quiz.questions.length) {
+                        askNextQuestion();
+                      } else {
+                        endQuizGame();
+                      }
+                    }
+                  }, 2000);
+                } else {
+                  endQuizGame();
+                }
               }
             }, timeRemaining);
           }
