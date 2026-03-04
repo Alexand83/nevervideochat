@@ -3,7 +3,7 @@
 ================================================================ */
 import { state }          from './state.js';
 import { dom }            from './dom.js';
-import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast } from './utils.js';
+import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml } from './utils.js';
 import { findUser, ensureUser } from './users.js';
 
 /* Forward refs — set by main.js to avoid circular deps */

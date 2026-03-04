@@ -8,6 +8,12 @@ export const AUTH_EMAIL_DOMAIN = 'nvc.local';
 // Rooms are now loaded from database (see rooms.js loadRoomsFromDB)
 export const DEFAULT_ROOM_ID = 'general';
 
+/* Security constants */
+export const MAX_MESSAGE_LENGTH = 10000; /* Max characters in message (including HTML) */
+export const MAX_USERNAME_LENGTH = 50;
+export const MAX_ROOM_NAME_LENGTH = 100;
+export const MAX_QUOTE_LENGTH = 5000;
+
 export const AVATAR_COLORS = [
   '#1f6feb','#388bfd','#a371f7','#da3633','#d29922',
   '#3fb950','#238636','#e8523a','#f78166','#79c0ff',
