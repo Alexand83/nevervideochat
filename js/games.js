@@ -952,13 +952,27 @@ function askNextQuestion() {
         endQuizGame();
         return;
       }
+      
+      /* Salva l'indice corrente prima di processare */
+      const currentIndexBeforeCheck = gameData.quiz.questionIndex;
+      
+      /* Processa risposte - questo incrementerà questionIndex */
       checkQuizAnswers();
+      
       setTimeout(() => {
         /* Verifica di nuovo prima di chiedere la prossima domanda */
         if (!activeGame || activeGame.game_type !== 'quiz' || showingFinalLeaderboard) {
           askingQuestion = false;
           return;
         }
+        
+        /* Verifica che questionIndex sia stato incrementato correttamente */
+        if (gameData.quiz.questionIndex !== currentIndexBeforeCheck + 1) {
+          console.warn(`[Games] questionIndex mismatch! Expected ${currentIndexBeforeCheck + 1}, got ${gameData.quiz.questionIndex}`);
+          /* Correggi l'indice se necessario */
+          gameData.quiz.questionIndex = currentIndexBeforeCheck + 1;
+        }
+        
         if (gameData.quiz.questionIndex >= gameData.quiz.questions.length) {
           askingQuestion = false;
           endQuizGame();
@@ -1019,9 +1033,25 @@ function handleAnswer(answer) {
 }
 
 /* ── Controlla risposte quiz ──────────────────────────────────── */
+let checkingAnswers = false; /* Flag per evitare chiamate multiple simultanee */
 function checkQuizAnswers() {
   if (!activeGame || activeGame.game_type !== 'quiz') return;
   if (!gameData.quiz.currentQuestion) return;
+  
+  /* Evita chiamate multiple simultanee */
+  if (checkingAnswers) {
+    console.log('[Games] checkQuizAnswers already in progress, skipping...');
+    return;
+  }
+  
+  /* Verifica che non abbiamo già processato questa domanda */
+  const currentQuestionIndex = gameData.quiz.questionIndex;
+  if (currentQuestionIndex >= gameData.quiz.questions.length) {
+    console.log('[Games] All questions already processed, skipping checkQuizAnswers');
+    return;
+  }
+  
+  checkingAnswers = true;
   
   const correctAnswer = gameData.quiz.currentQuestion.a.toLowerCase();
   const correctUsers = [];
@@ -1095,10 +1125,15 @@ function checkQuizAnswers() {
     showToast(toastMessage, 5000);
   }
   
-  /* INCREMENTA questionIndex per la prossima domanda */
+  /* INCREMENTA questionIndex per la prossima domanda - SOLO UNA VOLTA */
+  const oldIndex = gameData.quiz.questionIndex;
   gameData.quiz.questionIndex++;
   gameData.quiz.questionStartTime = null; /* Reset timestamp */
+  
+  console.log(`[Games] Processed question ${oldIndex + 1}, moving to ${gameData.quiz.questionIndex + 1}`);
+  
   saveActiveGame();
+  checkingAnswers = false; /* Reset flag dopo aver processato */
 }
 
 /* ── Termina gioco quiz ───────────────────────────────────────── */
