@@ -47,6 +47,21 @@ let gameData = {
   },
 };
 
+/* ── Helper: restituisce il container corretto per il contenuto del gioco ── */
+function getGameContainer() {
+  const isMobile = window.innerWidth <= 768;
+  const availableRooms = getAvailableRooms();
+  const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+  const isGamesRoom = roomData?.is_games_room === true;
+  
+  /* Su mobile nella stanza giochi: usa usersPanelGameContent */
+  if (isMobile && isGamesRoom && dom.usersPanelGameContent) {
+    return dom.usersPanelGameContent;
+  }
+  /* Desktop o altre stanze: usa gamesPanelBody */
+  return dom.gamesPanelBody;
+}
+
 /* ── Inizializza sistema giochi ───────────────────────────────── */
 export function initGames() {
   if (!dom.gamesPanel) return;
@@ -57,15 +72,17 @@ export function initGames() {
   renderGamesPanel();
   checkActiveGame();
   
-  /* Show/hide games panel based on room type */
+  /* Show/hide games panel based on room type and device */
   const availableRooms = getAvailableRooms();
   const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
   const isGamesRoom = roomData?.is_games_room === true;
+  const isMobile = window.innerWidth <= 768;
   
   if (dom.gamesPanel) {
-    dom.gamesPanel.hidden = !isGamesRoom;
-    /* Reset games panel width CSS variable if not in games room */
-    if (!isGamesRoom) {
+    /* Su mobile nella stanza giochi: nascondi gamesPanel (usa usersPanel) */
+    dom.gamesPanel.hidden = !isGamesRoom || isMobile;
+    /* Reset games panel width CSS variable if not in games room or on mobile */
+    if (!isGamesRoom || isMobile) {
       document.documentElement.style.setProperty('--games-panel-width', '0px');
     }
   }
@@ -952,6 +969,19 @@ async function endQuizGame() {
       /* Ferma completamente il gioco */
       activeGame = null;
       gameData.quiz.answers.clear();
+      
+      /* Su mobile nella stanza giochi: quando il gioco termina, mostra users list normale */
+      const isMobile = window.innerWidth <= 768;
+      const availableRooms = getAvailableRooms();
+      const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+      const isGamesRoom = roomData?.is_games_room === true;
+      
+      if (isMobile && isGamesRoom && dom.usersList && dom.usersPanelGameContent) {
+        dom.usersList.hidden = false;
+        dom.usersPanelGameContent.hidden = true;
+        dom.usersPanelGameContent.innerHTML = '';
+      }
+      
       updateGamesPanel();
     }
   }, 60000); // 1 minuto
@@ -983,6 +1013,18 @@ async function stopGame() {
   gameData.song.answers.clear();
   gameData.truthLie.votes.clear();
   gameData.quiz.answers.clear();
+  
+  /* Su mobile nella stanza giochi: quando il gioco termina, mostra users list normale */
+  const isMobile = window.innerWidth <= 768;
+  const availableRooms = getAvailableRooms();
+  const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+  const isGamesRoom = roomData?.is_games_room === true;
+  
+  if (isMobile && isGamesRoom && dom.usersList && dom.usersPanelGameContent) {
+    dom.usersList.hidden = false;
+    dom.usersPanelGameContent.hidden = true;
+    dom.usersPanelGameContent.innerHTML = '';
+  }
   
   updateGamesPanel();
   
@@ -1093,7 +1135,8 @@ async function updateScore(userId, gameType, points) {
 
 /* ── Render classifica finale nel pannello ───────────────────── */
 async function renderFinalLeaderboard(gameType) {
-  if (!state.supa || !dom.gamesPanelBody) return;
+  const container = getGameContainer();
+  if (!state.supa || !container) return;
   
   try {
     const { data, error } = await state.supa
@@ -1128,7 +1171,13 @@ async function renderFinalLeaderboard(gameType) {
     }
     
     leaderboardHtml += '</div></div>';
-    dom.gamesPanelBody.innerHTML = leaderboardHtml;
+    container.innerHTML = leaderboardHtml;
+    
+    /* Su mobile: mostra game content, nascondi users list */
+    if (window.innerWidth <= 768 && dom.usersPanelGameContent && dom.usersList) {
+      dom.usersList.hidden = true;
+      dom.usersPanelGameContent.hidden = false;
+    }
   } catch (err) {
     console.error('[Games] Error fetching final leaderboard:', err);
     showToast('⚠️ Errore nel caricamento della classifica.');
@@ -1174,16 +1223,34 @@ function startGameUI(gameType, gameState) {
 
 /* ── Aggiorna pannello giochi ──────────────────────────────────── */
 function updateGamesPanel() {
-  if (!dom.gamesPanelBody) return;
+  const container = getGameContainer();
+  if (!container) return;
   
   /* Se stiamo mostrando la classifica finale, non aggiornare */
   if (showingFinalLeaderboard) {
     return;
   }
   
+  const isMobile = window.innerWidth <= 768;
+  const availableRooms = getAvailableRooms();
+  const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+  const isGamesRoom = roomData?.is_games_room === true;
+  
   if (!activeGame) {
-    dom.gamesPanelBody.innerHTML = '<div class="games-panel-empty">🎮 Nessun gioco attivo. Usa <code>/giochi</code> per iniziare!</div>';
+    container.innerHTML = '<div class="games-panel-empty">🎮 Nessun gioco attivo. Usa <code>/giochi</code> per iniziare!</div>';
+    
+    /* Su mobile nella stanza giochi: quando non c'è gioco, mostra users list */
+    if (isMobile && isGamesRoom && dom.usersList && dom.usersPanelGameContent) {
+      dom.usersList.hidden = false;
+      dom.usersPanelGameContent.hidden = true;
+    }
     return;
+  }
+  
+  /* Su mobile nella stanza giochi: quando c'è gioco, mostra game content */
+  if (isMobile && isGamesRoom && dom.usersList && dom.usersPanelGameContent) {
+    dom.usersList.hidden = true;
+    dom.usersPanelGameContent.hidden = false;
   }
   
   let html = '';
@@ -1198,7 +1265,7 @@ function updateGamesPanel() {
     html = '<div class="games-panel-empty">Tipo di gioco sconosciuto.</div>';
   }
   
-  dom.gamesPanelBody.innerHTML = html;
+  container.innerHTML = html;
   
   /* Aggiungi event listeners per bottoni cliccabili */
   attachGameButtonListeners();
@@ -1206,10 +1273,11 @@ function updateGamesPanel() {
 
 /* ── Attacca event listeners ai bottoni del gioco ─────────────── */
 function attachGameButtonListeners() {
-  if (!dom.gamesPanelBody) return;
+  const container = getGameContainer();
+  if (!container) return;
   
   /* Bottoni suggerimenti canzone */
-  dom.gamesPanelBody.querySelectorAll('.game-suggestion-btn').forEach(btn => {
+  container.querySelectorAll('.game-suggestion-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const answer = btn.dataset.answer;
       if (answer) handleGuess(answer);
@@ -1217,7 +1285,7 @@ function attachGameButtonListeners() {
   });
   
   /* Bottoni voto verità/bugia */
-  dom.gamesPanelBody.querySelectorAll('.game-vote-btn').forEach(btn => {
+  container.querySelectorAll('.game-vote-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const vote = btn.dataset.vote;
       if (vote) handleVote(vote);
@@ -1225,7 +1293,7 @@ function attachGameButtonListeners() {
   });
   
   /* Bottoni risposta quiz */
-  dom.gamesPanelBody.querySelectorAll('.game-option-btn').forEach(btn => {
+  container.querySelectorAll('.game-option-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (btn.disabled) return;
       const answer = btn.dataset.answer;

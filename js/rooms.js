@@ -161,20 +161,35 @@ export function switchRoom(roomId) {
   
   /* Show/hide games panel */
   if (dom.gamesPanel) {
+    const isMobile = window.innerWidth <= 768;
     if (isGamesRoom) {
-      dom.gamesPanel.hidden = false;
-      dom.gamesPanel.classList.add('open');
-      /* Nascondi usersPanel di default quando si entra nella stanza giochi */
-      if (dom.usersPanel) {
-        dom.usersPanel.classList.add('hidden');
-        dom.usersPanel.classList.remove('open');
-        if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
+      /* Su mobile: nascondi gamesPanel, usa usersPanel per il gioco */
+      if (isMobile) {
+        dom.gamesPanel.hidden = true;
+        dom.gamesPanel.classList.remove('open');
+        document.documentElement.style.setProperty('--games-panel-width', '0px');
+        /* Su mobile: mostra usersPanel (conterrà il gioco se attivo) */
+        if (dom.usersPanel) {
+          dom.usersPanel.classList.remove('hidden');
+          /* Non aprire automaticamente su mobile, l'utente apre con il bottone floating */
+          dom.usersPanel.classList.remove('open');
+          if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
+        }
+      } else {
+        /* Desktop: mostra gamesPanel, nascondi usersPanel */
+        dom.gamesPanel.hidden = false;
+        dom.gamesPanel.classList.add('open');
+        if (dom.usersPanel) {
+          dom.usersPanel.classList.add('hidden');
+          dom.usersPanel.classList.remove('open');
+          if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
+        }
+        /* Aggiorna CSS variable per il padding della chat */
+        setTimeout(() => {
+          const panelWidth = dom.gamesPanel.offsetWidth || 320;
+          document.documentElement.style.setProperty('--games-panel-width', panelWidth + 'px');
+        }, 100);
       }
-      /* Aggiorna CSS variable per il padding della chat */
-      setTimeout(() => {
-        const panelWidth = dom.gamesPanel.offsetWidth || 320;
-        document.documentElement.style.setProperty('--games-panel-width', panelWidth + 'px');
-      }, 100);
       /* Re-check active game when entering games room */
       import('./games.js').then(({ checkActiveGame }) => {
         checkActiveGame();
@@ -244,7 +259,7 @@ export function switchRoom(roomId) {
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {
-      import('./camera.js?v=20260442').then(({ createCameraWindow }) => {
+      import('./camera.js?v=20260443').then(({ createCameraWindow }) => {
         if (state.activeRoom === roomIdStr && !state.cameraWindows[state.currentUser.id]?.el?.parentNode) {
           createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
         }
@@ -260,7 +275,7 @@ export function switchRoom(roomId) {
         /* Only close if still away from the Events room and camera is still for that room */
         if (state.activeRoom !== previousRoomId && state.cameraRoom === previousRoomId) {
           console.log('[Events Room] User away > 1 min — closing camera');
-          const { closeCameraWindow } = await import('./camera.js?v=20260442');
+          const { closeCameraWindow } = await import('./camera.js?v=20260443');
           closeCameraWindow(state.currentUser.id);
         }
       }, 60000);
@@ -310,7 +325,7 @@ export function switchRoom(roomId) {
         /* Guard: abort if user has left this room */
         if (state.activeRoom !== roomIdStr) return;
 
-        const { requestPublicCamera } = await import('./camera.js?v=20260442');
+        const { requestPublicCamera } = await import('./camera.js?v=20260443');
         const allUsers = Object.values(room.users);
         const usersWithCam = allUsers.filter(user =>
           user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)

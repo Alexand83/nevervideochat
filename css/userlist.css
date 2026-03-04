@@ -59,8 +59,21 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--s2) 0;
+  position: relative;
 }
 .users-list { display: flex; flex-direction: column; }
+
+/* Game content container inside users panel (mobile games room) */
+.users-panel-game-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  padding: var(--s3);
+  background: var(--bg0);
+}
 
 .user-item {
   display: flex;

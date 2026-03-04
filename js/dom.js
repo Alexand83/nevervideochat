@@ -63,6 +63,7 @@ export const dom = {
   /* Users panel */
   usersPanel:       $('usersPanel'),
   usersList:        $('usersList'),
+  usersPanelGameContent: $('usersPanelGameContent'),
   onlineCountLabel: $('onlineCountLabel'),
   closePanelBtn:    $('closePanelBtn'),
   panelOverlay:     $('panelOverlay'),
