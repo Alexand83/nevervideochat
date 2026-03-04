@@ -801,26 +801,30 @@ export function initPanelResize() {
     /* Aggiorna CSS var quando pannello è aperto (sia mobile che desktop in stanza giochi) */
     if (panel.classList.contains('open')) {
       updateUsersPanelWidthCSS();
-      /* Aggiorna anche la posizione right del pannello utenti in stanza giochi */
-      if (dom.gamesPanel && !dom.gamesPanel.hidden && dom.usersPanel.style.position === 'fixed') {
-        const gamesPanelWidth = dom.gamesPanel.offsetWidth || 320;
-        dom.usersPanel.style.right = gamesPanelWidth + 'px';
-      }
-        /* Aggiorna posizione bottone floating su mobile */
-        if (window.innerWidth <= 768 && dom.floatingUsersBtn) {
-          setTimeout(() => {
-            const panelWidth = dom.usersPanel.getBoundingClientRect().width || 280;
-            const isGamesRoom = dom.usersPanel.style.position === 'fixed';
-            if (isGamesRoom) {
-              /* In stanza giochi: bottone a sinistra del pannello utenti */
-              const gamesPanelWidth = dom.gamesPanel?.offsetWidth || 260;
-              dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${panelWidth}px + 12px)`;
-            } else {
-              /* Stanze normali: bottone a sinistra del pannello */
-              dom.floatingUsersBtn.style.right = `calc(${panelWidth}px + 12px)`;
-            }
-          }, 50);
+      
+      /* Su mobile: aggiorna posizione right se in stanza giochi e posizione bottone floating */
+      if (isMobile) {
+        const isGamesRoom = panel.style.position === 'fixed';
+        if (isGamesRoom && dom.gamesPanel && !dom.gamesPanel.hidden) {
+          const gamesPanelWidth = dom.gamesPanel.offsetWidth || 260;
+          panel.style.right = gamesPanelWidth + 'px';
+          /* Aggiorna posizione bottone floating */
+          if (dom.floatingUsersBtn) {
+            const panelWidth = panel.getBoundingClientRect().width || finalWidth;
+            dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${panelWidth}px + 12px)`;
+          }
+        } else if (dom.floatingUsersBtn) {
+          /* Stanze normali: aggiorna solo posizione bottone floating */
+          const panelWidth = panel.getBoundingClientRect().width || finalWidth;
+          dom.floatingUsersBtn.style.right = `calc(${panelWidth}px + 12px)`;
         }
+      } else {
+        /* Desktop: aggiorna posizione right se in stanza giochi */
+        if (dom.gamesPanel && !dom.gamesPanel.hidden && panel.style.position === 'fixed') {
+          const gamesPanelWidth = dom.gamesPanel.offsetWidth || 320;
+          panel.style.right = gamesPanelWidth + 'px';
+        }
+      }
     }
   };
 
