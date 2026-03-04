@@ -123,10 +123,20 @@ export async function finishInit() {
   initGames(); /* Initialize games system */
   connectSupabase().catch(err => console.error('[NVC]', err));
   
-  /* Initialize users panel width CSS variable on mobile if panel is open */
+  /* Initialize users panel width CSS variable on mobile if panel is open - ONLY in games room */
   if (window.innerWidth <= 768 && dom.usersPanel && dom.usersPanel.classList.contains('open')) {
-    import('./ui.js').then(({ updateUsersPanelWidthCSS }) => {
-      setTimeout(updateUsersPanelWidthCSS, 200);
+    import('./rooms.js').then(({ getAvailableRooms }) => {
+      const availableRooms = getAvailableRooms?.() || [];
+      const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+      const isGamesRoom = roomData?.is_games_room === true;
+      if (isGamesRoom) {
+        import('./ui.js').then(({ updateUsersPanelWidthCSS }) => {
+          setTimeout(updateUsersPanelWidthCSS, 200);
+        });
+      } else {
+        // In normal rooms, ensure no modifications
+        document.documentElement.style.setProperty('--users-panel-width', '0px');
+      }
     });
   }
   

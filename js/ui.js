@@ -1058,14 +1058,27 @@ export function initMobilePanel() {
       setTimeout(() => showDebugInfoNow(), 1000);
     }, 500);
   }
-  const open  = () => { 
+  const open  = async () => { 
     dom.usersPanel.classList.add('open'); 
     dom.panelOverlay.classList.add('show'); 
     if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','true');
-    /* Update CSS variable on mobile when opening */
+    /* Update CSS variable on mobile when opening - ONLY in games room */
     if (window.innerWidth <= 768) {
-      setTimeout(() => {
-        updateUsersPanelWidthCSS();
+      setTimeout(async () => {
+        try {
+          const { getAvailableRooms } = await import('./rooms.js');
+          const availableRooms = getAvailableRooms?.() || [];
+          const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+          const isGamesRoom = roomData?.is_games_room === true;
+          if (isGamesRoom) {
+            updateUsersPanelWidthCSS();
+          } else {
+            // In normal rooms, do nothing - let CSS handle it
+            document.documentElement.style.setProperty('--users-panel-width', '0px');
+          }
+        } catch (e) {
+          console.warn('[UI] Could not check games room on open:', e);
+        }
       }, 100); /* Delay to ensure width is calculated after transform */
     }
   };
@@ -1092,17 +1105,59 @@ export function initMobilePanel() {
     dom.panelOverlay.addEventListener('click', close);
   }
   
-  /* Watch for class changes to update CSS variable */
+  /* Watch for class changes to update CSS variable - ONLY in games room */
   if (dom.usersPanel) {
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver(async () => {
       if (window.innerWidth <= 768) {
-        setTimeout(updateUsersPanelWidthCSS, 50);
+        // Check if we're in games room before updating
+        try {
+          const { getAvailableRooms } = await import('./rooms.js');
+          const availableRooms = getAvailableRooms?.() || [];
+          const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+          const isGamesRoom = roomData?.is_games_room === true;
+          // Only update if in games room
+          if (isGamesRoom) {
+            setTimeout(updateUsersPanelWidthCSS, 50);
+          } else {
+            // In normal rooms, ensure no modifications
+            document.documentElement.style.setProperty('--users-panel-width', '0px');
+            const chatSection = document.querySelector('.chat-section');
+            if (chatSection) {
+              chatSection.style.flex = '';
+              chatSection.style.minWidth = '';
+              chatSection.style.width = '';
+              chatSection.style.maxWidth = '';
+            }
+            const appMain = document.querySelector('.app-main');
+            if (appMain) {
+              appMain.style.display = '';
+              appMain.style.flexDirection = '';
+            }
+          }
+        } catch (e) {
+          console.warn('[UI] Could not check games room in observer:', e);
+        }
       }
     });
     observer.observe(dom.usersPanel, { attributes: true, attributeFilter: ['class'] });
-    /* Initialize CSS variable if panel is already open on mobile */
+    /* Initialize - but only if in games room */
     if (window.innerWidth <= 768 && dom.usersPanel.classList.contains('open')) {
-      setTimeout(updateUsersPanelWidthCSS, 200);
+      setTimeout(async () => {
+        try {
+          const { getAvailableRooms } = await import('./rooms.js');
+          const availableRooms = getAvailableRooms?.() || [];
+          const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+          const isGamesRoom = roomData?.is_games_room === true;
+          if (isGamesRoom) {
+            updateUsersPanelWidthCSS();
+          } else {
+            // Ensure no modifications in normal rooms
+            document.documentElement.style.setProperty('--users-panel-width', '0px');
+          }
+        } catch (e) {
+          console.warn('[UI] Could not check games room on init:', e);
+        }
+      }, 200);
     }
   }
   
