@@ -1,7 +1,7 @@
 ﻿@media (max-width: 768px) {
 
-  /* Show mobile toggle */
-  .users-toggle-btn { display: flex; }
+  /* Hide users toggle button on mobile (resize handle is used instead) */
+  .users-toggle-btn { display: none !important; }
   .close-panel-btn  { display: flex; }
 
   /* Hide camera button label on small viewport */
@@ -25,9 +25,14 @@
   .users-panel.open { transform: translateX(0); }
   .users-panel.hidden { display: none !important; }
   
-  /* Hide resize handle on mobile - use toggle button instead */
+  /* Show resize handle on mobile (on the left side since panel is on the right) */
   .panel-resize-handle {
-    display: none !important;
+    display: block !important;
+    left: 0;
+    right: auto;
+    width: 6px;
+    cursor: col-resize;
+    touch-action: none;
   }
 
   /* Panel overlay */

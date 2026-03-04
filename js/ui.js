@@ -694,26 +694,24 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
   }
 }
 
-/* ── Panel resize (desktop only) ────────────────────────────────────── */
+/* ── Panel resize (desktop + mobile) ────────────────────────────────────── */
 export function initPanelResize() {
   const handle = document.getElementById('panelResizeHandle');
   const panel  = dom.usersPanel;
   if (!handle || !panel) return;
   
-  /* Only enable resize on desktop */
+  /* Load saved width (desktop) or set default (mobile) */
   const isMobile = window.innerWidth <= 768;
+  const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
   if (isMobile) {
-    /* On mobile, set fixed width and disable resize */
-    const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
+    /* On mobile, set default width if not already set */
     if (!panel.style.width || panel.style.width === '') {
       panel.style.width = savedW >= 200 && savedW <= 480 ? savedW + 'px' : '280px';
     }
-    return; /* Exit early - no resize on mobile */
+  } else {
+    /* On desktop, use saved width */
+    if (savedW >= 160 && savedW <= 480) panel.style.width = savedW + 'px';
   }
-  
-  /* Desktop resize functionality */
-  const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
-  if (savedW >= 160 && savedW <= 480) panel.style.width = savedW + 'px';
   
   let dragging = false, startX = 0, startW = 0;
   
@@ -731,8 +729,10 @@ export function initPanelResize() {
   const onMove = e => {
     if (!dragging) return;
     const x = e.touches?.[0]?.clientX ?? e.clientX;
-    const deltaX = startX - x;
-    const newWidth = Math.min(480, Math.max(160, startW + deltaX));
+    const deltaX = startX - x; /* On mobile (right side), dragging left increases width */
+    const newWidth = isMobile 
+      ? Math.min(480, Math.max(200, startW + deltaX))  /* Mobile: min 200px, max 480px */
+      : Math.min(480, Math.max(160, startW + deltaX)); /* Desktop: min 160px, max 480px */
     panel.style.width = newWidth + 'px';
     e.preventDefault();
   };
@@ -762,9 +762,13 @@ export function initPanelResize() {
 export function initMobilePanel() {
   const open  = () => { dom.usersPanel.classList.add('open'); dom.panelOverlay.classList.add('show'); if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','true'); };
   const close = () => { dom.usersPanel.classList.remove('open'); dom.panelOverlay.classList.remove('show'); if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded','false'); };
-  if (dom.mobileUsersToggle) {
+  
+  /* Only enable toggle button if it's visible (desktop) */
+  /* On mobile, users can open panel by clicking on the resize handle area or other methods */
+  if (dom.mobileUsersToggle && window.getComputedStyle(dom.mobileUsersToggle).display !== 'none') {
     dom.mobileUsersToggle.addEventListener('click', () => dom.usersPanel.classList.contains('open') ? close() : open());
   }
+  
   if (dom.closePanelBtn) {
     dom.closePanelBtn.addEventListener('click', close);
   }
