@@ -426,6 +426,7 @@
 }
 
 .msg-input {
+  text-align: left;
   flex: 1;
   min-height: 40px;
   max-height: 150px;
@@ -619,11 +620,10 @@
 /* ─── 7. EMOJI PANEL ─── */
 .emoji-panel {
   position: absolute;
-  bottom: calc(100% + var(--s2));
-  left: 0;
-  right: 0;
-  max-width: 360px;
-  max-height: 320px;
+  bottom: calc(100% + 6px);
+  left: var(--s3);
+  width: 320px;
+  max-height: 290px;
   display: flex;
   flex-direction: column;
   background: var(--bg2);
@@ -686,147 +686,3 @@
   transition: background var(--tf), transform var(--tf);
 }
 .emoji-cell:hover { background: var(--bg-hover); transform: scale(1.2); }
-
-/* â”€â”€â”€ Quote / Reply preview bar â”€â”€â”€ */
-.reply-preview-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-  padding: 6px var(--s3);
-  background: var(--bg2);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--r1);
-  margin: 0 4px 4px;
-  font-size: var(--fz-xs);
-}
-.reply-preview-inner { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.reply-preview-label { color: var(--tx2); flex-shrink: 0; }
-.reply-preview-author { color: var(--accent-h); font-weight: 600; flex-shrink: 0; }
-.reply-preview-text {
-  color: var(--tx1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 260px;
-}
-.reply-preview-cancel {
-  background: none;
-  color: var(--tx2);
-  font-size: 13px;
-  padding: 2px 4px;
-  flex-shrink: 0;
-  border-radius: var(--r1);
-  transition: color var(--tf);
-}
-.reply-preview-cancel:hover { color: var(--tx0); }
-
-/* â”€â”€â”€ Quote block inside messages â”€â”€â”€ */
-.msg-quote {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px 8px;
-  margin-bottom: 6px;
-  background: var(--bg3);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--r1);
-  font-size: var(--fz-xs);
-}
-.msg-quote-author { color: var(--accent-h); font-weight: 600; }
-.msg-quote-text   { color: var(--tx1); white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-
-/* â”€â”€â”€ Reply button on each message bubble â”€â”€â”€ */
-.msg-reply-btn {
-  display: none;
-  background: none;
-  color: var(--tx2);
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: var(--r1);
-  margin-top: 4px;
-  transition: color var(--tf), background var(--tf);
-  align-self: flex-start;
-}
-.msg-group:hover .msg-reply-btn { display: flex; align-items: center; gap: 4px; }
-.msg-reply-btn:hover { color: var(--accent-h); background: var(--accent-dim); }
-
-/* Events Room Camera Grid */
-/* Events Room Camera Grid - Dynamic autoresize */
-.events-cam-grid {
-  display: grid;
-  gap: 8px; /* Balanced gap */
-  padding: 10px 10px 38px 10px; /* Balanced padding, extra bottom for labels */
-  background: transparent; /* No background */
-  width: 100%;
-  overflow: visible; /* Allow labels to be visible */
-  justify-items: center; /* Center slots when not filling full width */
-}
-
-.events-cam-grid[data-cols='1'] { 
-  grid-template-columns: 1fr;
-  max-width: 480px; /* Larger single cam, but not full page (chat below) */
-  margin: 0 auto; /* Center single cam */
-}
-.events-cam-grid[data-cols='2'] { 
-  grid-template-columns: repeat(2, 1fr);
-  max-width: 640px; /* 2 cams: smaller than single cam (320px each) */
-  margin: 0 auto; /* Center grid */
-}
-.events-cam-grid[data-cols='3'] { 
-  grid-template-columns: repeat(3, 1fr);
-  max-width: 720px; /* 3 cams: even smaller (240px each) */
-  margin: 0 auto; /* Center grid */
-}
-.events-cam-grid[data-cols='4'] { 
-  grid-template-columns: repeat(4, 1fr);
-  max-width: 800px; /* 4+ cams: smallest (200px each) */
-  margin: 0 auto; /* Center grid */
-}
-
-.events-cam-slot {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  background: transparent; /* No background */
-  border: 1px solid var(--border); /* Thin border only */
-  border-radius: var(--r2);
-  overflow: visible; /* Allow label to be visible outside */
-  width: 100%;
-  max-width: 100%;
-}
-
-.events-cam-slot video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: var(--r2);
-  display: block;
-}
-
-.events-cam-slot-label {
-  position: absolute;
-  bottom: -24px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  color: var(--tx1);
-  font-size: var(--fz-sm);
-  font-weight: 600;
-  padding: 4px 0;
-  text-overflow: ellipsis;
-  overflow: visible;
-  white-space: nowrap;
-  background: transparent;
-  cursor: pointer;
-  transition: color var(--tf);
-  z-index: 100;
-  pointer-events: auto;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.5), 0 0 6px rgba(0,0,0,0.3);
-  line-height: 1.2;
-}
-
-.events-cam-slot-label:hover {
-  color: var(--accent);
-  text-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 0 6px rgba(0,0,0,0.3);
-  text-decoration: underline;
-}
