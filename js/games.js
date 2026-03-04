@@ -95,36 +95,31 @@ export function initGames() {
     updateButtonText();
   }
   
-  /* Rendi draggabile e ridimensionabile il pannello giochi */
+  /* Rendi solo ridimensionabile il pannello giochi (NON draggable) */
   if (dom.gamesPanel) {
-    const panelHeader = dom.gamesPanel.querySelector('.panel-hdr');
     const resizeHandle = document.getElementById('gamesPanelResizeHandle');
     
-    if (panelHeader) {
-      import('./utils.js').then(({ makeDraggable, makeResizable }) => {
-        makeDraggable(dom.gamesPanel, panelHeader);
-        
+    if (resizeHandle) {
+      import('./utils.js').then(({ makeResizable }) => {
         /* Rendi ridimensionabile */
-        if (resizeHandle) {
-          makeResizable(dom.gamesPanel, resizeHandle);
-          
-          /* Salva larghezza quando viene ridimensionato */
-          const updateWidth = () => {
-            const w = dom.gamesPanel.offsetWidth;
-            if (w >= 200 && w <= 800) {
-              localStorage.setItem('nvc_games_panel_w', w);
-              document.documentElement.style.setProperty('--games-panel-width', w + 'px');
-            }
-          };
-          
-          /* Observer per cambiamenti di width */
-          const observer = new MutationObserver(updateWidth);
-          observer.observe(dom.gamesPanel, { attributes: true, attributeFilter: ['style'] });
-          
-          /* Aggiorna anche quando il resize finisce */
-          resizeHandle.addEventListener('mouseup', updateWidth);
-          resizeHandle.addEventListener('touchend', updateWidth);
-        }
+        makeResizable(dom.gamesPanel, resizeHandle);
+        
+        /* Salva larghezza quando viene ridimensionato */
+        const updateWidth = () => {
+          const w = dom.gamesPanel.offsetWidth;
+          if (w >= 200 && w <= 800) {
+            localStorage.setItem('nvc_games_panel_w', w);
+            document.documentElement.style.setProperty('--games-panel-width', w + 'px');
+          }
+        };
+        
+        /* Observer per cambiamenti di width */
+        const observer = new MutationObserver(updateWidth);
+        observer.observe(dom.gamesPanel, { attributes: true, attributeFilter: ['style'] });
+        
+        /* Aggiorna anche quando il resize finisce */
+        resizeHandle.addEventListener('mouseup', updateWidth);
+        resizeHandle.addEventListener('touchend', updateWidth);
       });
     }
     
