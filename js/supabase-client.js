@@ -270,6 +270,13 @@ export async function connectSupabase() {
           await checkActiveGame();
         }
       })
+      .on('broadcast', { event: 'game-started' }, async ({ payload }) => {
+        /* Aggiorna UI quando un gioco viene avviato nella stanza attiva */
+        if (payload.room_id === state.activeRoom) {
+          const { checkActiveGame } = await import('./games.js');
+          await checkActiveGame();
+        }
+      })
       .subscribe();
 
     showToast('🟢 Connected to NeverVideoChat');

@@ -72,6 +72,34 @@ export function initGames() {
   renderGamesPanel();
   checkActiveGame();
   
+  /* Subscribe to active_games changes for real-time updates */
+  if (state.supa) {
+    const gamesChannel = state.supa.channel('active-games-updates');
+    gamesChannel
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'active_games' },
+        async (payload) => {
+          /* Aggiorna solo se il cambiamento riguarda la stanza attiva */
+          if (payload.new && String(payload.new.room_id) === String(state.activeRoom)) {
+            console.log('[Games] Active game changed in current room, reloading...');
+            await checkActiveGame();
+            /* Forza aggiornamento UI */
+            setTimeout(() => {
+              updateGamesPanel();
+            }, 100);
+          } else if (payload.old && String(payload.old.room_id) === String(state.activeRoom)) {
+            /* Gioco terminato nella stanza attiva */
+            console.log('[Games] Active game ended in current room');
+            await checkActiveGame();
+            setTimeout(() => {
+              updateGamesPanel();
+            }, 100);
+          }
+        }
+      )
+      .subscribe();
+  }
+  
   /* Show/hide games panel based on room type and device */
   const availableRooms = getAvailableRooms();
   const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
@@ -293,6 +321,11 @@ export async function checkActiveGame() {
       
       startGameUI(data.game_type, gameData[data.game_type]);
       console.log('[Games] Reloaded active game:', data.game_type, 'in room', state.activeRoom);
+      
+      /* Forza aggiornamento UI anche su mobile */
+      setTimeout(() => {
+        updateGamesPanel();
+      }, 100);
     } else {
       /* Nessun gioco attivo - reset */
       activeGame = null;
