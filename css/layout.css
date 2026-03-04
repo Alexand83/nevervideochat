@@ -20,17 +20,10 @@
   background: var(--accent);
   opacity: 0.5;
 }
-/* On mobile, resize handle is visible and positioned on the left side of the panel */
+/* Hide resize handle on mobile - use toggle button instead */
 @media (max-width: 768px) {
   .panel-resize-handle {
-    display: block;
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 6px;
-    z-index: 10;
-    touch-action: none;
+    display: none !important;
   }
 }
 

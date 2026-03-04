@@ -694,24 +694,26 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
   }
 }
 
-/* ── Panel resize (desktop + mobile) ────────────────────────────────────── */
+/* ── Panel resize (desktop only) ────────────────────────────────────── */
 export function initPanelResize() {
   const handle = document.getElementById('panelResizeHandle');
   const panel  = dom.usersPanel;
   if (!handle || !panel) return;
   
-  /* Load saved width (desktop) or set default (mobile) */
+  /* Only enable resize on desktop */
   const isMobile = window.innerWidth <= 768;
-  const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
   if (isMobile) {
-    /* On mobile, set default width if not already set */
+    /* On mobile, set fixed width and disable resize */
+    const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
     if (!panel.style.width || panel.style.width === '') {
       panel.style.width = savedW >= 200 && savedW <= 480 ? savedW + 'px' : '280px';
     }
-  } else {
-    /* On desktop, use saved width */
-    if (savedW >= 160 && savedW <= 480) panel.style.width = savedW + 'px';
+    return; /* Exit early - no resize on mobile */
   }
+  
+  /* Desktop resize functionality */
+  const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
+  if (savedW >= 160 && savedW <= 480) panel.style.width = savedW + 'px';
   
   let dragging = false, startX = 0, startW = 0;
   
@@ -729,10 +731,8 @@ export function initPanelResize() {
   const onMove = e => {
     if (!dragging) return;
     const x = e.touches?.[0]?.clientX ?? e.clientX;
-    const deltaX = startX - x; /* On mobile (right side), dragging left increases width */
-    const newWidth = isMobile 
-      ? Math.min(480, Math.max(200, startW + deltaX))  /* Mobile: min 200px, max 480px */
-      : Math.min(480, Math.max(160, startW + deltaX)); /* Desktop: min 160px, max 480px */
+    const deltaX = startX - x;
+    const newWidth = Math.min(480, Math.max(160, startW + deltaX));
     panel.style.width = newWidth + 'px';
     e.preventDefault();
   };

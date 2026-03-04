@@ -25,14 +25,9 @@
   .users-panel.open { transform: translateX(0); }
   .users-panel.hidden { display: none !important; }
   
-  /* Show resize handle on mobile (on the left side since panel is on the right) */
+  /* Hide resize handle on mobile - use toggle button instead */
   .panel-resize-handle {
-    display: block !important;
-    left: 0;
-    right: auto;
-    width: 6px;
-    cursor: col-resize;
-    touch-action: none;
+    display: none !important;
   }
 
   /* Panel overlay */
