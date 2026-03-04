@@ -612,7 +612,9 @@
 /* Mobile responsive */
 @media (max-width: 768px) {
   .games-panel {
-    width: 100%;
+    width: 260px; /* Ridotto da 100% per non coprire tutta la chat */
+    max-width: 70vw; /* Massimo 70% della viewport */
+    min-width: 200px;
     z-index: 1000;
   }
   

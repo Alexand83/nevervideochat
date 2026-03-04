@@ -192,10 +192,37 @@ export function switchRoom(roomId) {
         if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
         /* Rimuovi TUTTI gli stili inline residui dalla stanza giochi */
         dom.usersPanel.style.cssText = '';
+        /* Rimuovi anche singoli stili che potrebbero essere stati impostati */
+        dom.usersPanel.style.position = '';
+        dom.usersPanel.style.top = '';
+        dom.usersPanel.style.bottom = '';
+        dom.usersPanel.style.right = '';
+        dom.usersPanel.style.zIndex = '';
+        dom.usersPanel.style.width = '';
+        dom.usersPanel.style.height = '';
+        dom.usersPanel.style.flex = '';
+        dom.usersPanel.style.minWidth = '';
+        dom.usersPanel.style.maxWidth = '';
+        dom.usersPanel.style.overflowX = '';
         
         /* Reset chat section styles */
         const chatSection = document.querySelector('.chat-section');
-        if (chatSection) chatSection.style.cssText = '';
+        if (chatSection) {
+          chatSection.style.cssText = '';
+          chatSection.style.flex = '';
+          chatSection.style.minWidth = '';
+          chatSection.style.width = '';
+          chatSection.style.maxWidth = '';
+          chatSection.style.marginRight = '';
+        }
+        
+        /* Reset app-main styles (potrebbe avere overflow-x o altri stili) */
+        const appMain = document.querySelector('.app-main');
+        if (appMain) {
+          appMain.style.cssText = '';
+          appMain.style.overflowX = '';
+          appMain.style.flex = '';
+        }
         
         /* Reset CSS variables */
         document.documentElement.style.setProperty('--users-panel-width', '0px');
@@ -217,7 +244,7 @@ export function switchRoom(roomId) {
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {
-      import('./camera.js?v=20260440').then(({ createCameraWindow }) => {
+      import('./camera.js?v=20260441').then(({ createCameraWindow }) => {
         if (state.activeRoom === roomIdStr && !state.cameraWindows[state.currentUser.id]?.el?.parentNode) {
           createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
         }
@@ -233,7 +260,7 @@ export function switchRoom(roomId) {
         /* Only close if still away from the Events room and camera is still for that room */
         if (state.activeRoom !== previousRoomId && state.cameraRoom === previousRoomId) {
           console.log('[Events Room] User away > 1 min — closing camera');
-          const { closeCameraWindow } = await import('./camera.js?v=20260440');
+          const { closeCameraWindow } = await import('./camera.js?v=20260441');
           closeCameraWindow(state.currentUser.id);
         }
       }, 60000);
@@ -283,7 +310,7 @@ export function switchRoom(roomId) {
         /* Guard: abort if user has left this room */
         if (state.activeRoom !== roomIdStr) return;
 
-        const { requestPublicCamera } = await import('./camera.js?v=20260440');
+        const { requestPublicCamera } = await import('./camera.js?v=20260441');
         const allUsers = Object.values(room.users);
         const usersWithCam = allUsers.filter(user =>
           user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)

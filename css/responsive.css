@@ -6,6 +6,51 @@
 
   /* Hide camera button label on small viewport */
   .camera-btn .hdr-btn-label { display: none; }
+  
+  /* Reduce header padding and gap on mobile to prevent overflow */
+  .header-inner {
+    padding: 0 var(--s2); /* Ridotto da var(--s4) */
+    gap: var(--s1); /* Ridotto da var(--s3) */
+  }
+  
+  /* Reduce button padding on mobile */
+  .hdr-btn {
+    padding: 5px var(--s2); /* Ridotto da 6px var(--s3) */
+    font-size: var(--fz-xs); /* Ridotto da var(--fz-sm) */
+  }
+  
+  /* Icon-only buttons più compatti */
+  .hdr-icon-only-btn {
+    padding: 4px 6px; /* Ridotto da 5px 7px */
+    min-width: 32px; /* Ridotto da 36px */
+  }
+  
+  /* Profile button più compatto */
+  .hdr-profile-btn {
+    width: 32px; /* Ridotto da 36px */
+    height: 32px;
+    padding: 3px;
+  }
+  
+  /* Avatar chip più piccolo */
+  .hdr-avatar-chip {
+    width: 24px; /* Ridotto da 28px */
+    height: 24px;
+    font-size: 10px; /* Ridotto da 11px */
+  }
+  
+  /* Logo text più piccolo su mobile */
+  .logo-text {
+    font-size: var(--fz-base); /* Ridotto da var(--fz-lg) */
+  }
+  
+  /* Online badge più compatto */
+  .online-badge {
+    min-width: 16px; /* Ridotto da 18px */
+    height: 16px;
+    font-size: 9px; /* Ridotto da var(--fz-xs) */
+    padding: 0 3px; /* Ridotto da 0 4px */
+  }
 
   /* Users panel becomes a slide-in drawer (original behavior - works fine) */
   .users-panel {

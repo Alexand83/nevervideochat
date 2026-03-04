@@ -93,16 +93,25 @@ export function initGames() {
         if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
         /* Reset CSS variable — chat torna a larghezza piena */
         document.documentElement.style.setProperty('--users-panel-width', '0px');
+        /* Rimuovi TUTTI gli stili inline */
         dom.usersPanel.style.cssText = '';
+        dom.usersPanel.style.position = '';
+        dom.usersPanel.style.top = '';
+        dom.usersPanel.style.bottom = '';
+        dom.usersPanel.style.right = '';
+        dom.usersPanel.style.zIndex = '';
+        dom.usersPanel.style.width = '';
+        dom.usersPanel.style.height = '';
       } else {
         dom.usersPanel.classList.remove('hidden');
         dom.usersPanel.classList.add('open');
         if (dom.panelOverlay) dom.panelOverlay.classList.add('show');
         
         /* Imposta larghezza di default se non già impostata */
-        const gamesPanelWidth = dom.gamesPanel.offsetWidth || 320;
+        const isMobile = window.innerWidth <= 768;
+        const gamesPanelWidth = dom.gamesPanel.offsetWidth || (isMobile ? 260 : 320);
         const savedW = parseInt(localStorage.getItem('nvc_panel_w'), 10);
-        const defaultW = (savedW >= 200 && savedW <= 480) ? savedW : 240;
+        const defaultW = (savedW >= 200 && savedW <= 480) ? savedW : (isMobile ? 220 : 240);
         
         if (!dom.usersPanel.style.width || dom.usersPanel.style.width === '') {
           dom.usersPanel.style.width = defaultW + 'px';
@@ -162,12 +171,18 @@ export function initGames() {
     const isGamesRoom = roomData?.is_games_room === true;
     
     if (isGamesRoom) {
+      const isMobile = window.innerWidth <= 768;
       const savedW = parseInt(localStorage.getItem('nvc_games_panel_w'), 10);
       if (savedW >= 200 && savedW <= 800) {
         dom.gamesPanel.style.width = savedW + 'px';
         document.documentElement.style.setProperty('--games-panel-width', savedW + 'px');
       } else {
-        document.documentElement.style.setProperty('--games-panel-width', '320px');
+        /* Default width: 260px su mobile, 320px su desktop */
+        const defaultW = isMobile ? '260px' : '320px';
+        if (!dom.gamesPanel.style.width) {
+          dom.gamesPanel.style.width = defaultW;
+        }
+        document.documentElement.style.setProperty('--games-panel-width', defaultW);
       }
     } else {
       /* Non siamo in una stanza giochi, assicurati che la variabile sia 0 */
