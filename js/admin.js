@@ -224,15 +224,31 @@ async function saveRoom() {
   const maxCams = isEventsRoom && maxCamsInput ? parseInt(maxCamsInput, 10) : null;
   const isGamesRoom = document.getElementById('roomEditIsGamesRoom').checked;
   
+  /* Security: Validate input */
   if (!name) {
     showToast('⚠️ Room Name is required.');
     return;
   }
   
+  const { MAX_ROOM_NAME_LENGTH } = await import('./config.js');
+  if (name.length > MAX_ROOM_NAME_LENGTH) {
+    showToast(`⚠️ Room name too long (max ${MAX_ROOM_NAME_LENGTH} characters).`);
+    return;
+  }
+  
+  /* Security: Validate maxCams range */
+  if (maxCams !== null && (isNaN(maxCams) || maxCams < 1 || maxCams > 8)) {
+    showToast('⚠️ Max cameras must be between 1 and 8.');
+    return;
+  }
+  
+  /* Security: Sanitize room name */
+  const sanitizedName = escHtml(name);
+  
   try {
     const roomData = {
-      name,
-      icon,
+      name: sanitizedName,
+      icon: icon.substring(0, 10), /* Limit icon length */
       is_open: isOpen,
       created_by: state.currentUser.id,
       password: password ? await hashPassword(password) : null,

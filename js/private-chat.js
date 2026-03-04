@@ -94,7 +94,9 @@ export function renderPMsg(uid, msg) {
   const c = chat.popup.querySelector(`#pchat-msgs-${uid}`); if (!c) return;
   const el = document.createElement('div');
   el.className = `pchat-msg${msg.from === 'me' ? ' own' : ''}`;
-  el.innerHTML = `<div class="pchat-bubble">${escHtml(msg.text)}</div><div class="pchat-time">${fmtTime(msg.ts)}</div>`;
+  /* Security: Validate and limit message length */
+  const safeText = (msg.text || '').substring(0, 10000);
+  el.innerHTML = `<div class="pchat-bubble">${escHtml(safeText)}</div><div class="pchat-time">${fmtTime(msg.ts)}</div>`;
   c.appendChild(el); c.scrollTop = c.scrollHeight;
 }
 

@@ -242,6 +242,16 @@ export async function sendMessage() {
   const hasImage = !!state.pendingImage;
   if (!hasText && !hasImage) return;
   if (!hasText) html = '';
+  
+  /* Security: Validate message length to prevent DoS */
+  const { MAX_MESSAGE_LENGTH } = await import('./config.js');
+  if (html.length > MAX_MESSAGE_LENGTH) {
+    showToast(`⚠️ Message too long (max ${MAX_MESSAGE_LENGTH} characters).`);
+    return;
+  }
+  
+  /* Security: Sanitize HTML before saving to DB */
+  html = sanitiseHtml(html);
 
   if (hasImage) {
     const url = (_supabaseReady?.())
@@ -253,18 +263,34 @@ export async function sendMessage() {
   }
 
   const quote     = state.replyTo;
-  const quoteHtml = quote?.html || null;
-  const quoteName = quote?.name || null;
+  let quoteHtml = quote?.html || null;
+  let quoteName = quote?.name || null;
   clearReplyTo();
-
+  
+  /* Security: Validate and sanitize quote */
+  if (quoteHtml) {
+    const { MAX_QUOTE_LENGTH } = await import('./config.js');
+    if (quoteHtml.length > MAX_QUOTE_LENGTH) {
+      quoteHtml = quoteHtml.substring(0, MAX_QUOTE_LENGTH);
+    }
+    quoteHtml = sanitiseHtml(quoteHtml);
+  }
+  if (quoteName) {
+    const { MAX_USERNAME_LENGTH } = await import('./config.js');
+    if (quoteName.length > MAX_USERNAME_LENGTH) {
+      quoteName = quoteName.substring(0, MAX_USERNAME_LENGTH);
+    }
+    quoteName = escHtml(quoteName);
+  }
+  
   /* Optimistic render */
   const tempId = `m${Date.now()}${Math.random()}`;
   addMessage({ userId: 'me', html, ts: Date.now(), quoteHtml, quoteName, msgId: tempId });
   dom.msgInput.innerHTML = '';
-
+  
   /* Persist to Supabase with room_id */
   const fullContent = quoteHtml
-    ? `<div data-quote-name="${escHtml(quoteName || '')}" data-quote-html="${encodeURIComponent(quoteHtml)}" class="msg-quote-meta"></div>${html}`
+    ? `<div data-quote-name="${quoteName || ''}" data-quote-html="${encodeURIComponent(quoteHtml)}" class="msg-quote-meta"></div>${html}`
     : html;
 
   if (_supabaseReady?.()) {

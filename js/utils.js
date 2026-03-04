@@ -14,11 +14,40 @@ export function escHtml(s) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 export function sanitiseHtml(html) {
-  const d = document.createElement('div'); d.innerHTML = html;
-  d.querySelectorAll('script,style,object,embed').forEach(e => e.remove());
-  d.querySelectorAll('*').forEach(e =>
-    [...e.attributes].forEach(a => { if (a.name.startsWith('on')) e.removeAttribute(a.name); })
-  );
+  if (!html || typeof html !== 'string') return '';
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  
+  /* Remove dangerous tags */
+  d.querySelectorAll('script,style,object,embed,iframe,frame,frameset,meta,link,base,form,input,button,textarea,select,option').forEach(e => e.remove());
+  
+  /* Remove dangerous attributes (event handlers, javascript:, data:, etc.) */
+  d.querySelectorAll('*').forEach(e => {
+    [...e.attributes].forEach(a => {
+      const attrName = a.name.toLowerCase();
+      const attrValue = a.value.toLowerCase();
+      
+      /* Remove event handlers */
+      if (attrName.startsWith('on')) {
+        e.removeAttribute(a.name);
+        return;
+      }
+      
+      /* Remove javascript: and data: URLs */
+      if (attrValue.startsWith('javascript:') || attrValue.startsWith('data:text/html') || attrValue.startsWith('vbscript:')) {
+        e.removeAttribute(a.name);
+        return;
+      }
+      
+      /* Remove dangerous attributes */
+      if (['href', 'src', 'action', 'formaction'].includes(attrName)) {
+        if (attrValue.startsWith('javascript:') || attrValue.startsWith('data:text/html')) {
+          e.removeAttribute(a.name);
+        }
+      }
+    });
+  });
+  
   return d.innerHTML;
 }
 export function processHtml(html) {

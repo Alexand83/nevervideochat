@@ -1004,18 +1004,30 @@ function handleAnswer(answer) {
     return;
   }
   
-  const userId = state.currentUser.id;
-  const normalizedAnswer = answer.trim().toLowerCase();
+  /* Security: Validate userId */
+  if (!state.currentUser || !state.currentUser.id) {
+    console.error('[Games] Invalid user ID');
+    return;
+  }
+  
+  const userId = String(state.currentUser.id);
+  
+  /* Security: Validate and limit answer length */
+  const sanitizedAnswer = answer.trim().substring(0, 200); /* Max 200 chars */
+  const normalizedAnswer = sanitizedAnswer.toLowerCase();
   
   if (gameData.quiz.answers.has(userId)) {
     showToast('⚠️ Hai già risposto a questa domanda!');
     return;
   }
   
+  /* Security: Sanitize username */
+  const username = (state.currentUser.name || state.currentUser.username || 'Guest').substring(0, 50);
+  
   gameData.quiz.answers.set(userId, {
-    answer: answer.trim(),
+    answer: sanitizedAnswer,
     timestamp: Date.now(),
-    username: state.currentUser.name || state.currentUser.username,
+    username: username,
   });
   
   /* Salva stato aggiornato */
@@ -1323,16 +1335,32 @@ async function saveActiveGame() {
 async function updateScore(userId, gameType, points) {
   if (!state.supa) return;
   
+  /* Security: Validate inputs */
+  if (!userId || typeof userId !== 'string') {
+    console.error('[Games] Invalid userId in updateScore');
+    return;
+  }
+  
+  if (!gameType || typeof gameType !== 'string' || !['song', 'truthLie', 'quiz'].includes(gameType)) {
+    console.error('[Games] Invalid gameType in updateScore');
+    return;
+  }
+  
+  if (typeof points !== 'number' || isNaN(points) || points < 0 || points > 1000) {
+    console.error('[Games] Invalid points value in updateScore');
+    return;
+  }
+  
   try {
     const user = findUser(userId);
-    const username = user?.name || 'Guest';
+    const username = (user?.name || 'Guest').substring(0, 50); /* Security: Limit username length */
     
     const { data: existing, error: fetchError } = await state.supa
       .from('game_scores')
       .select('*')
-      .eq('user_id', userId)
-      .eq('room_id', state.activeRoom)
-      .eq('game_type', gameType)
+      .eq('user_id', String(userId)) /* Security: Ensure string */
+      .eq('room_id', String(state.activeRoom)) /* Security: Ensure string */
+      .eq('game_type', String(gameType)) /* Security: Ensure string */
       .maybeSingle();
     
     if (fetchError) throw fetchError;
