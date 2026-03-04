@@ -256,11 +256,11 @@ export async function connectSupabase() {
         renderUsers();
       })
       .on('broadcast', { event: 'game-answer' }, async ({ payload }) => {
-        /* Aggiorna risposte quiz in tempo reale */
+        /* Aggiorna risposte quiz in tempo reale - solo aggiorna UI, non ricarica tutto */
         if (payload.game_type === 'quiz' && payload.room_id === state.activeRoom) {
-          const { checkActiveGame } = await import('./games.js');
-          /* Ricarica il gioco dal DB per avere le risposte aggiornate */
-          await checkActiveGame();
+          const { updateGamesPanel } = await import('./games.js');
+          /* Aggiorna solo l'UI, non ricaricare tutto dal DB */
+          setTimeout(() => updateGamesPanel(), 100);
         }
       })
       .on('broadcast', { event: 'game-question' }, async ({ payload }) => {
@@ -272,7 +272,8 @@ export async function connectSupabase() {
       })
       .on('broadcast', { event: 'game-started' }, async ({ payload }) => {
         /* Aggiorna UI quando un gioco viene avviato nella stanza attiva */
-        if (payload.room_id === state.activeRoom) {
+        if (payload.room_id === state.activeRoom && String(payload.from) !== String(state.currentUser?.id)) {
+          /* Solo se non siamo noi ad aver avviato il gioco */
           const { checkActiveGame } = await import('./games.js');
           await checkActiveGame();
         }

@@ -74,20 +74,34 @@ export function initGames() {
   
   /* Subscribe to active_games changes for real-time updates */
   if (state.supa) {
+    let lastUpdateTime = 0;
+    const UPDATE_THROTTLE = 500; /* Minimo 500ms tra aggiornamenti */
+    
     const gamesChannel = state.supa.channel('active-games-updates');
     gamesChannel
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'active_games' },
         async (payload) => {
+          /* Throttle: evita aggiornamenti troppo frequenti */
+          const now = Date.now();
+          if (now - lastUpdateTime < UPDATE_THROTTLE) {
+            console.log('[Games] Update throttled, skipping...');
+            return;
+          }
+          lastUpdateTime = now;
+          
           /* Aggiorna solo se il cambiamento riguarda la stanza attiva */
           if (payload.new && String(payload.new.room_id) === String(state.activeRoom)) {
-            console.log('[Games] Active game changed in current room, reloading...');
-            await checkActiveGame();
-            /* Forza aggiornamento UI */
-            setTimeout(() => {
-              updateGamesPanel();
-            }, 100);
-          } else if (payload.old && String(payload.old.room_id) === String(state.activeRoom)) {
+            /* Evita di ricaricare se è solo un aggiornamento di stato (non un nuovo gioco) */
+            if (payload.eventType === 'INSERT' || (payload.eventType === 'UPDATE' && payload.new.game_state)) {
+              console.log('[Games] Active game changed in current room, reloading...');
+              await checkActiveGame();
+              /* Forza aggiornamento UI */
+              setTimeout(() => {
+                updateGamesPanel();
+              }, 100);
+            }
+          } else if (payload.old && String(payload.old.room_id) === String(state.activeRoom) && !payload.new) {
             /* Gioco terminato nella stanza attiva */
             console.log('[Games] Active game ended in current room');
             await checkActiveGame();
@@ -237,9 +251,17 @@ export function initGames() {
 }
 
 /* ── Controlla se c'è un gioco attivo nella stanza ───────────── */
+let checkingGame = false; /* Flag per evitare chiamate multiple simultanee */
 export async function checkActiveGame() {
   if (!state.supa || !state.activeRoom) return;
   
+  /* Evita chiamate multiple simultanee */
+  if (checkingGame) {
+    console.log('[Games] checkActiveGame already in progress, skipping...');
+    return;
+  }
+  
+  checkingGame = true;
   try {
     const { data, error } = await state.supa
       .from('active_games')
@@ -340,6 +362,8 @@ export async function checkActiveGame() {
     }
   } catch (err) {
     console.error('[Games] Error checking active game:', err);
+  } finally {
+    checkingGame = false;
   }
 }
 
