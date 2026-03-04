@@ -317,14 +317,19 @@
     <div class="games-panel-resize-handle" id="gamesPanelResizeHandle" aria-hidden="true"></div>
     <div class="panel-hdr">
       <h2 class="panel-title">🎮 Giochi</h2>
-      <button class="close-panel-btn" id="closeGamesPanelBtn" aria-label="Close games panel">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="tbr-btn" id="toggleUsersListBtn" title="Visualizza/Nascondi utenti online">
+          👥
+        </button>
+        <button class="close-panel-btn" id="closeGamesPanelBtn" aria-label="Close games panel">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div class="games-panel-content-wrap">
       <div class="games-panel-body" id="gamesPanelBody"></div>

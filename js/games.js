@@ -69,6 +69,25 @@ export function initGames() {
     });
   }
   
+  /* Toggle users list button handler */
+  if (dom.toggleUsersListBtn) {
+    dom.toggleUsersListBtn.addEventListener('click', () => {
+      if (!dom.usersPanel) return;
+      const isVisible = dom.usersPanel.classList.contains('open');
+      if (isVisible) {
+        dom.usersPanel.classList.remove('open');
+        dom.panelOverlay.classList.remove('show');
+        dom.toggleUsersListBtn.textContent = '👥';
+        dom.toggleUsersListBtn.title = 'Visualizza utenti online';
+      } else {
+        dom.usersPanel.classList.add('open');
+        dom.panelOverlay.classList.add('show');
+        dom.toggleUsersListBtn.textContent = '👥';
+        dom.toggleUsersListBtn.title = 'Nascondi utenti online';
+      }
+    });
+  }
+  
   /* Rendi draggabile e ridimensionabile il pannello giochi */
   if (dom.gamesPanel) {
     const panelHeader = dom.gamesPanel.querySelector('.panel-hdr');
@@ -1053,7 +1072,6 @@ async function renderFinalLeaderboard(gameType) {
     
     leaderboardHtml += '</div></div>';
     dom.gamesPanelBody.innerHTML = leaderboardHtml;
-    renderGamesUsersList();
   } catch (err) {
     console.error('[Games] Error fetching final leaderboard:', err);
     showToast('⚠️ Errore nel caricamento della classifica.');
@@ -1108,7 +1126,6 @@ function updateGamesPanel() {
   
   if (!activeGame) {
     dom.gamesPanelBody.innerHTML = '<div class="games-panel-empty">🎮 Nessun gioco attivo. Usa <code>/giochi</code> per iniziare!</div>';
-    renderGamesUsersList();
     return;
   }
   
@@ -1128,9 +1145,6 @@ function updateGamesPanel() {
   
   /* Aggiungi event listeners per bottoni cliccabili */
   attachGameButtonListeners();
-  
-  /* Renderizza sempre la lista utenti DOPO il contenuto del gioco */
-  renderGamesUsersList();
 }
 
 /* ── Attacca event listeners ai bottoni del gioco ─────────────── */
@@ -1271,7 +1285,6 @@ function renderQuizGameUI() {
 function renderGamesPanel() {
   if (!dom.gamesPanelBody) return;
   updateGamesPanel();
-  renderGamesUsersList();
 }
 
 /* ── Render lista utenti online nella stanza giochi ──────────── */

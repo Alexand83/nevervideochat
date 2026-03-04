@@ -424,7 +424,7 @@
   align-items: flex-end;
   gap: var(--s2);
   touch-action: none;
-  padding: var(--s2) var(--s3);
+  padding: var(--s1) var(--s3);
 }
 
 .msg-input {

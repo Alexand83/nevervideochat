@@ -157,6 +157,11 @@ export function switchRoom(roomId) {
     if (isGamesRoom) {
       dom.gamesPanel.hidden = false;
       dom.gamesPanel.classList.add('open');
+      /* Nascondi usersPanel di default quando si entra nella stanza giochi */
+      if (dom.usersPanel) {
+        dom.usersPanel.classList.remove('open');
+        dom.panelOverlay.classList.remove('show');
+      }
       /* Aggiorna CSS variable per il padding della chat */
       setTimeout(() => {
         const panelWidth = dom.gamesPanel.offsetWidth || 320;

@@ -71,6 +71,7 @@ export const dom = {
   gamesPanel:       $('gamesPanel'),
   gamesPanelBody:   $('gamesPanelBody'),
   closeGamesPanelBtn: $('closeGamesPanelBtn'),
+  toggleUsersListBtn: $('toggleUsersListBtn'),
 
   /* Private chat */
   privateChatCont: $('privateChatCont'),
