@@ -352,12 +352,25 @@ async function loadUsers() {
 }
 
 async function kickUser(userId, userName) {
-  if (!confirm(`Kick ${userName}?`)) return;
+  /* Security: Verify admin access */
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    showToast('🚫 Admin access required.');
+    return;
+  }
+  
+  /* Security: Validate userId */
+  if (!userId || (typeof userId !== 'string' && typeof userId !== 'number')) {
+    showToast('⚠️ Invalid user ID.');
+    return;
+  }
+  
+  if (!confirm(`Kick ${escHtml(userName)}?`)) return;
   if (!state.supa) return;
   
   /* Broadcast kick event */
-  broadcast('user-kicked', userId, { reason: 'Kicked by admin' });
-  showToast(`👢 Kicked ${userName}`);
+  broadcast('user-kicked', String(userId), { reason: 'Kicked by admin' });
+  showToast(`👢 Kicked ${escHtml(userName)}`);
   loadUsers();
 }
 
@@ -553,9 +566,22 @@ async function blockIP(ip, reason) {
 }
 
 async function unblockIP(ip) {
+  /* Security: Verify admin access */
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    showToast('🚫 Admin access required.');
+    return;
+  }
+  
+  /* Security: Validate IP format */
+  if (!ip || typeof ip !== 'string') {
+    showToast('⚠️ Invalid IP address.');
+    return;
+  }
+  
   if (!state.supa) return;
   try {
-    const { error } = await state.supa.from('banned_ips').delete().eq('ip', ip);
+    const { error } = await state.supa.from('banned_ips').delete().eq('ip', escHtml(ip));
     if (error) throw error;
     showToast('✅ IP unblocked.');
     loadBannedIPs();
