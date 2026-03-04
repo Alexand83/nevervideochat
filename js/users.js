@@ -44,6 +44,7 @@ export function renderUsers() {
   const online = all.length;
   if (dom.onlineCountLabel) dom.onlineCountLabel.textContent = online;
   if (dom.onlineBadge)      dom.onlineBadge.textContent      = online;
+  if (dom.floatingUsersBadge) dom.floatingUsersBadge.textContent = online;
 
   /* Games panel users list removed - now using separate usersPanel */
   

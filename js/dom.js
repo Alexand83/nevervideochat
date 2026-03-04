@@ -66,6 +66,8 @@ export const dom = {
   onlineCountLabel: $('onlineCountLabel'),
   closePanelBtn:    $('closePanelBtn'),
   panelOverlay:     $('panelOverlay'),
+  floatingUsersBtn: $('floatingUsersBtn'),
+  floatingUsersBadge: $('floatingUsersBadge'),
 
   /* Games panel */
   gamesPanel:       $('gamesPanel'),

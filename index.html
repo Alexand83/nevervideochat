@@ -7,25 +7,25 @@
   <meta name="theme-color" content="#0d1117">
   <title>NeverVideoChat</title>
   <!-- Modular CSS - Load in correct order -->
-  <link rel="stylesheet" href="css/variables.css?v=20260441">
-  <link rel="stylesheet" href="css/reset.css?v=20260441">
-  <link rel="stylesheet" href="css/header.css?v=20260441">
-  <link rel="stylesheet" href="css/layout.css?v=20260441">
-  <link rel="stylesheet" href="css/chat.css?v=20260441">
-  <link rel="stylesheet" href="css/userlist.css?v=20260441">
-  <link rel="stylesheet" href="css/privatechat.css?v=20260441">
-  <link rel="stylesheet" href="css/games.css?v=20260441">
-  <link rel="stylesheet" href="css/minimisedbar.css?v=20260441">
-  <link rel="stylesheet" href="css/toasts.css?v=20260441">
-  <link rel="stylesheet" href="css/camrequest.css?v=20260441">
-  <link rel="stylesheet" href="css/videocall.css?v=20260441">
-  <link rel="stylesheet" href="css/webcam.css?v=20260441">
-  <link rel="stylesheet" href="css/contextmenu.css?v=20260441">
-  <link rel="stylesheet" href="css/ui.css?v=20260441">
-  <link rel="stylesheet" href="css/modals.css?v=20260441">
-  <link rel="stylesheet" href="css/admin.css?v=20260441">
-  <link rel="stylesheet" href="css/kickbanoverlay.css?v=20260441">
-  <link rel="stylesheet" href="css/responsive.css?v=20260441">
+  <link rel="stylesheet" href="css/variables.css?v=20260442">
+  <link rel="stylesheet" href="css/reset.css?v=20260442">
+  <link rel="stylesheet" href="css/header.css?v=20260442">
+  <link rel="stylesheet" href="css/layout.css?v=20260442">
+  <link rel="stylesheet" href="css/chat.css?v=20260442">
+  <link rel="stylesheet" href="css/userlist.css?v=20260442">
+  <link rel="stylesheet" href="css/privatechat.css?v=20260442">
+  <link rel="stylesheet" href="css/games.css?v=20260442">
+  <link rel="stylesheet" href="css/minimisedbar.css?v=20260442">
+  <link rel="stylesheet" href="css/toasts.css?v=20260442">
+  <link rel="stylesheet" href="css/camrequest.css?v=20260442">
+  <link rel="stylesheet" href="css/videocall.css?v=20260442">
+  <link rel="stylesheet" href="css/webcam.css?v=20260442">
+  <link rel="stylesheet" href="css/contextmenu.css?v=20260442">
+  <link rel="stylesheet" href="css/ui.css?v=20260442">
+  <link rel="stylesheet" href="css/modals.css?v=20260442">
+  <link rel="stylesheet" href="css/admin.css?v=20260442">
+  <link rel="stylesheet" href="css/kickbanoverlay.css?v=20260442">
+  <link rel="stylesheet" href="css/responsive.css?v=20260442">
 </head>
 <body>
 
@@ -987,8 +987,20 @@
   </div>
 </div>
 
+<!-- Floating users button (mobile only) -->
+<button class="floating-users-btn" id="floatingUsersBtn" 
+        title="Online Users" aria-label="Toggle users panel" aria-expanded="false">
+  <svg class="floating-btn-icon" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+  </svg>
+  <span class="floating-btn-badge" id="floatingUsersBadge">1</span>
+</button>
+
 <!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="js/main.js?v=20260441"></script>
+<script type="module" src="js/main.js?v=20260442"></script>
 </body>
 </html>

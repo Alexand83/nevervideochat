@@ -8,7 +8,7 @@ import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js'
 import { findUser, checkIsMuted, renderUsers } from './users.js';
 import { addIgnoredUser, removeIgnoredUser } from './storage.js';
 import { broadcast }         from './broadcast.js';
-import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260441';
+import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260442';
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
@@ -791,6 +791,21 @@ export function initPanelResize() {
         const gamesPanelWidth = dom.gamesPanel.offsetWidth || 320;
         dom.usersPanel.style.right = gamesPanelWidth + 'px';
       }
+      /* Aggiorna posizione bottone floating su mobile */
+      if (window.innerWidth <= 768 && dom.floatingUsersBtn) {
+        setTimeout(() => {
+          const panelWidth = dom.usersPanel.getBoundingClientRect().width || 280;
+          const isGamesRoom = dom.usersPanel.style.position === 'fixed';
+          if (isGamesRoom) {
+            /* In stanza giochi: bottone a sinistra del pannello utenti */
+            const gamesPanelWidth = dom.gamesPanel?.offsetWidth || 260;
+            dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${panelWidth}px + 16px)`;
+          } else {
+            /* Stanze normali: bottone a sinistra del pannello */
+            dom.floatingUsersBtn.style.right = `calc(${panelWidth}px + 16px)`;
+          }
+        }, 50);
+      }
     }
   };
 
@@ -805,13 +820,41 @@ export function initPanelResize() {
 
 /* ── Mobile panel (e desktop toggle) ──────────────────────────── */
 export function initMobilePanel() {
+  const updateFloatingButtonPosition = () => {
+    if (!dom.floatingUsersBtn || window.innerWidth > 768) return;
+    const isOpen = dom.usersPanel.classList.contains('open');
+    if (isOpen) {
+      /* Quando pannello aperto: sposta il bottone a sinistra del pannello */
+      const panelWidth = dom.usersPanel.getBoundingClientRect().width || 280;
+      const isGamesRoom = dom.usersPanel.style.position === 'fixed';
+      if (isGamesRoom && dom.gamesPanel && !dom.gamesPanel.hidden) {
+        /* In stanza giochi: bottone a sinistra del pannello utenti (che è a sinistra della barra giochi) */
+        const gamesPanelWidth = dom.gamesPanel.offsetWidth || 260;
+        dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${panelWidth}px + 16px)`;
+      } else {
+        /* Stanze normali: bottone a sinistra del pannello */
+        dom.floatingUsersBtn.style.right = `calc(${panelWidth}px + 16px)`;
+      }
+    } else {
+      /* Quando pannello chiuso: bottone a destra */
+      dom.floatingUsersBtn.style.right = '16px';
+    }
+  };
+
   const open = () => {
     dom.usersPanel.classList.add('open');
     dom.panelOverlay.classList.add('show');
     if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded', 'true');
+    if (dom.floatingUsersBtn) {
+      dom.floatingUsersBtn.setAttribute('aria-expanded', 'true');
+      updateFloatingButtonPosition();
+    }
     /* Su mobile aggiorna CSS var (updateUsersPanelWidthCSS gestisce il check stanza giochi) */
     if (window.innerWidth <= 768) {
-      setTimeout(() => updateUsersPanelWidthCSS(), 100);
+      setTimeout(() => {
+        updateUsersPanelWidthCSS();
+        updateFloatingButtonPosition();
+      }, 100);
     }
   };
 
@@ -819,6 +862,10 @@ export function initMobilePanel() {
     dom.usersPanel.classList.remove('open');
     dom.panelOverlay.classList.remove('show');
     if (dom.mobileUsersToggle) dom.mobileUsersToggle.setAttribute('aria-expanded', 'false');
+    if (dom.floatingUsersBtn) {
+      dom.floatingUsersBtn.setAttribute('aria-expanded', 'false');
+      updateFloatingButtonPosition();
+    }
     document.documentElement.style.setProperty('--users-panel-width', '0px');
     /* Reset stili inline (usati in stanza giochi) */
     if (dom.usersPanel) dom.usersPanel.style.cssText = '';
@@ -826,11 +873,27 @@ export function initMobilePanel() {
     if (chatSection) { chatSection.style.flex = ''; chatSection.style.minWidth = ''; }
   };
 
-  /* Toggle button visibile solo su desktop */
+  /* Toggle button nell'header (desktop) */
   if (dom.mobileUsersToggle && window.getComputedStyle(dom.mobileUsersToggle).display !== 'none') {
     dom.mobileUsersToggle.addEventListener('click', () =>
       dom.usersPanel.classList.contains('open') ? close() : open()
     );
+  }
+
+  /* Floating button (mobile) */
+  if (dom.floatingUsersBtn) {
+    dom.floatingUsersBtn.addEventListener('click', () =>
+      dom.usersPanel.classList.contains('open') ? close() : open()
+    );
+    /* Aggiorna posizione quando il pannello si apre/chiude */
+    if (dom.usersPanel) {
+      const observer = new MutationObserver(() => {
+        if (window.innerWidth <= 768) {
+          updateFloatingButtonPosition();
+        }
+      });
+      observer.observe(dom.usersPanel, { attributes: true, attributeFilter: ['class'] });
+    }
   }
 
   if (dom.closePanelBtn)  dom.closePanelBtn.addEventListener('click', close);

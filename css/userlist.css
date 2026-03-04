@@ -187,3 +187,61 @@
   vertical-align: middle;
   line-height: 1.2;
 }
+
+/* Floating users button (mobile only) */
+.floating-users-btn {
+  display: none; /* Shown on mobile via responsive.css */
+  position: fixed;
+  bottom: 80px; /* Above chat input area */
+  right: 16px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  cursor: pointer;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  touch-action: none;
+}
+
+.floating-users-btn:hover,
+.floating-users-btn:active {
+  background: var(--accent-h);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+}
+
+.floating-users-btn[aria-expanded="true"] {
+  background: var(--clr-success);
+  right: calc(var(--users-panel-width, 280px) + 16px); /* Sposta a sinistra quando pannello aperto */
+}
+
+.floating-btn-icon {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2;
+}
+
+.floating-btn-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--clr-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg0);
+}

@@ -1,8 +1,20 @@
 @media (max-width: 768px) {
 
-  /* Users toggle button visible on mobile (original behavior) */
-  .users-toggle-btn { display: flex; }
+  /* Hide header users button on mobile (use floating button instead) */
+  .users-toggle-btn { display: none !important; }
   .close-panel-btn  { display: flex; }
+  
+  /* Show floating users button on mobile */
+  .floating-users-btn {
+    display: flex !important;
+  }
+  
+  /* Make users panel semi-transparent on mobile */
+  .users-panel {
+    background: rgba(var(--bg0-rgb, 13, 17, 23), 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
 
   /* Hide camera button label on small viewport */
   .camera-btn .hdr-btn-label { display: none; }
