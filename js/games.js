@@ -968,13 +968,26 @@ function checkQuizAnswers() {
   
   const correctAnswer = gameData.quiz.currentQuestion.a.toLowerCase();
   const correctUsers = [];
+  const wrongUsers = [];
+  const currentUserId = state.currentUser?.id;
+  let userAnsweredCorrectly = false;
   
   gameData.quiz.answers.forEach((data, userId) => {
     const userAnswer = typeof data === 'string' ? data : data.answer;
     if (userAnswer.toLowerCase() === correctAnswer) {
       correctUsers.push(userId);
+      if (String(userId) === String(currentUserId)) {
+        userAnsweredCorrectly = true;
+      }
+    } else {
+      wrongUsers.push(userId);
     }
   });
+  
+  const totalAnswers = gameData.quiz.answers.size;
+  const correctCount = correctUsers.length;
+  const wrongCount = wrongUsers.length;
+  const correctPercentage = totalAnswers > 0 ? Math.round((correctCount / totalAnswers) * 100) : 0;
   
   /* Assegna punteggi - sistema più intelligente: più veloci = più punti */
   if (correctUsers.length > 0) {
@@ -997,35 +1010,32 @@ function checkQuizAnswers() {
       else if (index === 2) points = 5;
       updateScore(user.userId, 'quiz', points);
     });
-    
-    const correctNames = sortedUsers
-      .map((u, idx) => {
-        const user = findUser(u.userId);
-        const name = user?.name || user?.username || 'Qualcuno';
-        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
-        return `${medal} ${name}`;
-      })
-      .join(', ');
-    
-    const pointsText = sortedUsers.length === 1 
-      ? '(+10 punti)'
-      : sortedUsers.length === 2
-      ? '(+10, +7 punti)'
-      : sortedUsers.length === 3
-      ? '(+10, +7, +5 punti)'
-      : '(+10, +7, +5, +3 punti)';
-    
-    const correctText = `✅ Corretti: ${correctNames} ${pointsText}`;
-    
-    /* Toast solo se siamo nella stanza attiva */
-    if (String(state.activeRoom) === String(activeGame.room_id)) {
-      showToast(`⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}. ${correctText}`);
-    }
+  }
+  
+  /* Costruisci messaggio toast con statistiche */
+  let toastMessage = `⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}.\n`;
+  
+  if (totalAnswers === 0) {
+    toastMessage += '❌ Nessuno ha risposto!';
   } else {
-    /* Toast solo se siamo nella stanza attiva */
-    if (String(state.activeRoom) === String(activeGame.room_id)) {
-      showToast(`⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}. ❌ Nessuno ha risposto correttamente!`);
+    /* Statistiche generali */
+    toastMessage += `📊 ${correctCount} indovinato${correctCount !== 1 ? 'i' : ''} (${correctPercentage}%), ${wrongCount} sbagliato${wrongCount !== 1 ? 'i' : ''}.\n`;
+    
+    /* Messaggio personale */
+    if (gameData.quiz.answers.has(currentUserId)) {
+      if (userAnsweredCorrectly) {
+        toastMessage += `✅ Hai indovinato!`;
+      } else {
+        toastMessage += `❌ Hai sbagliato.`;
+      }
+    } else {
+      toastMessage += `⚠️ Non hai risposto.`;
     }
+  }
+  
+  /* Toast solo se siamo nella stanza attiva - UN SOLO MESSAGGIO */
+  if (String(state.activeRoom) === String(activeGame.room_id)) {
+    showToast(toastMessage, 5000);
   }
   
   /* INCREMENTA questionIndex per la prossima domanda */
