@@ -1140,8 +1140,17 @@ function checkQuizAnswers() {
   
   /* INCREMENTA questionIndex per la prossima domanda - SOLO UNA VOLTA */
   const oldIndex = gameData.quiz.questionIndex;
-  gameData.quiz.questionIndex++;
+  
+  /* Verifica che l'indice non sia già stato incrementato */
+  if (oldIndex >= gameData.quiz.questions.length) {
+    console.warn(`[Games] questionIndex already at end (${oldIndex}), not incrementing`);
+    checkingAnswers = false;
+    return;
+  }
+  
+  gameData.quiz.questionIndex = oldIndex + 1; /* Incrementa esplicitamente */
   gameData.quiz.questionStartTime = null; /* Reset timestamp */
+  gameData.quiz.currentQuestion = null; /* Reset domanda corrente */
   
   console.log(`[Games] Processed question ${oldIndex + 1}, moving to ${gameData.quiz.questionIndex + 1}`);
   
