@@ -21,6 +21,12 @@
   display: none;
 }
 
+/* Quando il pannello utenti è aperto nella stanza giochi, posizionalo a sinistra della barra giochi */
+.users-panel[style*="position: fixed"] {
+  border-left: 1px solid var(--border);
+  box-shadow: -4px 0 12px rgba(0,0,0,0.3);
+}
+
 .panel-hdr {
   padding: var(--s3) var(--s4);
   border-bottom: 1px solid var(--border);

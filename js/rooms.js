@@ -181,6 +181,12 @@ export function switchRoom(roomId) {
         dom.usersPanel.classList.remove('hidden');
         dom.usersPanel.classList.add('open');
         if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
+        /* Rimuovi stili inline se presenti (da stanza giochi) */
+        dom.usersPanel.style.position = '';
+        dom.usersPanel.style.top = '';
+        dom.usersPanel.style.bottom = '';
+        dom.usersPanel.style.right = '';
+        dom.usersPanel.style.zIndex = '';
       }
     }
   }

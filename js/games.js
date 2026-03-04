@@ -87,6 +87,26 @@ export function initGames() {
         dom.usersPanel.classList.remove('hidden');
         dom.usersPanel.classList.add('open');
         if (dom.panelOverlay) dom.panelOverlay.classList.add('show');
+        
+        /* Imposta larghezza e posizione di default quando si apre dalla barra giochi */
+        const gamesPanelWidth = dom.gamesPanel.offsetWidth || 320;
+        const defaultUsersPanelWidth = 240; // Larghezza di default per il pannello utenti
+        
+        if (!dom.usersPanel.style.width || dom.usersPanel.style.width === '') {
+          dom.usersPanel.style.width = defaultUsersPanelWidth + 'px';
+        }
+        
+        /* Posiziona il pannello utenti a sinistra della barra giochi */
+        if (dom.usersPanel.style.position !== 'fixed') {
+          dom.usersPanel.style.position = 'fixed';
+          dom.usersPanel.style.top = 'var(--hdr-h, 60px)';
+          dom.usersPanel.style.bottom = '0';
+          dom.usersPanel.style.right = gamesPanelWidth + 'px';
+          dom.usersPanel.style.zIndex = '399'; // Sotto la barra giochi (400) ma sopra il contenuto
+        } else {
+          // Aggiorna la posizione right in base alla larghezza attuale della barra giochi
+          dom.usersPanel.style.right = gamesPanelWidth + 'px';
+        }
       }
       updateButtonText();
     });
