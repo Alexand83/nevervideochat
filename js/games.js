@@ -60,6 +60,10 @@ export function initGames() {
   
   if (dom.gamesPanel) {
     dom.gamesPanel.hidden = !isGamesRoom;
+    /* Reset games panel width CSS variable if not in games room */
+    if (!isGamesRoom) {
+      document.documentElement.style.setProperty('--games-panel-width', '0px');
+    }
   }
   
   /* Close button handler */

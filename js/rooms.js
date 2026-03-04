@@ -136,6 +136,9 @@ let _eventsRoomCamOffTimer = null;
 export function switchRoom(roomId) {
   const roomIdStr = String(roomId);
   if (!state.rooms[roomIdStr]) return;
+  
+  /* Reset games panel width CSS variable immediately when switching rooms */
+  document.documentElement.style.setProperty('--games-panel-width', '0px');
 
   /* Track previous room to detect Events room transitions */
   const previousRoomId = String(state.activeRoom);

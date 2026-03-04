@@ -74,6 +74,9 @@ export async function finishInit() {
   state.rejectedCamUsers   = loadRejectedCams();
   state.ignoredUsers       = loadIgnoredUsers();
   if (!state.privateChats) state.privateChats = {};
+  
+  /* Reset games panel width CSS variable to 0 on init (unless in games room) */
+  document.documentElement.style.setProperty('--games-panel-width', '0px');
 
   /* Wire the auth module's finishInit reference */
   const { setFinishInit } = await import('./auth.js');
