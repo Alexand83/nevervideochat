@@ -81,8 +81,10 @@ export function initGames() {
       const isVisible = dom.usersPanel.classList.contains('open');
       if (isVisible) {
         dom.usersPanel.classList.remove('open');
+        dom.usersPanel.classList.add('hidden');
         if (dom.panelOverlay) dom.panelOverlay.classList.remove('show');
       } else {
+        dom.usersPanel.classList.remove('hidden');
         dom.usersPanel.classList.add('open');
         if (dom.panelOverlay) dom.panelOverlay.classList.add('show');
       }
