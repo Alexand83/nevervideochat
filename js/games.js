@@ -784,6 +784,12 @@ function checkQuizAnswers() {
 async function endQuizGame() {
   if (!activeGame || activeGame.game_type !== 'quiz') return;
   
+  /* FERMA il timer del quiz per evitare che continui */
+  if (gameTimer) {
+    clearTimeout(gameTimer);
+    gameTimer = null;
+  }
+  
   const isInActiveRoom = String(state.activeRoom) === String(activeGame.room_id);
   
   /* Mostra classifica finale nel pannello */
@@ -794,20 +800,32 @@ async function endQuizGame() {
     showToast(`🎉 Quiz completato! Classifica finale mostrata.`);
   }
   
-  /* Timer per rimuovere la classifica dopo 1 minuto */
+  /* Salva nel DB che il gioco è finito */
+  if (state.supa) {
+    try {
+      await state.supa
+        .from('active_games')
+        .update({ is_active: false, ended_at: new Date().toISOString() })
+        .eq('id', activeGame.id);
+    } catch (err) {
+      console.error('[Games] Error ending quiz game:', err);
+    }
+  }
+  
+  /* Timer per rimuovere la classifica dopo 1 minuto e fermare completamente il gioco */
   if (finalLeaderboardTimer) {
     clearTimeout(finalLeaderboardTimer);
   }
   finalLeaderboardTimer = setTimeout(() => {
     if (showingFinalLeaderboard) {
       showingFinalLeaderboard = false;
+      /* Ferma completamente il gioco */
+      activeGame = null;
+      gameData.quiz.answers.clear();
       updateGamesPanel();
       renderGamesUsersList();
     }
   }, 60000); // 1 minuto
-  
-  /* Non chiudere il gioco subito, lascia la classifica visibile */
-  /* await stopGame(); */
 }
 
 /* ── Termina gioco corrente ──────────────────────────────────── */
