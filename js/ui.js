@@ -708,46 +708,64 @@ export function updateUsersPanelWidthCSS() {
   
   console.log('[UI] updateUsersPanelWidthCSS:', { isMobile, isOpen, width, windowWidth: window.innerWidth });
   
+  // Check if we're in games room - only apply special handling there
+  let isGamesRoom = false;
+  try {
+    const { getAvailableRooms } = await import('./rooms.js');
+    const availableRooms = getAvailableRooms?.() || [];
+    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+    isGamesRoom = roomData?.is_games_room === true;
+  } catch (e) {
+    console.warn('[UI] Could not check games room status:', e);
+  }
+  
   if (isMobile && isOpen) {
-    // Set CSS variable
+    // Set CSS variable (only used in games room)
     document.documentElement.style.setProperty('--users-panel-width', width + 'px');
     console.log('[UI] Set --users-panel-width to:', width + 'px');
     
-    // On mobile, when panel opens, change it from fixed to relative so it's part of flex layout
-    if (isMobile && isOpen) {
+    // Only apply special layout changes in games room
+    if (isGamesRoom) {
       const appMain = document.querySelector('.app-main');
       if (appMain) {
         appMain.style.display = 'flex';
         appMain.style.flexDirection = 'row';
       }
-      // Panel should be relative when open (handled by CSS, but ensure it)
+      // Panel should be relative when open in games room
       dom.usersPanel.style.position = 'relative';
       dom.usersPanel.style.top = 'auto';
       dom.usersPanel.style.right = 'auto';
       dom.usersPanel.style.height = '100%';
       
-      // Chat should flex shrink
+      // Chat should flex shrink in games room
       if (chatSection) {
         const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
         const totalWidth = gamesPanelWidth + width;
         chatSection.style.flex = `0 1 calc(100% - ${totalWidth}px)`;
         chatSection.style.minWidth = '0';
-        console.log('[UI] Applied flex shrink to chat section');
-        
-        // Show debug info on screen (only on mobile)
-        showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalWidth, cssVar: width + 'px' });
+        console.log('[UI] Applied flex shrink to chat section (games room)');
       }
+    } else {
+      // In normal rooms, keep panel fixed (original behavior)
+      // Don't modify chat section - it works fine as is
+      console.log('[UI] Normal room - keeping panel fixed');
+    }
+    
+    // Show debug info on screen (only on mobile)
+    if (isGamesRoom && chatSection) {
+      const gamesPanelWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--games-panel-width') || '0', 10);
+      showDebugInfo({ isMobile, isOpen, panelWidth: width, gamesWidth: gamesPanelWidth, totalWidth: gamesPanelWidth + width, cssVar: width + 'px' });
     }
   } else {
     document.documentElement.style.setProperty('--users-panel-width', '0px');
     if (isMobile) {
-      // Reset panel to fixed when closed
+      // Reset panel to fixed when closed (always fixed in normal rooms)
       dom.usersPanel.style.position = 'fixed';
       dom.usersPanel.style.top = 'var(--hdr-h)';
       dom.usersPanel.style.right = '0';
       dom.usersPanel.style.height = 'calc(100dvh - var(--hdr-h))';
       
-      // Reset chat section
+      // Reset chat section (only if was modified in games room)
       if (chatSection) {
         chatSection.style.flex = '';
         chatSection.style.minWidth = '';

@@ -7,7 +7,7 @@
   /* Hide camera button label on small viewport */
   .camera-btn .hdr-btn-label { display: none; }
 
-  /* Users panel becomes a slide-in drawer - but when open, it's part of flex layout */
+  /* Users panel becomes a slide-in drawer (original behavior - works fine) */
   .users-panel {
     position: fixed;
     top: var(--hdr-h);
@@ -17,43 +17,16 @@
     min-width: 200px;
     max-width: 90vw;
     transform: translateX(100%);
-    transition: transform var(--ts), position var(--ts);
+    transition: transform var(--ts);
     z-index: 200;
     box-shadow: var(--sh-xl);
     display: flex !important; /* Override desktop state */
   }
-  
-  /* When panel is open, make it part of flex layout instead of fixed */
-  .users-panel.open {
-    transform: translateX(0);
-    position: relative !important;
-    top: auto !important;
-    right: auto !important;
-    height: 100% !important;
-    box-shadow: none !important;
-    z-index: auto !important;
-  }
-  
+  .users-panel.open { transform: translateX(0); }
   .users-panel.hidden { display: none !important; }
   
-  /* When users panel is open, app-main should be flex and chat should shrink */
-  .app-main:has(.users-panel.open) {
-    display: flex !important;
-    flex-direction: row !important;
-  }
-  
-  /* Chat section when panel is open - should shrink to make space */
-  .chat-section {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    transition: flex 0.3s ease;
-  }
-  
-  /* When panel is open, chat should be smaller */
-  .app-main:has(.users-panel.open) .chat-section {
-    flex: 0 1 calc(100% - var(--users-panel-width, 280px) - var(--games-panel-width, 0px)) !important;
-    min-width: 0 !important;
-  }
+  /* Only in games room: special handling for users panel when opened from games panel */
+  /* This is handled by JavaScript in games.js, not CSS */
   
   /* Show resize handle on mobile (on the left side since panel is on the right) */
   .panel-resize-handle {
