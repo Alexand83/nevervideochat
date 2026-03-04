@@ -1056,7 +1056,15 @@ function checkQuizAnswers() {
     return;
   }
   
+  /* Verifica che la domanda corrente esista ancora (non è stata già processata) */
+  if (!gameData.quiz.currentQuestion) {
+    console.log('[Games] No current question, skipping checkQuizAnswers');
+    return;
+  }
+  
   checkingAnswers = true;
+  
+  console.log(`[Games] Processing question ${currentQuestionIndex + 1} (index ${currentQuestionIndex})`);
   
   const correctAnswer = gameData.quiz.currentQuestion.a.toLowerCase();
   const correctUsers = [];
