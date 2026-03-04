@@ -32,6 +32,19 @@
     max-width: calc(100% - var(--users-panel-width, 0px) - var(--games-panel-width, 0px)) !important;
     margin-right: 0 !important;
     transition: width 0.3s ease;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+  
+  /* Ensure app-main doesn't overflow when panel is open */
+  .app-main {
+    overflow-x: hidden !important;
+    position: relative;
+  }
+  
+  /* Hide overflow on body when panel is open */
+  body:has(.users-panel.open) {
+    overflow-x: hidden !important;
   }
   
   /* Show resize handle on mobile (on the left side since panel is on the right) */

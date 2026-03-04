@@ -723,6 +723,14 @@ export function updateUsersPanelWidthCSS() {
       chatSection.style.width = newWidth;
       chatSection.style.maxWidth = newWidth;
       chatSection.style.marginRight = '0px';
+      chatSection.style.overflowX = 'hidden';
+      
+      // Also set overflow on app-main
+      const appMain = document.querySelector('.app-main');
+      if (appMain) {
+        appMain.style.overflowX = 'hidden';
+      }
+      
       console.log('[UI] Applied inline width to chat section:', newWidth);
       
       // Show debug info on screen (only on mobile)
@@ -850,6 +858,9 @@ function showDebugInfoNow() {
   const computedWidth = chatSection ? window.getComputedStyle(chatSection).width : 'N/A';
   const inlineWidth = chatSection?.style.width || 'N/A';
   const computedMargin = chatSection ? window.getComputedStyle(chatSection).marginRight : 'N/A';
+  const computedFlex = chatSection ? window.getComputedStyle(chatSection).flex : 'N/A';
+  const appMain = document.querySelector('.app-main');
+  const appMainOverflow = appMain ? window.getComputedStyle(appMain).overflowX : 'N/A';
   
   debugOverlay.innerHTML = `
     <div style="margin-bottom: 8px;"><strong style="color: #0ff;">Users Panel Debug</strong></div>
@@ -861,7 +872,9 @@ function showDebugInfoNow() {
     <div>Total Width: <span style="color: #0ff">${totalMargin}px</span></div>
     <div>Chat Width: <span style="color: #f0f">${computedWidth}</span></div>
     <div>Chat Width (inline): <span style="color: #f0f">${inlineWidth}</span></div>
+    <div>Chat Flex: <span style="color: #f0f">${computedFlex}</span></div>
     <div>Chat Margin: <span style="color: #f0f">${computedMargin}</span></div>
+    <div>App Main Overflow: <span style="color: #f0f">${appMainOverflow}</span></div>
     <div style="margin-top: 8px; font-size: 10px; color: #888;">Window: ${window.innerWidth}x${window.innerHeight}</div>
   `;
   const closeBtn = document.createElement('button');
