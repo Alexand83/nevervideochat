@@ -14,7 +14,7 @@
   /* Allow JS to override width via inline style */
   min-width: 160px;
   max-width: 480px;
-  /* Hidden by default on desktop, shown via .open class */
+  /* Hidden by default, shown via .open class */
   display: none;
 }
 

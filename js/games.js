@@ -894,7 +894,6 @@ async function endQuizGame() {
       activeGame = null;
       gameData.quiz.answers.clear();
       updateGamesPanel();
-      renderGamesUsersList();
     }
   }, 60000); // 1 minuto
 }

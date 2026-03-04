@@ -17,6 +17,7 @@
     transition: transform var(--ts);
     z-index: 200;
     box-shadow: var(--sh-xl);
+    display: flex !important; /* Override desktop hidden state */
   }
   .users-panel.open { transform: translateX(0); }
 
