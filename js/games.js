@@ -1379,11 +1379,11 @@ async function updateScore(userId, gameType, points) {
       await state.supa
         .from('game_scores')
         .insert({
-          user_id: userId,
+          user_id: String(userId), /* Security: Ensure string */
           username: username,
-          room_id: state.activeRoom,
-          game_type: gameType,
-          score: points,
+          room_id: String(state.activeRoom), /* Security: Ensure string */
+          game_type: String(gameType), /* Security: Ensure string */
+          score: Math.max(0, Math.min(1000000, points)), /* Security: Clamp score */
           games_played: 1,
           wins: points > 0 ? 1 : 0,
         });

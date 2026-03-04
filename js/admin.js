@@ -246,11 +246,18 @@ async function saveRoom() {
   const sanitizedName = escHtml(name);
   
   try {
+    /* Security: Verify admin access before saving */
+    const hasAccess = await checkAdminAccess();
+    if (!hasAccess) {
+      showToast('🚫 Admin access required.');
+      return;
+    }
+    
     const roomData = {
       name: sanitizedName,
       icon: icon.substring(0, 10), /* Limit icon length */
       is_open: isOpen,
-      created_by: state.currentUser.id,
+      created_by: String(state.currentUser.id), /* Security: Ensure string */
       password: password ? await hashPassword(password) : null,
       max_cams: (isEventsRoom && maxCams && maxCams >= 1 && maxCams <= 8) ? maxCams : null,
       is_games_room: isGamesRoom,
@@ -414,16 +421,30 @@ async function muteUser(userId, userName) {
 }
 
 async function banUser(userId, userName) {
-  const reason = prompt(`Ban ${userName}. Reason:`);
+  /* Security: Verify admin access */
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    showToast('🚫 Admin access required.');
+    return;
+  }
+  
+  /* Security: Validate userId */
+  if (!userId || (typeof userId !== 'string' && typeof userId !== 'number')) {
+    showToast('⚠️ Invalid user ID.');
+    return;
+  }
+  
+  const reason = prompt(`Ban ${escHtml(userName)}. Reason:`);
   if (reason === null) return;
+  const sanitizedReason = (reason || 'Banned by admin').substring(0, 500); /* Limit reason length */
   if (!state.supa) return;
   
   try {
     const { error } = await state.supa.from('banned_users').upsert({
-      user_id: userId,
-      username: userName,
-      reason: reason || 'Banned by admin',
-      banned_by: state.currentUser.id,
+      user_id: String(userId), /* Security: Ensure string */
+      username: escHtml(userName).substring(0, 50), /* Security: Sanitize and limit */
+      reason: escHtml(sanitizedReason), /* Security: Sanitize reason */
+      banned_by: String(state.currentUser.id), /* Security: Ensure string */
     }, { onConflict: 'user_id' });
     
     if (error) throw error;
@@ -549,12 +570,26 @@ function openBlockIpModal() {
 }
 
 async function blockIP(ip, reason) {
+  /* Security: Verify admin access */
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    showToast('🚫 Admin access required.');
+    return;
+  }
+  
+  /* Security: Validate IP format (basic validation) */
+  if (!ip || typeof ip !== 'string' || !/^[\d.]+$/.test(ip.replace(/:/g, ''))) {
+    showToast('⚠️ Invalid IP address.');
+    return;
+  }
+  
   if (!state.supa) return;
   try {
+    const sanitizedReason = (reason || 'Blocked by admin').substring(0, 500); /* Limit reason length */
     const { error } = await state.supa.from('banned_ips').insert({
-      ip,
-      reason,
-      banned_by: state.currentUser.id,
+      ip: escHtml(ip).substring(0, 45), /* Security: Sanitize and limit IP */
+      reason: escHtml(sanitizedReason), /* Security: Sanitize reason */
+      banned_by: String(state.currentUser.id), /* Security: Ensure string */
     });
     if (error) throw error;
     showToast('✅ IP blocked.');
