@@ -695,7 +695,7 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
 }
 
 /* ── Update users panel width CSS variable ── */
-export function updateUsersPanelWidthCSS() {
+export async function updateUsersPanelWidthCSS() {
   const isMobile = window.innerWidth <= 768;
   if (!dom.usersPanel) {
     console.log('[UI] updateUsersPanelWidthCSS: usersPanel not found');
