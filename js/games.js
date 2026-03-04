@@ -153,13 +153,22 @@ export function initGames() {
       });
     }
     
-    /* Carica larghezza salvata */
-    const savedW = parseInt(localStorage.getItem('nvc_games_panel_w'), 10);
-    if (savedW >= 200 && savedW <= 800) {
-      dom.gamesPanel.style.width = savedW + 'px';
-      document.documentElement.style.setProperty('--games-panel-width', savedW + 'px');
+    /* Carica larghezza salvata - ma solo se siamo in una stanza giochi */
+    const availableRooms = getAvailableRooms();
+    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+    const isGamesRoom = roomData?.is_games_room === true;
+    
+    if (isGamesRoom) {
+      const savedW = parseInt(localStorage.getItem('nvc_games_panel_w'), 10);
+      if (savedW >= 200 && savedW <= 800) {
+        dom.gamesPanel.style.width = savedW + 'px';
+        document.documentElement.style.setProperty('--games-panel-width', savedW + 'px');
+      } else {
+        document.documentElement.style.setProperty('--games-panel-width', '320px');
+      }
     } else {
-      document.documentElement.style.setProperty('--games-panel-width', '320px');
+      /* Non siamo in una stanza giochi, assicurati che la variabile sia 0 */
+      document.documentElement.style.setProperty('--games-panel-width', '0px');
     }
   }
 }
