@@ -255,6 +255,21 @@ export async function connectSupabase() {
         const { renderUsers } = await import('./users.js');
         renderUsers();
       })
+      .on('broadcast', { event: 'game-answer' }, async ({ payload }) => {
+        /* Aggiorna risposte quiz in tempo reale */
+        if (payload.game_type === 'quiz' && payload.room_id === state.activeRoom) {
+          const { checkActiveGame } = await import('./games.js');
+          /* Ricarica il gioco dal DB per avere le risposte aggiornate */
+          await checkActiveGame();
+        }
+      })
+      .on('broadcast', { event: 'game-question' }, async ({ payload }) => {
+        /* Aggiorna UI quando arriva una nuova domanda */
+        if (payload.game_type === 'quiz' && payload.room_id === state.activeRoom) {
+          const { checkActiveGame } = await import('./games.js');
+          await checkActiveGame();
+        }
+      })
       .subscribe();
 
     showToast('🟢 Connected to NeverVideoChat');

@@ -272,7 +272,10 @@ export async function checkActiveGame() {
         gameData.quiz = {
           currentQuestion: gameState.currentQuestion || null,
           questionIndex: gameState.questionIndex || 0,
-          answers: new Map(Object.entries(gameState.answers || {})),
+          answers: new Map(Object.entries(gameState.answers || {}).map(([k, v]) => [
+            k, 
+            typeof v === 'string' ? { answer: v, timestamp: Date.now(), username: null } : v
+          ])),
           timeLimit: gameState.timeLimit || 15000,
           questions: gameState.questions || defaultQuestions,
         };
@@ -879,11 +882,21 @@ function handleAnswer(answer) {
   gameData.quiz.answers.set(userId, {
     answer: answer.trim(),
     timestamp: Date.now(),
+    username: state.currentUser.name || state.currentUser.username,
   });
   
   /* Salva stato aggiornato */
   saveActiveGame();
   updateGamesPanel();
+  
+  /* Broadcast risposta a tutti gli utenti nella stanza */
+  broadcastAll('game-answer', {
+    game_type: 'quiz',
+    user_id: userId,
+    username: state.currentUser.name || state.currentUser.username,
+    answer: answer.trim(),
+    room_id: activeGame.room_id,
+  });
   
   /* Toast solo se siamo nella stanza attiva */
   if (String(state.activeRoom) === String(activeGame.room_id)) {
@@ -900,26 +913,62 @@ function checkQuizAnswers() {
   const correctUsers = [];
   
   gameData.quiz.answers.forEach((data, userId) => {
-    const userAnswer = data.answer.toLowerCase();
-    if (userAnswer === correctAnswer) {
+    const userAnswer = typeof data === 'string' ? data : data.answer;
+    if (userAnswer.toLowerCase() === correctAnswer) {
       correctUsers.push(userId);
     }
   });
   
-  /* Assegna punteggi */
-  const pointsPerUser = correctUsers.length > 0 ? Math.max(1, Math.floor(10 / correctUsers.length)) : 0;
-  correctUsers.forEach(userId => {
-    updateScore(userId, 'quiz', pointsPerUser);
-  });
-  
-  const correctNames = correctUsers.map(uid => findUser(uid)?.name || 'Qualcuno').join(', ');
-  const correctText = correctUsers.length > 0 
-    ? `✅ Corretti: ${correctNames} (+${pointsPerUser} punti)`
-    : `❌ Nessuno ha risposto correttamente!`;
-  
-  /* Toast solo se siamo nella stanza attiva */
-  if (String(state.activeRoom) === String(activeGame.room_id)) {
-    showToast(`⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}. ${correctText}`);
+  /* Assegna punteggi - sistema più intelligente: più veloci = più punti */
+  if (correctUsers.length > 0) {
+    /* Ordina per timestamp (più veloce = timestamp più basso) */
+    const sortedUsers = correctUsers
+      .map(uid => {
+        const data = gameData.quiz.answers.get(uid);
+        return {
+          userId: uid,
+          timestamp: typeof data === 'object' && data.timestamp ? data.timestamp : Date.now(),
+        };
+      })
+      .sort((a, b) => a.timestamp - b.timestamp);
+    
+    /* Primo: 10 punti, secondo: 7, terzo: 5, altri: 3 */
+    sortedUsers.forEach((user, index) => {
+      let points = 3;
+      if (index === 0) points = 10;
+      else if (index === 1) points = 7;
+      else if (index === 2) points = 5;
+      updateScore(user.userId, 'quiz', points);
+    });
+    
+    const correctNames = sortedUsers
+      .map((u, idx) => {
+        const user = findUser(u.userId);
+        const name = user?.name || user?.username || 'Qualcuno';
+        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
+        return `${medal} ${name}`;
+      })
+      .join(', ');
+    
+    const pointsText = sortedUsers.length === 1 
+      ? '(+10 punti)'
+      : sortedUsers.length === 2
+      ? '(+10, +7 punti)'
+      : sortedUsers.length === 3
+      ? '(+10, +7, +5 punti)'
+      : '(+10, +7, +5, +3 punti)';
+    
+    const correctText = `✅ Corretti: ${correctNames} ${pointsText}`;
+    
+    /* Toast solo se siamo nella stanza attiva */
+    if (String(state.activeRoom) === String(activeGame.room_id)) {
+      showToast(`⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}. ${correctText}`);
+    }
+  } else {
+    /* Toast solo se siamo nella stanza attiva */
+    if (String(state.activeRoom) === String(activeGame.room_id)) {
+      showToast(`⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}. ❌ Nessuno ha risposto correttamente!`);
+    }
   }
   
   /* INCREMENTA questionIndex per la prossima domanda */
@@ -1384,13 +1433,52 @@ function renderQuizGameUI() {
     return '<div class="games-panel-content">Caricamento domanda...</div>';
   }
   
+  /* Raggruppa risposte per opzione */
+  const answersByOption = new Map();
+  question.options.forEach(opt => {
+    answersByOption.set(opt, []);
+  });
+  
+  gameData.quiz.answers.forEach((data, uid) => {
+    const userAnswer = typeof data === 'string' ? data : data.answer;
+    const user = findUser(uid);
+    const username = user?.name || user?.username || (typeof data === 'object' ? data.username : null) || 'Utente';
+    
+    /* Trova l'opzione corrispondente (case-insensitive) */
+    const matchingOption = question.options.find(opt => 
+      opt.toLowerCase() === userAnswer.toLowerCase()
+    );
+    
+    if (matchingOption) {
+      const existing = answersByOption.get(matchingOption) || [];
+      existing.push({ userId: uid, username, isMe: uid === userId });
+      answersByOption.set(matchingOption, existing);
+    }
+  });
+  
   let optionsHtml = '';
   question.options.forEach((opt, idx) => {
     const letter = String.fromCharCode(65 + idx);
+    const usersWhoAnswered = answersByOption.get(opt) || [];
+    const userCount = usersWhoAnswered.length;
+    const isMyAnswer = usersWhoAnswered.some(u => u.isMe);
+    
+    let usersListHtml = '';
+    if (userCount > 0) {
+      const usersList = usersWhoAnswered
+        .map(u => u.isMe ? '<strong>Tu</strong>' : escHtml(u.username))
+        .join(', ');
+      usersListHtml = `<div class="game-option-users">👥 ${usersList} ${userCount > 1 ? `(${userCount})` : ''}</div>`;
+    }
+    
     optionsHtml += `
-      <button class="game-option-btn ${hasAnswered ? 'disabled' : ''}" data-answer="${escHtml(opt)}" ${hasAnswered ? 'disabled' : ''}>
+      <button class="game-option-btn ${hasAnswered ? 'disabled' : ''} ${isMyAnswer ? 'my-answer' : ''}" 
+              data-answer="${escHtml(opt)}" ${hasAnswered ? 'disabled' : ''}>
         <span class="game-option-letter">${letter}</span>
-        <span class="game-option-text">${escHtml(opt)}</span>
+        <div class="game-option-content">
+          <span class="game-option-text">${escHtml(opt)}</span>
+          ${usersListHtml}
+        </div>
       </button>
     `;
   });
@@ -1400,7 +1488,7 @@ function renderQuizGameUI() {
       <div class="game-question-number">Domanda ${questionNum}/${totalQuestions}</div>
       <div class="game-question">${escHtml(question.q)}</div>
       <div class="game-options-container">${optionsHtml}</div>
-      <div class="game-stats">👥 Risposte: ${answersCount}</div>
+      <div class="game-stats">👥 Totale risposte: ${answersCount}</div>
       ${hasAnswered ? '<div class="game-instruction">✅ Hai già risposto! Attendi il risultato...</div>' : '<div class="game-instruction">Clicca su una risposta o scrivi: <code>/game answer [risposta]</code></div>'}
     </div>
   `;
