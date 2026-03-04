@@ -203,7 +203,7 @@
 
 /* Floating users button (mobile only) - minimal style, top position */
 .floating-users-btn {
-  display: none; /* Shown on mobile via responsive.css */
+  display: none !important; /* Hidden by default, shown only on mobile via responsive.css */
   position: fixed;
   top: calc(var(--hdr-h, 60px) + 8px); /* Below header */
   right: 12px;

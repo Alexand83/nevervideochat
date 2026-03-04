@@ -8,7 +8,7 @@ import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js'
 import { findUser, checkIsMuted, renderUsers } from './users.js';
 import { addIgnoredUser, removeIgnoredUser } from './storage.js';
 import { broadcast }         from './broadcast.js';
-import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260444';
+import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260445';
 import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
@@ -768,9 +768,24 @@ export function initPanelResize() {
       ? Math.min(maxWidth, Math.max(200, startW + deltaX))
       : Math.min(480, Math.max(160, startW + deltaX));
     panel.style.width = newWidth + 'px';
-    /* Aggiorna CSS var solo in stanza giochi su mobile */
-    if (isMobile && panel.classList.contains('open')) {
-      document.documentElement.style.setProperty('--users-panel-width', newWidth + 'px');
+    /* Aggiorna CSS var quando pannello è aperto (mobile e desktop in stanza giochi) */
+    if (panel.classList.contains('open')) {
+      if (isMobile) {
+        document.documentElement.style.setProperty('--users-panel-width', newWidth + 'px');
+        /* Aggiorna posizione bottone floating durante il resize */
+        if (dom.floatingUsersBtn) {
+          const isGamesRoom = panel.style.position === 'fixed';
+          if (isGamesRoom && dom.gamesPanel && !dom.gamesPanel.hidden) {
+            const gamesPanelWidth = dom.gamesPanel.offsetWidth || 260;
+            dom.floatingUsersBtn.style.right = `calc(${gamesPanelWidth}px + ${newWidth}px + 12px)`;
+          } else {
+            dom.floatingUsersBtn.style.right = `calc(${newWidth}px + 12px)`;
+          }
+        }
+      } else {
+        /* Desktop: aggiorna CSS var solo in stanza giochi */
+        updateUsersPanelWidthCSS();
+      }
     }
     e.preventDefault();
   };

@@ -4,7 +4,7 @@
   .users-toggle-btn { display: none !important; }
   .close-panel-btn  { display: flex; }
   
-  /* Show floating users button on mobile */
+  /* Show floating users button ONLY on mobile */
   .floating-users-btn {
     display: flex !important;
   }
