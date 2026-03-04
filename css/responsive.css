@@ -152,6 +152,13 @@
   .logo-icon-svg { width: 30px; height: 30px; }
 }
 
+/* Desktop: Hide floating button */
+@media (min-width: 769px) {
+  .floating-users-btn {
+    display: none !important;
+  }
+}
+
 /* iOS safe-area bottom insets */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .chat-input-area { padding-bottom: env(safe-area-inset-bottom); }
