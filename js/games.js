@@ -66,6 +66,16 @@ export function initGames() {
       if (dom.gamesPanel) dom.gamesPanel.hidden = true;
     });
   }
+  
+  /* Rendi draggabile il pannello giochi */
+  if (dom.gamesPanel) {
+    const panelHeader = dom.gamesPanel.querySelector('.panel-hdr');
+    if (panelHeader) {
+      import('./utils.js').then(({ makeDraggable }) => {
+        makeDraggable(dom.gamesPanel, panelHeader);
+      });
+    }
+  }
 }
 
 /* ── Controlla se c'è un gioco attivo nella stanza ───────────── */
@@ -741,6 +751,10 @@ function checkQuizAnswers() {
   if (String(state.activeRoom) === String(activeGame.room_id)) {
     showToast(`⏰ Tempo scaduto! Risposta corretta: ${gameData.quiz.currentQuestion.a}. ${correctText}`);
   }
+  
+  /* INCREMENTA questionIndex per la prossima domanda */
+  gameData.quiz.questionIndex++;
+  saveActiveGame();
 }
 
 /* ── Termina gioco quiz ───────────────────────────────────────── */
@@ -1108,37 +1122,30 @@ function renderGamesUsersList() {
   if (!dom.gamesPanelBody) return;
   
   const room = state.rooms[state.activeRoom];
-  if (!room) {
-    /* Se non c'è la stanza, mostra comunque un messaggio */
-    const existingUsersSection = dom.gamesPanelBody.querySelector('.games-users-section');
-    if (existingUsersSection) {
-      existingUsersSection.outerHTML = '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza</div><div class="games-users-empty">Caricamento...</div></div>';
-    } else {
-      dom.gamesPanelBody.insertAdjacentHTML('beforeend', '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza</div><div class="games-users-empty">Caricamento...</div></div>');
-    }
-    return;
-  }
+  const roomUsers = room ? Object.values(room.users || {}) : [];
   
-  const users = Object.values(room.users || {});
-  const onlineUsers = users.filter(u => u.online).sort((a, b) => {
-    /* Ordina: utente corrente primo, poi alfabetico */
-    if (a.id === state.currentUser?.id) return -1;
-    if (b.id === state.currentUser?.id) return 1;
-    return (a.name || '').localeCompare(b.name || '');
-  });
+  /* Stesso comportamento di renderUsers() - include sempre currentUser come primo */
+  const all = [state.currentUser, ...roomUsers.filter(u => u && u.id !== state.currentUser?.id && u.online)];
+  const online = all.filter(u => u && u.online).length;
   
   let usersHtml = '';
-  if (onlineUsers.length > 0) {
-    usersHtml = '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza (' + onlineUsers.length + ')</div><div class="games-users-list">';
-    onlineUsers.forEach(user => {
-      const color = avatarColor(user.name);
-      const init = initials(user.name);
+  if (online > 0) {
+    usersHtml = '<div class="games-users-section"><div class="games-users-header">👥 Online in questa stanza (' + online + ')</div><div class="games-users-list">';
+    all.forEach(user => {
+      if (!user || !user.online) return;
+      const displayName = user.username || user.name;
+      const color = avatarColor(displayName);
+      const init = initials(displayName);
       const isMe = user.id === state.currentUser?.id;
-      const hasCam = user.hasCamera && user.online;
-      usersHtml += `<div class="games-user-item ${isMe ? 'games-user-me' : ''}" title="${escHtml(user.name)}">
+      /* Per currentUser: mostra cam solo se attiva in questa stanza */
+      const hasCamHere = isMe 
+        ? (state.cameraRoom === state.activeRoom)
+        : (user.hasCamera && user.online);
+      
+      usersHtml += `<div class="games-user-item ${isMe ? 'games-user-me' : ''}" title="${escHtml(displayName)}">
         <span class="games-user-avatar" style="background: ${color};">${init}</span>
-        <span class="games-user-name">${escHtml(user.name)}${isMe ? ' (Tu)' : ''}</span>
-        ${hasCam ? '<span class="games-user-cam">📹</span>' : ''}
+        <span class="games-user-name">${escHtml(displayName)}${isMe ? ' (Tu)' : ''}</span>
+        ${hasCamHere ? '<span class="games-user-cam">📹</span>' : ''}
       </div>`;
     });
     usersHtml += '</div></div>';
