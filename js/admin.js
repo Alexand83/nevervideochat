@@ -597,6 +597,48 @@ async function filterAndRenderUsers() {
     }
 }
 
+/* ── Populate role filter dropdown ── */
+async function populateUsersRoleFilter() {
+  const roleFilter = document.getElementById('adminUsersRoleFilter');
+  if (!roleFilter || !state.supa) return;
+  
+  try {
+    /* Get all custom roles */
+    const { data: roles, error } = await state.supa
+      .from('custom_roles')
+      .select('id, name')
+      .order('name');
+    
+    if (error) {
+      console.error('[Admin] Error loading roles for filter:', error);
+      return;
+    }
+    
+    /* Save current selection */
+    const currentValue = roleFilter.value;
+    
+    /* Clear and populate */
+    roleFilter.innerHTML = '<option value="">All Roles</option>';
+    
+    if (roles && roles.length > 0) {
+      roles.forEach(role => {
+        const option = document.createElement('option');
+        option.value = role.id;
+        option.textContent = role.name;
+        roleFilter.appendChild(option);
+      });
+    }
+    
+    /* Restore selection if it still exists */
+    if (currentValue) {
+      const option = roleFilter.querySelector(`option[value="${currentValue}"]`);
+      if (option) roleFilter.value = currentValue;
+    }
+  } catch (err) {
+    console.error('[Admin] Error populating role filter:', err);
+  }
+}
+
 async function kickUser(userId, userName) {
   /* Check permissions */
   if (!hasPermission('can_kick')) {
