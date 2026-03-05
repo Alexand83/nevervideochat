@@ -325,13 +325,34 @@ function persistAuthSession(session) {
 function clearAuthSession() { localStorage.removeItem('nvc_auth_session'); }
 
 export async function tryRestoreSession() {
-  if (!state.supa) return null;
+  if (!state.supa) {
+    console.log('[Auth] tryRestoreSession: Supabase client not initialized');
+    return null;
+  }
+  
   const stored = JSON.parse(localStorage.getItem('nvc_auth_session') || 'null');
+  console.log('[Auth] tryRestoreSession: Checking for stored session...', {
+    hasStored: !!stored,
+    hasAccessToken: !!stored?.access_token,
+    hasRefreshToken: !!stored?.refresh_token
+  });
+  
   if (stored?.access_token) {
     try {
+      console.log('[Auth] tryRestoreSession: Attempting to restore session from localStorage...');
       const { data, error } = await state.supa.auth.setSession({
         access_token: stored.access_token, refresh_token: stored.refresh_token,
       });
+      
+      console.log('[Auth] tryRestoreSession: setSession result:', {
+        hasError: !!error,
+        error: error,
+        hasData: !!data,
+        hasUser: !!data?.user,
+        hasSession: !!data?.session,
+        hasAccessToken: !!data?.session?.access_token
+      });
+      
       if (!error && data?.user) {
         if (data.session) persistAuthSession(data.session);
         
