@@ -402,6 +402,16 @@ export async function tryRestoreSession() {
             } else {
               console.log('[Auth] ✅ RESTORE: Successfully registered restored session via SQL function');
               console.log('[Auth] ✅ RPC result:', rpcData);
+              
+              /* CRITICO: Notifica tutte le altre sessioni di questo utente che sono state invalidate */
+              /* Questo permette al browser 1 di disconnettersi immediatamente */
+              try {
+                const { broadcastAll } = await import('./broadcast.js');
+                broadcastAll('session-invalidated', { user_id: data.user.id, userId: data.user.id });
+                console.log('[Auth] 📢 RESTORE: Broadcasted session-invalidated to all other sessions');
+              } catch (broadcastErr) {
+                console.error('[Auth] Error broadcasting session-invalidated:', broadcastErr);
+              }
             }
             
             /* Salva l'ID della sessione per riferimento locale */
