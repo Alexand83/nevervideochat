@@ -385,8 +385,15 @@ export async function tryRestoreSession() {
         
         /* CRITICO: Verifica che questa sia la sessione attiva - SOLO database, localStorage è per-browser */
         if (data.session?.access_token) {
-          /* Crea sessionId FUORI dal try così è disponibile per tutto il blocco */
-          const sessionId = createSessionId(data.session.access_token);
+          /* CRITICO: Usa l'UUID esistente se presente, altrimenti genera uno nuovo */
+          /* Ma NON generare un nuovo UUID se la sessione non è valida - usa quello esistente per verificare */
+          let sessionId = localStorage.getItem('nvc_browser_session_id');
+          if (!sessionId) {
+            /* Se non c'è UUID salvato, genera uno nuovo (prima connessione di questo browser) */
+            sessionId = createSessionId(data.session.access_token);
+          } else {
+            console.log('[Auth] Using existing browser session ID for verification:', sessionId.substring(0, 30) + '...');
+          }
           
           try {
             /* CRITICO: Verifica usando funzione SQL - più sicuro */
@@ -410,9 +417,15 @@ export async function tryRestoreSession() {
               const { showDisconnectedOverlay } = await import('./supabase-client.js');
               showDisconnectedOverlay();
               clearAuthSession();
+              /* NON rimuovere nvc_browser_session_id - serve per identificare questo browser */
               return null;
             } else {
               console.log('[Auth] ✅ Restored session is valid - this is the active session');
+              /* Se la sessione è valida ma non c'era UUID salvato, salvalo ora */
+              if (!localStorage.getItem('nvc_browser_session_id')) {
+                localStorage.setItem('nvc_browser_session_id', sessionId);
+                console.log('[Auth] Saved browser session ID for future use');
+              }
             }
           } catch (err) {
             console.error('[Auth] Error checking session on restore:', err);
