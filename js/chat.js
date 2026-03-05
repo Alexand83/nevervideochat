@@ -378,7 +378,7 @@ export async function sendMessage() {
       content:  fullContent,
       room_id:  state.activeRoom,
       reactions: {},
-    }).then(({ data, error }) => {
+    }).then(async ({ data, error }) => {
       if (error) {
         /* Se è un errore 403, la sessione è stata invalidata */
         if (error?.status === 403 || error?.message?.includes('403') || error?.code === 'PGRST301') {
