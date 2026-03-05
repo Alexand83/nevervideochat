@@ -315,6 +315,7 @@ async function uploadAvatarFile(file) {
 }
 
 async function saveProfile(displayName, avatarUrl) {
+  /* Aggiorna il display_name in state.currentUser.name */
   state.currentUser.name = displayName;
   if (avatarUrl) state.currentUser.avatarUrl = avatarUrl;
   localStorage.setItem('nvc_identity', JSON.stringify(state.currentUser));
@@ -355,7 +356,28 @@ async function saveProfile(displayName, avatarUrl) {
     const { refreshPermissions } = await import('./permissions.js');
     await refreshPermissions();
   }
-  updateHeaderUser(); await updateOwnPresence(); renderUsers();
+  
+  /* Aggiorna UI e presenza con il nuovo display_name */
+  updateHeaderUser(); 
+  await updateOwnPresence(); 
+  renderUsers();
+  
+  /* Aggiorna anche tutti i messaggi esistenti per riflettere il nuovo nome */
+  if (state.rooms[state.activeRoom]) {
+    const room = state.rooms[state.activeRoom];
+    /* Rendi tutti i messaggi dell'utente corrente per aggiornare il nome */
+    const msgGroups = dom.msgsContainer?.querySelectorAll(`[data-msg-id]`);
+    if (msgGroups) {
+      msgGroups.forEach(group => {
+        const msgId = group.getAttribute('data-msg-id');
+        const msg = room.messages.find(m => m.id === msgId);
+        if (msg && (msg.userId === 'me' || msg.userId === state.currentUser?.id)) {
+          const senderEl = group.querySelector('.msg-sender');
+          if (senderEl) senderEl.textContent = 'You';
+        }
+      });
+    }
+  }
 }
 
 export function updateHeaderUser() {

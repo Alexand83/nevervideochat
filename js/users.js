@@ -55,7 +55,8 @@ export function renderUsers() {
     li.setAttribute('role', 'listitem');
     li.dataset.userId = user.id;
 
-    const displayName = user.username || user.name;
+    /* Usa display_name (name) se disponibile, altrimenti username, altrimenti name */
+    const displayName = user.name || user.username || 'User';
 
     const av = document.createElement('div');
     av.className = 'user-item-avatar';
@@ -187,8 +188,8 @@ export async function updateOwnPresence(presenceCh) {
 
   await ch.track({
     id:        state.currentUser.id,
-    name:      state.currentUser.name,
-    username:  state.currentUser.username || state.currentUser.name,
+    name:      state.currentUser.name,  /* display_name - quello che l'utente vuole mostrare */
+    username:  state.currentUser.username || null,  /* username dell'account (per login) */
     isGuest:   state.currentUser.isGuest,
     hasCamera: state.cameraRoom === roomId,   /* true only in the room where cam is active */
     online:    true,
@@ -216,10 +217,11 @@ export function syncPresence(presenceState, roomId) {
   Object.entries(presenceState).forEach(([uid, presences]) => {
     if (String(uid) === myId) return;
     const info = presences[0];
+    /* info.name è il display_name dalla presenza */
     const user = {
       id: String(uid),
-      name:      info.name,
-      username:  info.username || null,
+      name:      info.name || info.username || 'User',  /* display_name dalla presenza */
+      username:  info.username || null,  /* username dell'account */
       isGuest:   info.isGuest,
       online:    true,
       hasCamera: !!info.hasCamera,
@@ -227,7 +229,7 @@ export function syncPresence(presenceState, roomId) {
     };
     room.users[String(uid)] = user;
     /* Also keep the global state.users in sync */
-    ensureUser(String(uid), info.name, { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
+    ensureUser(String(uid), info.name || info.username || 'User', { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
   });
 
   if (rId === state.activeRoom) renderUsers();

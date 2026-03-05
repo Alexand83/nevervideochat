@@ -88,14 +88,16 @@ export function renderMessage(msg) {
   const user    = isMine
     ? state.currentUser
     : (findUser(msg.userId) || { name: msg.username || 'User', isGuest: true, avatarUrl: null });
-  const color   = avatarColor(user.name);
-  const init    = initials(user.name);
+  /* Usa display_name (name) se disponibile, altrimenti username */
+  const displayName = user.name || user.username || 'User';
+  const color   = avatarColor(displayName);
+  const init    = initials(displayName);
 
   const group = document.createElement('div');
   group.className = `msg-group${isMine ? ' own' : ''}`;
 
   const avatar = document.createElement('div');
-  avatar.className = 'msg-avatar'; avatar.title = user.name;
+  avatar.className = 'msg-avatar'; avatar.title = displayName;
   if (user.avatarUrl) {
     avatar.classList.add('has-photo');
     avatar.style.backgroundImage    = `url(${user.avatarUrl})`;
@@ -114,7 +116,7 @@ export function renderMessage(msg) {
 
   const senderEl = document.createElement('span');
   senderEl.className = 'msg-sender';
-  senderEl.textContent = isMine ? 'You' : user.name;
+  senderEl.textContent = isMine ? 'You' : displayName;
 
   const timeEl = document.createElement('span');
   timeEl.className = 'msg-time'; timeEl.textContent = fmtTime(msg.ts);
