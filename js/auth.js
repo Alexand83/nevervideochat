@@ -397,8 +397,55 @@ export async function tryRestoreSession() {
             /* In caso di errore, permettere il restore per non bloccare l'utente */
           }
           
-          /* Salva l'ID della sessione per riferimento locale (non usato per verifica) */
-          saveSessionId(sessionId);
+          /* CRITICO: Registra questa sessione nel database DOPO averla ripristinata */
+          /* Questo è necessario perché se l'utente ha già una sessione salvata (cookie/localStorage), */
+          /* non passa per loginUser() e quindi la sessione non viene mai registrata nel database */
+          try {
+            console.log('[Auth] 📝 RESTORE: Registering restored session in database...', {
+              userId: data.user.id,
+              sessionId: sessionId.substring(0, 20) + '...'
+            });
+            
+            /* Verifica che auth.uid() sia disponibile PRIMA dell'upsert */
+            const { data: currentSession } = await state.supa.auth.getSession();
+            console.log('[Auth] 🔍 RESTORE: Current session before upsert:', {
+              hasSession: !!currentSession?.session,
+              hasAccessToken: !!currentSession?.session?.access_token,
+              userId: data.user.id
+            });
+            
+            const { data: upsertData, error: sessionError } = await state.supa
+              .from('active_sessions')
+              .upsert({
+                user_id: data.user.id,
+                session_id: sessionId,
+                updated_at: new Date().toISOString()
+              }, {
+                onConflict: 'user_id'
+              })
+              .select();
+            
+            if (sessionError) {
+              console.error('[Auth] ❌ RESTORE: Error saving restored session to database!');
+              console.error('[Auth] ❌ Error object:', sessionError);
+              console.error('[Auth] ❌ Error code:', sessionError.code);
+              console.error('[Auth] ❌ Error message:', sessionError.message);
+              console.error('[Auth] ❌ Error status:', sessionError.status);
+              console.error('[Auth] ❌ Error details (full):', JSON.stringify(sessionError, null, 2));
+              
+              if (sessionError.code === 'PGRST301' || sessionError.status === 403 || sessionError.message?.includes('permission') || sessionError.message?.includes('policy')) {
+                console.error('[Auth] 🚨 RESTORE: RLS policy blocking insert! Check active_sessions RLS policies in Supabase!');
+              }
+            } else {
+              console.log('[Auth] ✅ RESTORE: Successfully registered restored session in database:', upsertData);
+            }
+            
+            /* Salva l'ID della sessione per riferimento locale */
+            saveSessionId(sessionId);
+          } catch (err) {
+            console.error('[Auth] ❌ RESTORE: Exception while registering session:', err);
+            console.error('[Auth] ❌ Exception stack:', err.stack);
+          }
         }
         
         /* CONTROLLO IMMEDIATO: Verifica che questa sia la sessione attiva subito dopo il restore */
