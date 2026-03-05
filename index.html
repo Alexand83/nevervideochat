@@ -743,20 +743,73 @@
       <button class="nvc-modal-close-btn" id="adminModalClose" aria-label="Close admin panel">✕</button>
     </div>
 
-    <!-- Admin tabs -->
-    <div class="admin-tabs" role="tablist">
-      <button class="admin-tab active" data-tab="rooms" role="tab">🏠 Rooms</button>
-      <button class="admin-tab" data-tab="users" role="tab">👥 Users</button>
-      <button class="admin-tab" data-tab="roles" role="tab">👑 Roles</button>
-      <button class="admin-tab" data-tab="messages" role="tab">💬 Messages</button>
-      <button class="admin-tab" data-tab="banned" role="tab">🚫 Banned</button>
-      <button class="admin-tab" data-tab="ips" role="tab">🌐 IP Blocks</button>
-      <button class="admin-tab" data-tab="announcements" role="tab">📢 Announcements</button>
-      <button class="admin-tab" data-tab="statistics" role="tab">📊 Statistics</button>
-      <button class="admin-tab" data-tab="logs" role="tab">📋 Logs</button>
-      <button class="admin-tab" data-tab="themes" role="tab">🎨 Themes</button>
-      <button class="admin-tab" data-tab="wordfilter" role="tab">🚫 Word Filter</button>
-    </div>
+    <!-- Admin Layout: Sidebar + Content -->
+    <div class="admin-layout">
+      <!-- Admin Sidebar -->
+      <div class="admin-sidebar" role="navigation">
+        <div class="admin-sidebar-section">
+          <div class="admin-sidebar-title">Management</div>
+          <button class="admin-sidebar-item active" data-tab="rooms" role="tab">
+            <span class="admin-sidebar-icon">🏠</span>
+            <span class="admin-sidebar-label">Rooms</span>
+          </button>
+          <button class="admin-sidebar-item" data-tab="users" role="tab">
+            <span class="admin-sidebar-icon">👥</span>
+            <span class="admin-sidebar-label">Users</span>
+          </button>
+          <button class="admin-sidebar-item" data-tab="roles" role="tab">
+            <span class="admin-sidebar-icon">👑</span>
+            <span class="admin-sidebar-label">Roles</span>
+          </button>
+        </div>
+        
+        <div class="admin-sidebar-section">
+          <div class="admin-sidebar-title">Moderation</div>
+          <button class="admin-sidebar-item" data-tab="messages" role="tab">
+            <span class="admin-sidebar-icon">💬</span>
+            <span class="admin-sidebar-label">Messages</span>
+          </button>
+          <button class="admin-sidebar-item" data-tab="banned" role="tab">
+            <span class="admin-sidebar-icon">🚫</span>
+            <span class="admin-sidebar-label">Banned</span>
+          </button>
+          <button class="admin-sidebar-item" data-tab="ips" role="tab">
+            <span class="admin-sidebar-icon">🌐</span>
+            <span class="admin-sidebar-label">IP Blocks</span>
+          </button>
+          <button class="admin-sidebar-item" data-tab="wordfilter" role="tab">
+            <span class="admin-sidebar-icon">🚫</span>
+            <span class="admin-sidebar-label">Word Filter</span>
+          </button>
+        </div>
+        
+        <div class="admin-sidebar-section">
+          <div class="admin-sidebar-title">Content</div>
+          <button class="admin-sidebar-item" data-tab="announcements" role="tab">
+            <span class="admin-sidebar-icon">📢</span>
+            <span class="admin-sidebar-label">Announcements</span>
+          </button>
+          <button class="admin-sidebar-item" data-tab="themes" role="tab">
+            <span class="admin-sidebar-icon">🎨</span>
+            <span class="admin-sidebar-label">Themes</span>
+          </button>
+        </div>
+        
+        <div class="admin-sidebar-section">
+          <div class="admin-sidebar-title">Analytics</div>
+          <button class="admin-sidebar-item" data-tab="statistics" role="tab">
+            <span class="admin-sidebar-icon">📊</span>
+            <span class="admin-sidebar-label">Statistics</span>
+          </button>
+          <button class="admin-sidebar-item" data-tab="logs" role="tab">
+            <span class="admin-sidebar-icon">📋</span>
+            <span class="admin-sidebar-label">Logs</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Admin Content Area -->
+      <div class="admin-content">
 
     <!-- Rooms Management Tab -->
     <div class="admin-tab-content active" id="adminTabRooms" role="tabpanel">

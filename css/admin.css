@@ -1,47 +1,103 @@
 /* ─── ADMIN PANEL ─── */
 .admin-modal {
-  max-width: 900px;
-  max-height: 85vh;
+  max-width: 1200px;
+  width: 95vw;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
 }
 
-.admin-tabs {
+/* Admin Layout: Sidebar + Content */
+.admin-layout {
   display: flex;
-  gap: 4px;
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg2);
-  flex-shrink: 0;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
 }
 
-.admin-tab {
+/* Admin Sidebar */
+.admin-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--bg1);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.admin-sidebar-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-sidebar-section:last-child {
+  border-bottom: none;
+}
+
+.admin-sidebar-title {
   padding: 8px 16px;
+  font-size: var(--fz-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--tx2);
+  margin-bottom: 4px;
+}
+
+.admin-sidebar-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
   background: none;
   border: none;
   color: var(--tx1);
   font-size: var(--fz-sm);
   font-weight: 500;
-  border-radius: var(--r2);
   cursor: pointer;
   transition: background var(--tf), color var(--tf);
+  text-align: left;
+  border-left: 3px solid transparent;
 }
 
-.admin-tab:hover {
+.admin-sidebar-item:hover {
   background: var(--bg-hover);
   color: var(--tx0);
 }
 
-.admin-tab.active {
-  background: var(--accent);
-  color: #fff;
+.admin-sidebar-item.active {
+  background: var(--bg2);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+
+.admin-sidebar-icon {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.admin-sidebar-label {
+  flex: 1;
+}
+
+/* Admin Content Area */
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg0);
+  min-width: 0;
 }
 
 .admin-tab-content {
   display: none;
-  flex: 1;
-  overflow-y: auto;
   padding: var(--s4);
+  min-height: 100%;
 }
 
 .admin-tab-content.active {
