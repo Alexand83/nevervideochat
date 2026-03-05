@@ -3,8 +3,9 @@
 ================================================================ */
 import { state }          from './state.js';
 import { dom }            from './dom.js';
-import { showToast, escHtml } from './utils.js';
+import { showToast, escHtml, sanitiseHtml } from './utils.js';
 import { broadcast }      from './broadcast.js';
+import { hasPermission, loadUserPermissions } from './permissions.js';
 
 let currentUserRole = null;
 
@@ -73,6 +74,50 @@ export function initAdminPanel() {
   /* Create role button */
   dom.adminCreateRoleBtn?.addEventListener('click', () => {
     openRoleEditModal();
+  });
+
+  /* Create announcement button */
+  document.getElementById('adminCreateAnnouncementBtn')?.addEventListener('click', () => {
+    openAnnouncementEditModal();
+  });
+
+  /* Role edit modal */
+  dom.roleEditModalClose?.addEventListener('click', () => {
+    dom.roleEditModal.hidden = true;
+  });
+  dom.roleEditCancelBtn?.addEventListener('click', () => {
+    dom.roleEditModal.hidden = true;
+  });
+  dom.roleEditForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await saveRole();
+  });
+
+  /* Announcement edit modal */
+  dom.announcementEditModalClose?.addEventListener('click', () => {
+    dom.announcementEditModal.hidden = true;
+  });
+  dom.announcementEditCancelBtn?.addEventListener('click', () => {
+    dom.announcementEditModal.hidden = true;
+  });
+  dom.announcementEditForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await saveAnnouncement();
+  });
+
+  /* Message filters */
+  document.getElementById('adminMessagesRoomFilter')?.addEventListener('change', loadMessages);
+  document.getElementById('adminMessagesStatusFilter')?.addEventListener('change', loadMessages);
+  document.getElementById('adminMessagesSearch')?.addEventListener('input', (e) => {
+    clearTimeout(window.messageSearchTimeout);
+    window.messageSearchTimeout = setTimeout(loadMessages, 500);
+  });
+
+  /* Log filters */
+  document.getElementById('adminLogsActionFilter')?.addEventListener('change', loadAdminLogs);
+  document.getElementById('adminLogsSearch')?.addEventListener('input', (e) => {
+    clearTimeout(window.logSearchTimeout);
+    window.logSearchTimeout = setTimeout(loadAdminLogs, 500);
   });
 
   /* Room edit modal */
@@ -280,6 +325,7 @@ async function saveRoom() {
     
     if (error) throw error;
     
+    await logAdminActionLocal(id ? 'update_room' : 'create_room', 'room', id || data.id, sanitizedName);
     showToast('✅ Room saved!');
     dom.roomEditModal.hidden = true;
     loadRooms();
@@ -314,6 +360,7 @@ async function deleteRoom(roomId) {
   try {
     const { error } = await state.supa.from('rooms').delete().eq('id', roomId);
     if (error) throw error;
+    await logAdminActionLocal('delete_room', 'room', String(roomId), String(roomId));
     showToast('✅ Room deleted.');
     loadRooms();
   } catch (err) {
@@ -416,6 +463,7 @@ async function muteUser(userId, userName) {
     
     /* Broadcast mute event */
     broadcast('user-muted', userId, { duration: mins });
+    await logAdminActionLocal('mute', 'user', userId, userName, { duration: mins });
     showToast(`🔇 Muted ${userName} ${mins > 0 ? `for ${mins} minutes` : 'permanently'}`);
     loadUsers();
   } catch (err) {
@@ -685,22 +733,28 @@ async function hashPassword(password) {
    NUOVE FUNZIONALITÀ ADMIN - Ruoli, Moderazione, Statistiche, Log, Annunci
 ================================================================ */
 
-/* ── Log azione admin ─────────────────────────────────────────── */
-async function logAdminAction(action, targetType, targetId, targetName, details = {}) {
-  if (!state.supa || !state.currentUser) return;
-  
-  try {
-    await state.supa.from('admin_logs').insert({
-      admin_id: String(state.currentUser.id),
-      admin_name: state.currentUser.name || state.currentUser.username || 'Unknown',
-      action,
-      target_type: targetType,
-      target_id: targetId ? String(targetId) : null,
-      target_name: targetName || null,
-      details,
-      ip_address: null,
-    });
-  } catch (err) {
-    console.error('[Admin] Error logging action:', err);
-  }
+/* ── Import nuove funzionalità ───────────────────────────────── */
+import {
+  logAdminAction,
+  loadCustomRoles,
+  openRoleEditModal,
+  saveRole,
+  deleteRole,
+  assignRoleToUser,
+  loadMessages,
+  deleteMessage,
+  editMessage,
+  restoreMessage,
+  loadStatistics,
+  loadAdminLogs,
+  loadAnnouncements,
+  openAnnouncementEditModal,
+  saveAnnouncement,
+  toggleAnnouncement,
+  deleteAnnouncement,
+} from './admin-extensions.js';
+
+/* ── Log azione admin (wrapper) ───────────────────────────────── */
+async function logAdminActionLocal(action, targetType, targetId, targetName, details = {}) {
+  await logAdminAction(action, targetType, targetId, targetName, details);
 }
