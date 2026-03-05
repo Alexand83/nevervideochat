@@ -52,10 +52,10 @@ export function initSupabaseClient() {
 export function markSessionAsNew() {
   sessionJustCreated = true;
   sessionCreationTime = Date.now();
-  /* Aumenta il tempo di protezione a 15 secondi per dare tempo alla sessione di stabilizzarsi */
+  /* Aumenta il tempo di protezione a 30 secondi per dare tempo alla sessione di stabilizzarsi completamente */
   setTimeout(() => {
     sessionJustCreated = false;
-  }, 15000); /* 15 secondi di grazia per stabilizzare la sessione */
+  }, 30000); /* 30 secondi di grazia per stabilizzare la sessione */
 }
 
 /* ── Marca che stiamo disconnettingo le altre sessioni (per evitare falsi positivi) ── */
