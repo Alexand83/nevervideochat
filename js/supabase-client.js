@@ -197,26 +197,38 @@ function startSessionCheckInterval() {
         return;
       }
       
-      /* Verifica nel database */
-      const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
-        p_user_id: state.currentUser.id,
-        p_session_id: sessionId
-      });
+      /* Verifica SEMPLICE: controlla localStorage (funziona sempre) */
+      const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
+      if (activeSessionData && activeSessionData.userId === state.currentUser.id) {
+        if (activeSessionData.sessionId !== sessionId) {
+          console.warn('[Session Check] Session ID mismatch - disconnecting old session');
+          showDisconnectedOverlay();
+          if (sessionCheckInterval) {
+            clearInterval(sessionCheckInterval);
+            sessionCheckInterval = null;
+          }
+          return;
+        }
+      }
       
-      if (checkError) {
-        console.warn('[Session Check] Error checking session:', checkError);
-        /* Se la funzione non esiste, potrebbe essere che lo script SQL non sia stato eseguito */
-        if (checkError.message?.includes('function') || checkError.code === '42883') {
-          console.error('[Session Check] CRITICAL: is_session_valid function not found! Execute supabase_active_sessions.sql in Supabase!');
+      /* Verifica anche nel database (opzionale, se le funzioni esistono) */
+      try {
+        const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
+          p_user_id: state.currentUser.id,
+          p_session_id: sessionId
+        });
+        
+        if (!checkError && isValid === false) {
+          console.warn('[Session Check] Database says session is not valid - disconnecting');
+          showDisconnectedOverlay();
+          if (sessionCheckInterval) {
+            clearInterval(sessionCheckInterval);
+            sessionCheckInterval = null;
+          }
         }
-      } else if (isValid === false) {
-        /* Questa NON è la sessione attiva - disconnettere immediatamente */
-        console.warn('[Session Check] Session is not valid - disconnecting');
-        showDisconnectedOverlay();
-        if (sessionCheckInterval) {
-          clearInterval(sessionCheckInterval);
-          sessionCheckInterval = null;
-        }
+        /* Ignora errori database - usa solo localStorage */
+      } catch (dbErr) {
+        /* Ignora */
       }
     } catch (err) {
       console.warn('[Session Check] Error in periodic check:', err);

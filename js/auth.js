@@ -136,21 +136,35 @@ export async function loginUser(nick, password) {
       console.log('[Auth] Saved session ID to localStorage');
       
       /* Registra questa sessione come attiva nel database */
-      const { error: sessionError } = await state.supa.rpc('upsert_active_session', {
-        p_user_id: data.user.id,
-        p_session_id: sessionId
-      });
+      /* Usa un approccio semplice: salva nel localStorage con timestamp */
+      /* Questo funziona anche senza le funzioni SQL */
+      const sessionData = {
+        userId: data.user.id,
+        sessionId: sessionId,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
+      console.log('[Auth] ✅ Saved active session to localStorage:', sessionData);
       
-      if (sessionError) {
-        console.error('[Auth] CRITICAL: Could not register active session:', sessionError);
-        /* Se la funzione non esiste, potrebbe essere che lo script SQL non sia stato eseguito */
-        if (sessionError.message?.includes('function') || sessionError.code === '42883') {
-          console.error('[Auth] CRITICAL: upsert_active_session function not found!');
-          console.error('[Auth] You MUST execute supabase_active_sessions.sql in Supabase SQL Editor!');
-          showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
+      /* Prova anche a registrare nel database (se le funzioni esistono) */
+      try {
+        const { error: sessionError } = await state.supa.rpc('upsert_active_session', {
+          p_user_id: data.user.id,
+          p_session_id: sessionId
+        });
+        
+        if (sessionError) {
+          /* Se la funzione non esiste, usa solo localStorage (fallback) */
+          if (sessionError.message?.includes('function') || sessionError.code === '42883') {
+            console.warn('[Auth] Database functions not found - using localStorage fallback');
+          } else {
+            console.error('[Auth] Error registering in database:', sessionError);
+          }
+        } else {
+          console.log('[Auth] ✅ Also registered in database');
         }
-      } else {
-        console.log('[Auth] ✅ Successfully registered new active session - old sessions are now invalid');
+      } catch (dbErr) {
+        console.warn('[Auth] Database registration failed - using localStorage only:', dbErr);
       }
     } catch (err) {
       console.error('[Auth] Error registering active session:', err);

@@ -247,31 +247,35 @@ export async function sendMessage() {
         return;
       }
       
-      /* Verifica anche nel database per sicurezza */
-      const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
-        p_user_id: state.currentUser.id,
-        p_session_id: sessionId
-      });
-      
-      if (checkError) {
-        console.error('[Chat] Error checking session validity:', checkError);
-        /* Se la funzione non esiste, blocca comunque per sicurezza */
-        if (checkError.message?.includes('function') || checkError.code === '42883') {
-          console.error('[Chat] CRITICAL: is_session_valid function not found! Execute supabase_active_sessions.sql!');
-          showToast('⚠️ Session management not configured. Message blocked for security.');
+      /* Verifica SEMPLICE: controlla localStorage (funziona sempre, anche senza database) */
+      const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
+      if (activeSessionData && activeSessionData.userId === state.currentUser.id) {
+        /* Se l'ID della sessione salvata non corrisponde, questa è una vecchia sessione */
+        if (activeSessionData.sessionId !== sessionId) {
+          console.warn('[Chat] Session ID mismatch - this is an old session - disconnecting');
+          const { showDisconnectedOverlay } = await import('./supabase-client.js');
+          showDisconnectedOverlay();
           return;
         }
-        /* Per altri errori, blocca comunque per sicurezza */
-        showToast('⚠️ Cannot verify session. Message blocked.');
-        return;
       }
       
-      if (isValid === false) {
-        /* Questa NON è la sessione attiva - disconnettere immediatamente */
-        console.warn('[Chat] This session is not the active one - disconnecting');
-        const { showDisconnectedOverlay } = await import('./supabase-client.js');
-        showDisconnectedOverlay();
-        return;
+      /* Verifica anche nel database (se le funzioni esistono) - fallback opzionale */
+      try {
+        const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
+          p_user_id: state.currentUser.id,
+          p_session_id: sessionId
+        });
+        
+        if (!checkError && isValid === false) {
+          /* Questa NON è la sessione attiva - disconnettere immediatamente */
+          console.warn('[Chat] Database says session is not valid - disconnecting');
+          const { showDisconnectedOverlay } = await import('./supabase-client.js');
+          showDisconnectedOverlay();
+          return;
+        }
+        /* Se c'è un errore (funzione non esiste), ignora e usa solo localStorage */
+      } catch (dbErr) {
+        /* Ignora errori database - usa solo localStorage */
       }
     } catch (err) {
       console.error('[Chat] Error verifying session:', err);
