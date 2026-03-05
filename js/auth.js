@@ -327,16 +327,33 @@ async function saveProfile(displayName, avatarUrl) {
       is_guest: state.currentUser.isGuest || false,
     };
     
-    /* Assegna ruoli di default */
-    if (state.currentUser.isGuest) {
-      profileData.custom_role_id = 'guest';
+    /* IMPORTANTE: NON sovrascrivere mai i ruoli esistenti! */
+    /* Controlla se esiste già un profilo con ruoli */
+    const { data: existing } = await state.supa
+      .from('profiles')
+      .select('role, custom_role_id')
+      .eq('id', String(state.currentUser.id))
+      .maybeSingle();
+    
+    if (existing) {
+      /* Se esiste già, NON toccare i ruoli - solo aggiornare nome/avatar */
+      /* Non aggiungere role o custom_role_id al profileData */
     } else {
-      /* Per utenti registrati, assicura che abbiano ruolo 'user' di default */
-      profileData.role = 'user';
-      profileData.custom_role_id = 'user';
+      /* Solo se NON esiste, assegna ruoli di default */
+      if (state.currentUser.isGuest) {
+        profileData.custom_role_id = 'guest';
+      } else {
+        /* Per nuovi utenti registrati, assegna 'user' di default */
+        profileData.role = 'user';
+        profileData.custom_role_id = 'user';
+      }
     }
     
     await state.supa.from('profiles').upsert(profileData, { onConflict: 'id' });
+    
+    /* Ricarica permessi dopo il salvataggio per assicurarsi che siano aggiornati */
+    const { refreshPermissions } = await import('./permissions.js');
+    await refreshPermissions();
   }
   updateHeaderUser(); await updateOwnPresence(); renderUsers();
 }

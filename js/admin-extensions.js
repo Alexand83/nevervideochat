@@ -31,6 +31,14 @@ export async function logAdminAction(action, targetType, targetId, targetName, d
 /* ── Gestione Ruoli ──────────────────────────────────────────── */
 export async function loadCustomRoles() {
   if (!dom.adminRolesList || !state.supa) return;
+  
+  /* Check permissions */
+  await loadUserPermissions();
+  if (!hasPermission('can_manage_roles')) {
+    dom.adminRolesList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to manage roles.</p>';
+    return;
+  }
+  
   try {
     const { data, error } = await state.supa
       .from('custom_roles')
@@ -580,6 +588,13 @@ export async function assignRoleToUser(userId, roleId) {
 export async function loadMessages() {
   if (!dom.adminMessagesList || !state.supa) return;
   
+  /* Check permissions */
+  await loadUserPermissions();
+  if (!hasPermission('can_delete_messages')) {
+    dom.adminMessagesList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to view messages.</p>';
+    return;
+  }
+  
   try {
     const roomFilter = document.getElementById('adminMessagesRoomFilter')?.value || '';
     const statusFilter = document.getElementById('adminMessagesStatusFilter')?.value || 'all';
@@ -894,6 +909,13 @@ export async function loadAdminLogs() {
 export async function loadAnnouncements() {
   if (!dom.adminAnnouncementsList || !state.supa) return;
   
+  /* Check permissions */
+  await loadUserPermissions();
+  if (!hasPermission('can_manage_announcements')) {
+    dom.adminAnnouncementsList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to manage announcements.</p>';
+    return;
+  }
+  
   try {
     const { data, error } = await state.supa
       .from('announcements')
@@ -948,6 +970,16 @@ export async function loadAnnouncements() {
 export async function loadWordFilter() {
   const adminWordFilterList = document.getElementById('adminWordFilterList');
   if (!adminWordFilterList || !state.supa) return;
+  
+  /* Check permissions - solo admin/moderator possono gestire word filter */
+  await loadUserPermissions();
+  const { checkAdminAccess } = await import('./admin.js');
+  const hasAccess = await checkAdminAccess();
+  const canModerate = hasPermission('can_mute') || hasPermission('can_kick');
+  if (!hasAccess && !canModerate) {
+    adminWordFilterList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to manage word filter.</p>';
+    return;
+  }
   
   try {
     const { data, error } = await state.supa

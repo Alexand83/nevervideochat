@@ -222,6 +222,14 @@ async function openAdminPanel() {
 /* ── Rooms Management ── */
 async function loadRooms() {
   if (!dom.adminRoomsList || !state.supa) return;
+  
+  /* Check permissions */
+  await loadUserPermissions();
+  if (!hasPermission('can_manage_rooms')) {
+    dom.adminRoomsList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to manage rooms.</p>';
+    return;
+  }
+  
   try {
     const { data, error } = await state.supa.from('rooms').select('*').order('created_at', { ascending: false });
     if (error) throw error;
@@ -434,6 +442,14 @@ let allUsersCache = []; // Cache per filtri
 
 async function loadUsers() {
   if (!dom.adminUsersList || !state.supa) return;
+  
+  /* Check permissions */
+  await loadUserPermissions();
+  if (!hasPermission('can_manage_users')) {
+    dom.adminUsersList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to manage users.</p>';
+    return;
+  }
+  
   try {
     /* Get all registered users from database */
     const { data: allProfiles, error: profilesError } = await state.supa
@@ -684,6 +700,14 @@ async function banUser(userId, userName) {
 /* ── Banned Users ── */
 async function loadBannedUsers() {
   if (!dom.adminBannedList || !state.supa) return;
+  
+  /* Check permissions */
+  await loadUserPermissions();
+  if (!hasPermission('can_ban')) {
+    dom.adminBannedList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to view banned users.</p>';
+    return;
+  }
+  
   try {
     const { data, error } = await state.supa
       .from('banned_users')
@@ -748,6 +772,14 @@ async function unbanUser(userId) {
 /* ── Banned IPs ── */
 async function loadBannedIPs() {
   if (!dom.adminIpsList || !state.supa) return;
+  
+  /* Check permissions */
+  await loadUserPermissions();
+  if (!hasPermission('can_ban')) {
+    dom.adminIpsList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to view IP blocks.</p>';
+    return;
+  }
+  
   try {
     const { data, error } = await state.supa
       .from('banned_ips')
