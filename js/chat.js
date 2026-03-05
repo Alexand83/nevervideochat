@@ -13,6 +13,12 @@ let _supabaseReady   = null;
 let _renderRoomTabs  = null;
 let _broadcast       = null;
 let _handleGameCommand = null;
+
+/* ── Crea un ID univoco per la sessione (hash del token) ── */
+async function createSessionId(accessToken) {
+  /* Usa una parte del token come ID univoco (primi 32 caratteri) */
+  return accessToken.substring(0, 32) + '_' + Date.now();
+}
 export function setChatDeps(openCtx, uploadStorage, supaReady, renderTabs, broadcast, handleGameCmd) {
   _openContextMenu = openCtx;
   _uploadToStorage = uploadStorage;
