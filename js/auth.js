@@ -307,54 +307,40 @@ export async function tryRestoreSession() {
       if (!error && data?.user) {
         if (data.session) persistAuthSession(data.session);
         
-        /* CRITICO: Verifica che questa sia la sessione attiva */
+        /* CRITICO: Verifica che questa sia la sessione attiva - SOLO database, localStorage è per-browser */
         if (data.session?.access_token) {
           try {
             const sessionId = createSessionId(data.session.access_token);
-            const savedSessionId = getSavedSessionId();
             
-            /* Se l'ID salvato non corrisponde, questa è una vecchia sessione */
-            if (savedSessionId && savedSessionId !== sessionId) {
-              console.warn('[Auth] Restored session ID does not match saved session - disconnecting');
-              const { showDisconnectedOverlay } = await import('./supabase-client.js');
-              showDisconnectedOverlay();
-              clearAuthSession();
-              return null;
-            }
+            /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
+            const { data: activeSession, error: checkError } = await state.supa
+              .from('active_sessions')
+              .select('session_id')
+              .eq('user_id', data.user.id)
+              .single();
             
-            /* APPROCCIO SEMPLICE: Controlla direttamente la tabella active_sessions */
-            try {
-              const { data: activeSession, error: checkError } = await state.supa
-                .from('active_sessions')
-                .select('session_id')
-                .eq('user_id', data.user.id)
-                .single();
-              
-              if (checkError) {
-                /* Se la tabella non esiste, usa localStorage come fallback */
-                const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
-                if (activeSessionData && activeSessionData.userId === data.user.id) {
-                  if (activeSessionData.sessionId !== sessionId) {
-                    console.warn('[Auth] Restored session ID mismatch (localStorage) - disconnecting');
-                    const { showDisconnectedOverlay } = await import('./supabase-client.js');
-                    showDisconnectedOverlay();
-                    clearAuthSession();
-                    return null;
-                  }
-                }
-              } else if (activeSession) {
-                /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
-                if (activeSession.session_id !== sessionId) {
-                  console.warn('[Auth] Restored session is not the active one (database) - disconnecting');
-                  const { showDisconnectedOverlay } = await import('./supabase-client.js');
-                  showDisconnectedOverlay();
-                  clearAuthSession();
-                  return null;
-                }
+            if (checkError) {
+              console.error('[Auth] Error reading from database on restore:', checkError);
+              /* Se la tabella non esiste, permettere il restore (sistema non configurato) */
+              console.warn('[Auth] Database check failed - allowing restore (system might not be configured)');
+            } else if (activeSession) {
+              /* Se la sessione nel database non corrisponde, questa è una vecchia sessione da un altro browser */
+              if (activeSession.session_id !== sessionId) {
+                console.warn('[Auth] Restored session is NOT the active one - this is an OLD session from another browser - disconnecting');
+                const { showDisconnectedOverlay } = await import('./supabase-client.js');
+                showDisconnectedOverlay();
+                clearAuthSession();
+                return null;
               }
-            } catch (err) {
-              console.warn('[Auth] Error checking session on restore:', err);
+              console.log('[Auth] ✅ Restored session matches database - this is the active session');
+            } else {
+              /* Nessuna sessione nel database - potrebbe essere il primo login, permettere */
+              console.log('[Auth] No active session in database (first login?) - allowing restore');
             }
+          } catch (err) {
+            console.error('[Auth] Error checking session on restore:', err);
+            /* In caso di errore, permettere il restore per non bloccare l'utente */
+          }
             
             /* Salva l'ID della sessione se non è già salvato */
             if (!savedSessionId) {
