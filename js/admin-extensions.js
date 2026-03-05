@@ -278,7 +278,9 @@ export async function assignRoleToUser(userId, roleId) {
     const { error, data } = await state.supa
       .from('profiles')
       .update({ custom_role_id: finalRoleId })
-      .eq('id', String(userId));
+      .eq('id', String(userId))
+      .select('id')
+      .maybeSingle();
     
     if (error) {
       console.error('[Admin] Assign role DB error:', error);
@@ -286,7 +288,7 @@ export async function assignRoleToUser(userId, roleId) {
     }
     
     /* Check if update affected any rows */
-    if (!data || (Array.isArray(data) && data.length === 0)) {
+    if (!data) {
       console.log('[Admin] User not found in profiles table, attempting to create:', userId);
       
       /* Determine if user is guest */
