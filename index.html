@@ -771,7 +771,18 @@
     <!-- Users Management Tab -->
     <div class="admin-tab-content" id="adminTabUsers" role="tabpanel">
       <div class="admin-section">
-        <h3 class="admin-section-title">Online Users</h3>
+        <h3 class="admin-section-title">Users Management</h3>
+        <div class="admin-filters">
+          <input type="text" id="adminUsersSearch" class="admin-filter-input" placeholder="Search by name, username, or ID...">
+          <select id="adminUsersRoleFilter" class="admin-filter-select">
+            <option value="">All Roles</option>
+          </select>
+          <select id="adminUsersStatusFilter" class="admin-filter-select">
+            <option value="">All Status</option>
+            <option value="online">Online</option>
+            <option value="offline">Offline</option>
+          </select>
+        </div>
         <div id="adminUsersList" class="admin-list">
           <!-- Filled by JS -->
         </div>
@@ -880,6 +891,20 @@
       <div class="admin-section">
         <h3 class="admin-section-title">Manage Themes</h3>
         <div id="adminThemesList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Word Filter Tab -->
+    <div class="admin-tab-content" id="adminTabWordfilter" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Word Filter</h3>
+        <button class="auth-btn-primary" id="adminCreateWordFilterBtn">➕ Add Word</button>
+        <div class="admin-filters" style="margin-top: 16px;">
+          <input type="text" id="adminWordFilterSearch" class="admin-filter-input" placeholder="Search words...">
+        </div>
+        <div id="adminWordFilterList" class="admin-list">
           <!-- Filled by JS -->
         </div>
       </div>
@@ -1208,6 +1233,39 @@
       <div class="settings-actions">
         <button type="submit" class="auth-btn-primary">💾 Save Announcement</button>
         <button type="button" class="auth-btn-ghost" id="announcementEditCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Word Filter Edit Modal -->
+<div class="nvc-modal-backdrop" id="wordFilterEditModal" role="dialog" aria-modal="true" hidden>
+  <div class="nvc-modal">
+    <div class="nvc-modal-hdr">
+      <h2 id="wordFilterEditModalTitle">Add Word Filter</h2>
+      <button class="nvc-modal-close-btn" id="wordFilterEditModalClose">✕</button>
+    </div>
+    <form id="wordFilterEditForm">
+      <label class="settings-label" for="wordFilterWordInput">Word to Filter</label>
+      <input type="text" id="wordFilterWordInput" class="settings-input" required placeholder="Enter word or phrase...">
+      <p class="settings-hint">The word will be matched case-insensitively and as whole words only.</p>
+      
+      <label class="settings-label" for="wordFilterActionSelect">Action</label>
+      <select id="wordFilterActionSelect" class="settings-input" required>
+        <option value="block">🚫 Block (prevent message from being sent)</option>
+        <option value="replace">🔄 Replace (replace with another word)</option>
+        <option value="warn">⚠️ Warn (allow but log for moderation)</option>
+      </select>
+      
+      <div id="wordFilterReplacementContainer" hidden>
+        <label class="settings-label" for="wordFilterReplacementInput">Replacement Word</label>
+        <input type="text" id="wordFilterReplacementInput" class="settings-input" placeholder="Word to replace with...">
+        <p class="settings-hint">This word will replace the filtered word in messages.</p>
+      </div>
+      
+      <div class="settings-actions">
+        <button type="submit" class="auth-btn-primary">💾 Save Word Filter</button>
+        <button type="button" class="auth-btn-ghost" id="wordFilterEditCancelBtn">Cancel</button>
       </div>
     </form>
   </div>

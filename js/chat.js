@@ -261,6 +261,24 @@ export async function sendMessage() {
   /* Security: Sanitize HTML before saving to DB */
   html = sanitiseHtml(html);
 
+  /* Word filter check - extract plain text for filtering */
+  const plainText = textContent || dom.msgInput.textContent || dom.msgInput.innerText || '';
+  if (plainText.trim()) {
+    const { filterMessage } = await import('./word-filter.js');
+    const filtered = filterMessage(plainText);
+    
+    if (filtered.blocked) {
+      showToast('🚫 Your message contains filtered words and cannot be sent.');
+      return;
+    }
+    
+    /* If text was replaced, update html with filtered text */
+    if (filtered.text !== plainText) {
+      /* Re-sanitize the filtered text */
+      html = sanitiseHtml(filtered.text);
+    }
+  }
+
   if (hasImage) {
     const url = (_supabaseReady?.())
       ? await _uploadToStorage?.(state.pendingImage.dataUrl, 'images', 'jpg')

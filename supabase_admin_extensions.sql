@@ -166,9 +166,11 @@ INSERT INTO public.custom_roles (id, name, color, permissions) VALUES
     "can_view_logs": false,
     "can_manage_announcements": false,
     "can_view_statistics": false,
-    "can_post_messages": true
+    "can_post_messages": true,
+    "can_change_avatar": true,
+    "can_change_nickname": true
   }'::jsonb)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET permissions = EXCLUDED.permissions;
 
 INSERT INTO public.custom_roles (id, name, color, permissions) VALUES
   ('guest', 'Guest', '#9e9e9e', '{
@@ -183,9 +185,11 @@ INSERT INTO public.custom_roles (id, name, color, permissions) VALUES
     "can_view_logs": false,
     "can_manage_announcements": false,
     "can_view_statistics": false,
-    "can_post_messages": true
+    "can_post_messages": true,
+    "can_change_avatar": true,
+    "can_change_nickname": true
   }'::jsonb)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET permissions = EXCLUDED.permissions;
 
 -- ── Abilita Realtime per le nuove tabelle ─────────────────────
 DO $$
@@ -212,3 +216,47 @@ USING (
     AND role IN ('owner', 'admin')
   )
 );
+
+-- ── Tabella parole filtrate (Word Filter) ────────────────────────
+CREATE TABLE IF NOT EXISTS public.filtered_words (
+  id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+  word        TEXT        NOT NULL UNIQUE,
+  action      TEXT        DEFAULT 'block' CHECK (action IN ('block', 'replace', 'warn')),
+  replacement  TEXT,  -- Parola sostitutiva se action = 'replace'
+  created_by  TEXT        NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS for filtered_words
+ALTER TABLE public.filtered_words ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read filtered_words" ON public.filtered_words;
+DROP POLICY IF EXISTS "Admin manage filtered_words" ON public.filtered_words;
+
+CREATE POLICY "Public read filtered_words" ON public.filtered_words 
+FOR SELECT 
+USING (true);  -- Tutti possono leggere per filtrare i messaggi
+
+CREATE POLICY "Admin manage filtered_words" ON public.filtered_words 
+FOR ALL 
+USING (
+  EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = COALESCE(auth.uid()::text, '')::text
+    AND role IN ('owner', 'admin', 'moderator')
+  )
+);
+
+-- ── Abilita Realtime per filtered_words ───────────────────────────
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'filtered_words'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.filtered_words;
+  END IF;
+END $$;

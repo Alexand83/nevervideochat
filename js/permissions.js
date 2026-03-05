@@ -64,6 +64,8 @@ function getDefaultPermissions(role) {
       can_manage_announcements: true,
       can_view_statistics: true,
       can_post_messages: true,
+      can_change_avatar: true,
+      can_change_nickname: true,
     },
     admin: {
       can_ban: true,
@@ -78,6 +80,8 @@ function getDefaultPermissions(role) {
       can_manage_announcements: true,
       can_view_statistics: true,
       can_post_messages: true,
+      can_change_avatar: true,
+      can_change_nickname: true,
     },
     moderator: {
       can_ban: false,
@@ -92,6 +96,8 @@ function getDefaultPermissions(role) {
       can_manage_announcements: false,
       can_view_statistics: true,
       can_post_messages: true,
+      can_change_avatar: true,
+      can_change_nickname: true,
     },
     user: {
       can_ban: false,
@@ -106,6 +112,8 @@ function getDefaultPermissions(role) {
       can_manage_announcements: false,
       can_view_statistics: false,
       can_post_messages: true,
+      can_change_avatar: true,
+      can_change_nickname: true,
     },
   };
 

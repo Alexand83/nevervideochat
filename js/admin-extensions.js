@@ -938,6 +938,211 @@ export async function loadAnnouncements() {
   }
 }
 
+/* ── Word Filter Management ───────────────────────────────────── */
+export async function loadWordFilter() {
+  const adminWordFilterList = document.getElementById('adminWordFilterList');
+  if (!adminWordFilterList || !state.supa) return;
+  
+  try {
+    const { data, error } = await state.supa
+      .from('filtered_words')
+      .select('*')
+      .order('word');
+    
+    if (error) throw error;
+    
+    const searchTerm = (document.getElementById('adminWordFilterSearch')?.value || '').toLowerCase().trim();
+    let filteredWords = data || [];
+    
+    if (searchTerm) {
+      filteredWords = filteredWords.filter(w => 
+        w.word.toLowerCase().includes(searchTerm) ||
+        (w.replacement && w.replacement.toLowerCase().includes(searchTerm))
+      );
+    }
+    
+    adminWordFilterList.innerHTML = '';
+    
+    if (filteredWords.length === 0) {
+      adminWordFilterList.innerHTML = '<p class="admin-empty">No filtered words found.</p>';
+      return;
+    }
+    
+    filteredWords.forEach(wordFilter => {
+      const item = document.createElement('div');
+      item.className = 'admin-list-item';
+      
+      const actionBadge = {
+        block: '<span class="admin-badge" style="background: #da3633;">Block</span>',
+        replace: '<span class="admin-badge" style="background: #d29922;">Replace</span>',
+        warn: '<span class="admin-badge" style="background: #1f6feb;">Warn</span>'
+      }[wordFilter.action] || '';
+      
+      item.innerHTML = `
+        <div class="admin-item-info">
+          <strong>${escHtml(wordFilter.word)}</strong>
+          ${actionBadge}
+          ${wordFilter.replacement ? `<span class="admin-item-id">→ ${escHtml(wordFilter.replacement)}</span>` : ''}
+        </div>
+        <div class="admin-item-actions">
+          <button class="admin-action-btn" data-action="edit" data-word-id="${wordFilter.id}">✏️ Edit</button>
+          <button class="admin-action-btn admin-action-danger" data-action="delete" data-word-id="${wordFilter.id}">🗑️ Delete</button>
+        </div>
+      `;
+      
+      item.querySelector('[data-action="edit"]')?.addEventListener('click', () => {
+        openWordFilterEditModal(wordFilter);
+      });
+      
+      item.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
+        deleteWordFilter(wordFilter.id, wordFilter.word);
+      });
+      
+      adminWordFilterList.appendChild(item);
+    });
+  } catch (err) {
+    console.error('[Admin] Load word filter error:', err);
+    showToast('⚠️ Failed to load word filter.');
+  }
+}
+
+export async function saveWordFilter(wordId = null) {
+  if (!state.supa || !state.currentUser) return;
+  
+  const wordInput = document.getElementById('wordFilterWordInput');
+  const actionSelect = document.getElementById('wordFilterActionSelect');
+  const replacementInput = document.getElementById('wordFilterReplacementInput');
+  
+  if (!wordInput || !actionSelect) return;
+  
+  const word = wordInput.value.trim().toLowerCase();
+  const action = actionSelect.value;
+  const replacement = replacementInput?.value.trim() || null;
+  
+  if (!word) {
+    showToast('⚠️ Word cannot be empty.');
+    return;
+  }
+  
+  if (action === 'replace' && !replacement) {
+    showToast('⚠️ Replacement word is required for "Replace" action.');
+    return;
+  }
+  
+  try {
+    const wordData = {
+      word,
+      action,
+      replacement: action === 'replace' ? replacement : null,
+      created_by: String(state.currentUser.id),
+    };
+    
+    if (wordId) {
+      wordData.updated_at = new Date().toISOString();
+      const { error } = await state.supa
+        .from('filtered_words')
+        .update(wordData)
+        .eq('id', wordId);
+      
+      if (error) throw error;
+      await logAdminAction('update_word_filter', 'word_filter', wordId, word);
+      showToast('✅ Word filter updated.');
+    } else {
+      const { error } = await state.supa
+        .from('filtered_words')
+        .insert(wordData);
+      
+      if (error) {
+        if (error.code === '23505') { // Unique constraint violation
+          showToast('⚠️ This word is already filtered.');
+          return;
+        }
+        throw error;
+      }
+      await logAdminAction('create_word_filter', 'word_filter', null, word);
+      showToast('✅ Word filter added.');
+    }
+    
+    const wordFilterEditModal = document.getElementById('wordFilterEditModal');
+    if (wordFilterEditModal) wordFilterEditModal.hidden = true;
+    loadWordFilter();
+    
+    /* Refresh word filter cache */
+    const { refreshFilteredWords } = await import('./word-filter.js');
+    await refreshFilteredWords();
+  } catch (err) {
+    console.error('[Admin] Save word filter error:', err);
+    showToast('⚠️ Failed to save word filter.');
+  }
+}
+
+export async function deleteWordFilter(wordId, word) {
+  if (!state.supa || !state.currentUser) return;
+  
+  if (!confirm(`Delete word filter "${word}"?`)) return;
+  
+  try {
+    const { error } = await state.supa
+      .from('filtered_words')
+      .delete()
+      .eq('id', wordId);
+    
+    if (error) throw error;
+    
+    await logAdminAction('delete_word_filter', 'word_filter', wordId, word);
+    showToast('✅ Word filter deleted.');
+    loadWordFilter();
+    
+    /* Refresh word filter cache */
+    const { refreshFilteredWords } = await import('./word-filter.js');
+    await refreshFilteredWords();
+  } catch (err) {
+    console.error('[Admin] Delete word filter error:', err);
+    showToast('⚠️ Failed to delete word filter.');
+  }
+}
+
+export function openWordFilterEditModal(wordFilter = null) {
+  const wordFilterEditModal = document.getElementById('wordFilterEditModal');
+  if (!wordFilterEditModal) {
+    showToast('⚠️ Word filter modal not found.');
+    return;
+  }
+  
+  const wordInput = document.getElementById('wordFilterWordInput');
+  const actionSelect = document.getElementById('wordFilterActionSelect');
+  const replacementInput = document.getElementById('wordFilterReplacementInput');
+  const replacementContainer = document.getElementById('wordFilterReplacementContainer');
+  
+  if (!wordInput || !actionSelect) return;
+  
+  if (wordFilter) {
+    wordInput.value = wordFilter.word || '';
+    actionSelect.value = wordFilter.action || 'block';
+    if (replacementInput) replacementInput.value = wordFilter.replacement || '';
+    document.getElementById('wordFilterEditModalTitle').textContent = 'Edit Word Filter';
+  } else {
+    wordInput.value = '';
+    actionSelect.value = 'block';
+    if (replacementInput) replacementInput.value = '';
+    document.getElementById('wordFilterEditModalTitle').textContent = 'Add Word Filter';
+  }
+  
+  /* Show/hide replacement input based on action */
+  if (replacementContainer) {
+    replacementContainer.hidden = actionSelect.value !== 'replace';
+  }
+  
+  actionSelect.addEventListener('change', () => {
+    if (replacementContainer) {
+      replacementContainer.hidden = actionSelect.value !== 'replace';
+    }
+  });
+  
+  wordFilterEditModal.dataset.wordId = wordFilter?.id || '';
+  wordFilterEditModal.hidden = false;
+}
+
 export function openAnnouncementEditModal(ann = null) {
   if (!dom.announcementEditModal) return;
   const title = document.getElementById('announcementEditModalTitle');

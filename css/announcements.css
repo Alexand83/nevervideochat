@@ -76,7 +76,7 @@
   cursor: pointer;
   padding: 4px 8px;
   border-radius: var(--r2);
-  transition: background var(--tf), transform var(--tf);
+  transition: background var(--tf);
   flex-shrink: 0;
   min-width: 28px;
   height: 28px;
@@ -92,11 +92,10 @@
 
 .announcement-close:hover {
   background: rgba(0, 0, 0, 0.2);
-  transform: scale(1.1);
 }
 
 .announcement-close:active {
-  transform: scale(0.95);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* Announcement types */

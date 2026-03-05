@@ -77,6 +77,10 @@ export async function finishInit() {
   /* Load and display announcements */
   const { loadAndDisplayAnnouncements, initAnnouncementsListener } = await import('./announcements.js');
   await loadAndDisplayAnnouncements();
+  
+  /* Initialize word filter */
+  const { initWordFilterListener } = await import('./word-filter.js');
+  await initWordFilterListener();
   initAnnouncementsListener();
   state.pendingCamRequests = {};
   state.rejectedCamUsers   = loadRejectedCams();

@@ -204,9 +204,26 @@ function setAuthBtnLoading(btn, loading, txt) {
 export function initProfileModal() {
   dom.headerProfileBtn?.addEventListener('click', openProfileModal);
   dom.profileModalClose?.addEventListener('click', () => { dom.profileModal.hidden = true; });
-  dom.profileAvatarChangeBtn?.addEventListener('click', () => dom.profileAvatarInput.click());
+  dom.profileAvatarChangeBtn?.addEventListener('click', async () => {
+    const { hasPermission } = await import('./permissions.js');
+    const { loadUserPermissions } = await import('./permissions.js');
+    await loadUserPermissions();
+    if (!hasPermission('can_change_avatar')) {
+      showToast('🚫 You do not have permission to change avatar.');
+      return;
+    }
+    dom.profileAvatarInput.click();
+  });
   dom.profileAvatarInput?.addEventListener('change', async e => {
     const file = e.target.files?.[0]; if (!file) return;
+    const { hasPermission } = await import('./permissions.js');
+    const { loadUserPermissions } = await import('./permissions.js');
+    await loadUserPermissions();
+    if (!hasPermission('can_change_avatar')) {
+      showToast('🚫 You do not have permission to change avatar.');
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = ev => setAvatarDisplay(dom.profileAvatarDisplay, null, ev.target.result);
     reader.readAsDataURL(file);
@@ -217,12 +234,30 @@ export function initProfileModal() {
     e.target.value = '';
   });
   dom.profileSaveBtn?.addEventListener('click', async () => {
+    const { hasPermission } = await import('./permissions.js');
+    const { loadUserPermissions } = await import('./permissions.js');
+    await loadUserPermissions();
+    
     const name = dom.profileNameInput.value.trim();
     if (!name) return showToast('⚠️ Display name cannot be empty.');
-    const newUrl = dom.profileAvatarInput.dataset.uploadedUrl || state.currentUser.avatarUrl || null;
+    
+    /* Check nickname permission */
+    if (!hasPermission('can_change_nickname')) {
+      showToast('🚫 You do not have permission to change nickname.');
+      return;
+    }
+    
+    /* Check avatar permission if avatar changed */
+    const newUrl = dom.profileAvatarInput.dataset.uploadedUrl;
+    if (newUrl && !hasPermission('can_change_avatar')) {
+      showToast('🚫 You do not have permission to change avatar.');
+      return;
+    }
+    
+    const finalAvatarUrl = newUrl || state.currentUser.avatarUrl || null;
     dom.profileSaveBtn.disabled = true; dom.profileSaveBtn.textContent = 'Saving…';
     try {
-      await saveProfile(name, newUrl);
+      await saveProfile(name, finalAvatarUrl);
       dom.profileModal.hidden = true; showToast('✅ Profile saved.');
     } catch (err) { showToast('⚠️ Could not save profile: ' + err.message); }
     finally { dom.profileSaveBtn.disabled = false; dom.profileSaveBtn.textContent = 'Save Changes'; }
@@ -236,8 +271,13 @@ export function initProfileModal() {
   dom.profileModal?.addEventListener('click', e => { if (e.target === dom.profileModal) dom.profileModal.hidden = true; });
 }
 
-function openProfileModal() {
+async function openProfileModal() {
   const u = state.currentUser; if (!u) return;
+  
+  /* Load permissions to check what user can do */
+  const { hasPermission, loadUserPermissions } = await import('./permissions.js');
+  await loadUserPermissions();
+  
   dom.profileNameInput.value = u.name || '';
   delete dom.profileAvatarInput.dataset.uploadedUrl;
   setAvatarDisplay(dom.profileAvatarDisplay, u.name, u.avatarUrl);
@@ -246,6 +286,21 @@ function openProfileModal() {
     : `Registered as @${u.username || u.name}`;
   dom.profileLogoutBtn.hidden       = u.isGuest;
   dom.profileSwitchToAuthBtn.hidden = !u.isGuest;
+  
+  /* Enable/disable fields based on permissions */
+  const canChangeAvatar = hasPermission('can_change_avatar');
+  const canChangeNickname = hasPermission('can_change_nickname');
+  
+  dom.profileAvatarChangeBtn.disabled = !canChangeAvatar;
+  dom.profileAvatarChangeBtn.title = canChangeAvatar 
+    ? 'Change photo' 
+    : 'You do not have permission to change avatar';
+  dom.profileNameInput.disabled = !canChangeNickname;
+  dom.profileNameInput.title = canChangeNickname 
+    ? 'Display name' 
+    : 'You do not have permission to change nickname';
+  dom.profileSaveBtn.disabled = !canChangeNickname && !canChangeAvatar;
+  
   dom.profileModal.hidden = false;
 }
 

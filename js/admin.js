@@ -81,6 +81,36 @@ export function initAdminPanel() {
     openAnnouncementEditModal();
   });
 
+  /* Create word filter button */
+  document.getElementById('adminCreateWordFilterBtn')?.addEventListener('click', async () => {
+    const { openWordFilterEditModal } = await import('./admin-extensions.js');
+    openWordFilterEditModal();
+  });
+
+  /* Word filter search */
+  document.getElementById('adminWordFilterSearch')?.addEventListener('input', (e) => {
+    clearTimeout(window.wordFilterSearchTimeout);
+    window.wordFilterSearchTimeout = setTimeout(async () => {
+      const { loadWordFilter } = await import('./admin-extensions.js');
+      await loadWordFilter();
+    }, 300);
+  });
+
+  /* Word filter modal */
+  document.getElementById('wordFilterEditModalClose')?.addEventListener('click', () => {
+    document.getElementById('wordFilterEditModal').hidden = true;
+  });
+  document.getElementById('wordFilterEditCancelBtn')?.addEventListener('click', () => {
+    document.getElementById('wordFilterEditModal').hidden = true;
+  });
+  document.getElementById('wordFilterEditForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { saveWordFilter } = await import('./admin-extensions.js');
+    const modal = document.getElementById('wordFilterEditModal');
+    const wordId = modal?.dataset.wordId || null;
+    await saveWordFilter(wordId);
+  });
+
   /* Role edit modal */
   dom.roleEditModalClose?.addEventListener('click', () => {
     dom.roleEditModal.hidden = true;
@@ -126,6 +156,14 @@ export function initAdminPanel() {
     window.logSearchTimeout = setTimeout(loadAdminLogs, 500);
   });
 
+  /* Users filters */
+  document.getElementById('adminUsersSearch')?.addEventListener('input', (e) => {
+    clearTimeout(window.usersSearchTimeout);
+    window.usersSearchTimeout = setTimeout(filterAndRenderUsers, 300);
+  });
+  document.getElementById('adminUsersRoleFilter')?.addEventListener('change', filterAndRenderUsers);
+  document.getElementById('adminUsersStatusFilter')?.addEventListener('change', filterAndRenderUsers);
+
   /* Room edit modal */
   dom.roomEditModalClose?.addEventListener('click', () => {
     dom.roomEditModal.hidden = true;
@@ -148,8 +186,12 @@ function switchAdminTab(tabName) {
   
   /* Load tab data */
   if (tabName === 'rooms') loadRooms();
-  else if (tabName === 'users') loadUsers();
+  else if (tabName === 'users') {
+    loadUsers();
+    populateUsersRoleFilter();
+  }
   else if (tabName === 'roles') loadCustomRoles();
+  else if (tabName === 'wordfilter') loadWordFilter();
   else if (tabName === 'messages') loadMessages();
   else if (tabName === 'banned') loadBannedUsers();
   else if (tabName === 'ips') loadBannedIPs();
@@ -157,6 +199,10 @@ function switchAdminTab(tabName) {
   else if (tabName === 'statistics') loadStatistics();
   else if (tabName === 'logs') loadAdminLogs();
   else if (tabName === 'themes') loadThemes();
+  else if (tabName === 'wordfilter') {
+    const { loadWordFilter } = await import('./admin-extensions.js');
+    loadWordFilter();
+  }
 }
 
 async function openAdminPanel() {
@@ -376,6 +422,8 @@ async function deleteRoom(roomId) {
 }
 
 /* ── Users Management ── */
+let allUsersCache = []; // Cache per filtri
+
 async function loadUsers() {
   if (!dom.adminUsersList || !state.supa) return;
   try {
@@ -397,7 +445,7 @@ async function loadUsers() {
     const onlineUserIds = new Set(onlineUsers.map(u => u.id));
     
     /* Combine: show all registered users, mark which are online */
-    const allUsers = (allProfiles || []).map(profile => {
+    allUsersCache = (allProfiles || []).map(profile => {
       const isOnline = onlineUserIds.has(profile.id);
       const onlineUser = onlineUsers.find(u => u.id === profile.id);
       return {
@@ -411,19 +459,59 @@ async function loadUsers() {
       };
     });
     
-    if (allUsers.length === 0) {
-      dom.adminUsersList.innerHTML = '<p class="admin-empty">No registered users found.</p>';
-      return;
-    }
-    
-    const profileMap = {};
-    allProfiles?.forEach(p => {
-      profileMap[p.id] = p;
-    });
-    
-    dom.adminUsersList.innerHTML = '';
-    
-    for (const user of allUsers) {
+    /* Apply filters and render */
+    filterAndRenderUsers();
+  } catch (err) {
+    console.error('[Admin] Load users error:', err);
+    showToast('⚠️ Failed to load users.');
+  }
+}
+
+function filterAndRenderUsers() {
+  if (!dom.adminUsersList) return;
+  
+  const searchTerm = (document.getElementById('adminUsersSearch')?.value || '').toLowerCase().trim();
+  const roleFilter = document.getElementById('adminUsersRoleFilter')?.value || '';
+  const statusFilter = document.getElementById('adminUsersStatusFilter')?.value || '';
+  
+  let filteredUsers = [...allUsersCache];
+  
+  /* Apply search filter */
+  if (searchTerm) {
+    filteredUsers = filteredUsers.filter(user => 
+      user.name.toLowerCase().includes(searchTerm) ||
+      (user.username && user.username.toLowerCase().includes(searchTerm)) ||
+      user.id.toLowerCase().includes(searchTerm)
+    );
+  }
+  
+  /* Apply role filter */
+  if (roleFilter) {
+    filteredUsers = filteredUsers.filter(user => 
+      user.custom_role_id === roleFilter
+    );
+  }
+  
+  /* Apply status filter */
+  if (statusFilter) {
+    filteredUsers = filteredUsers.filter(user => 
+      statusFilter === 'online' ? user.is_online : !user.is_online
+    );
+  }
+  
+  if (filteredUsers.length === 0) {
+    dom.adminUsersList.innerHTML = '<p class="admin-empty">No users found matching your filters.</p>';
+    return;
+  }
+  
+  const profileMap = {};
+  allUsersCache.forEach(u => {
+    profileMap[u.id] = u;
+  });
+  
+  dom.adminUsersList.innerHTML = '';
+  
+  for (const user of filteredUsers) {
       const item = document.createElement('div');
       item.className = 'admin-list-item';
       const profile = profileMap[user.id];
