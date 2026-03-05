@@ -66,8 +66,11 @@ export async function loginUser(nick, password) {
       /* Crea un ID univoco per questa sessione (hash del token) */
       const sessionId = createSessionId(data.session.access_token);
       
+      console.log('[Auth] Registering new active session:', { userId: data.user.id, sessionId: sessionId.substring(0, 20) + '...' });
+      
       /* Salva l'ID della sessione nel localStorage per riutilizzarlo */
       saveSessionId(sessionId);
+      console.log('[Auth] Saved session ID to localStorage');
       
       /* Registra questa sessione come attiva nel database */
       const { error: sessionError } = await state.supa.rpc('upsert_active_session', {
@@ -76,12 +79,22 @@ export async function loginUser(nick, password) {
       });
       
       if (sessionError) {
-        console.warn('[Auth] Could not register active session:', sessionError);
+        console.error('[Auth] CRITICAL: Could not register active session:', sessionError);
+        /* Se la funzione non esiste, potrebbe essere che lo script SQL non sia stato eseguito */
+        if (sessionError.message?.includes('function') || sessionError.code === '42883') {
+          console.error('[Auth] CRITICAL: upsert_active_session function not found!');
+          console.error('[Auth] You MUST execute supabase_active_sessions.sql in Supabase SQL Editor!');
+          showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
+        }
       } else {
-        console.log('[Auth] Registered new active session - old sessions are now invalid');
+        console.log('[Auth] ✅ Successfully registered new active session - old sessions are now invalid');
       }
     } catch (err) {
-      console.warn('[Auth] Error registering active session:', err);
+      console.error('[Auth] Error registering active session:', err);
+      if (err?.message?.includes('function') || err?.code === '42883') {
+        console.error('[Auth] CRITICAL: Database functions not found! Execute supabase_active_sessions.sql!');
+        showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
+      }
     }
   }
   

@@ -16,6 +16,7 @@ import { clearPendingCamRequest } from './storage.js';
 let sessionJustCreated = false;
 let sessionCreationTime = 0;
 let isDisconnectingOthers = false; /* Flag per indicare che stiamo disconnettingo le altre sessioni */
+let sessionCheckInterval = null; /* Intervallo per controllare periodicamente la sessione */
 
 export function initSupabaseClient() {
   if (!SUPABASE_URL.includes('supabase.co') || SUPABASE_ANON_KEY.startsWith('YOUR_')) {
@@ -146,6 +147,82 @@ export async function connectRoom(roomId) {
     });
 
   room.dbSub = dbSub;
+}
+
+/* ── Verifica periodicamente se la sessione è ancora valida ── */
+function startSessionCheckInterval() {
+  /* Clear existing interval */
+  if (sessionCheckInterval) {
+    clearInterval(sessionCheckInterval);
+  }
+  
+  /* Check every 5 seconds if session is still valid */
+  sessionCheckInterval = setInterval(async () => {
+    if (!state.supa || !state.currentUser) return;
+    
+    /* NON controllare se stiamo disconnettingo le altre sessioni */
+    if (isDisconnectingOthers) return;
+    
+    /* NON controllare se la sessione è appena stata creata */
+    if (sessionJustCreated) {
+      const timeSinceCreation = Date.now() - sessionCreationTime;
+      if (timeSinceCreation < 30000) return; /* 30 secondi di grazia */
+    }
+    
+    try {
+      const session = await state.supa.auth.getSession();
+      if (!session?.data?.session?.access_token) {
+        console.warn('[Session Check] No active session found');
+        return;
+      }
+      
+      const sessionId = session.data.session.access_token.substring(0, 40);
+      const savedSessionId = localStorage.getItem('nvc_session_id');
+      
+      /* Controllo rapido: se l'ID salvato non corrisponde, questa è una vecchia sessione */
+      if (savedSessionId && savedSessionId !== sessionId) {
+        console.warn('[Session Check] Session ID mismatch - disconnecting old session');
+        showDisconnectedOverlay();
+        if (sessionCheckInterval) {
+          clearInterval(sessionCheckInterval);
+          sessionCheckInterval = null;
+        }
+        return;
+      }
+      
+      /* Verifica nel database */
+      const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
+        p_user_id: state.currentUser.id,
+        p_session_id: sessionId
+      });
+      
+      if (checkError) {
+        console.warn('[Session Check] Error checking session:', checkError);
+        /* Se la funzione non esiste, potrebbe essere che lo script SQL non sia stato eseguito */
+        if (checkError.message?.includes('function') || checkError.code === '42883') {
+          console.error('[Session Check] CRITICAL: is_session_valid function not found! Execute supabase_active_sessions.sql in Supabase!');
+        }
+      } else if (isValid === false) {
+        /* Questa NON è la sessione attiva - disconnettere immediatamente */
+        console.warn('[Session Check] Session is not valid - disconnecting');
+        showDisconnectedOverlay();
+        if (sessionCheckInterval) {
+          clearInterval(sessionCheckInterval);
+          sessionCheckInterval = null;
+        }
+      }
+    } catch (err) {
+      console.warn('[Session Check] Error in periodic check:', err);
+    }
+  }, 5000); /* Check every 5 seconds */
+}
+
+/* ── Stop periodic session check ── */
+function stopSessionCheckInterval() {
+  if (sessionCheckInterval) {
+    clearInterval(sessionCheckInterval);
+    sessionCheckInterval = null;
+  }
 }
 
 /* ── Connect global signal channel + all rooms ── */
@@ -360,6 +437,9 @@ export async function connectSupabase() {
 
     showToast('🟢 Connected to NeverVideoChat');
     console.log('[NVC] Supabase connected.');
+    
+    /* Avvia il controllo periodico della sessione */
+    startSessionCheckInterval();
   } catch (err) {
     console.error('[NVC] Connection error:', err);
     /* Se è un errore 403, significa che la sessione è stata invalidata */
