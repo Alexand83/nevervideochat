@@ -240,6 +240,7 @@ export async function saveRole() {
     };
     
     if (id && ['owner', 'admin', 'moderator', 'user'].includes(id)) {
+      console.log('[Admin] Attempted to modify system role:', id);
       showToast('⚠️ Cannot modify system roles.');
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -249,9 +250,13 @@ export async function saveRole() {
       return;
     }
     
+    console.log('[Admin] Preparing to save role. ID:', id, 'Name:', name);
+    console.log('[Admin] Role data to save:', JSON.stringify(roleData, null, 2));
+    
     if (id) {
       roleData.id = id;
       console.log('[Admin] Updating role:', JSON.stringify({ id, roleData }, null, 2));
+      console.log('[Admin] About to execute UPDATE query...');
       const { data, error, status, statusText } = await state.supa
         .from('custom_roles')
         .update(roleData)
@@ -282,6 +287,7 @@ export async function saveRole() {
       const roleId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
       roleData.id = roleId;
       console.log('[Admin] Creating role:', JSON.stringify({ roleId, roleData }, null, 2));
+      console.log('[Admin] About to execute INSERT query...');
       const { data, error, status, statusText } = await state.supa
         .from('custom_roles')
         .insert(roleData)
