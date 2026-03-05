@@ -359,15 +359,23 @@ export async function startOwnCamera() {
       return;
     }
     
+    /* Aggiorna prima la presenza locale per assicurarsi che sia corretta */
+    for (const [rId, room] of Object.entries(state.rooms)) {
+      if (room.users[state.currentUser.id]) {
+        room.users[state.currentUser.id].hasCamera = (rId === state.cameraRoom);
+      }
+    }
+    
     broadcastAll('cam-opened', { room_id: state.cameraRoom });
     await updateAllRoomPresences(); 
-    /* Forza re-render per assicurarsi che l'icona cam appaia */
+    /* Forza re-render immediato */
     renderUsers();
+    
     /* Aggiorna di nuovo dopo un breve delay per assicurarsi che la presenza sia sincronizzata */
     setTimeout(async () => {
       await updateAllRoomPresences();
       renderUsers();
-    }, 300);
+    }, 500);
     
     if (isEventsRoom) {
       /* Automatically share with all users in Events room */

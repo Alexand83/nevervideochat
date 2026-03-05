@@ -125,13 +125,17 @@ export async function connectSupabase() {
 
         /* Update room.users for EVERY joined room — icon true only in camRoom */
         for (const [rId, room] of Object.entries(state.rooms)) {
-          if (room.users[fromId]) room.users[fromId].hasCamera = (rId === camRoom);
+          if (room.users[fromId]) {
+            /* Aggiorna hasCamera solo se la cam è in questa stanza */
+            room.users[fromId].hasCamera = (rId === camRoom);
+          }
         }
         /* Keep global state.users in sync (used as fallback) */
         const inMyRoom = !camRoom || camRoom === state.activeRoom;
         const u = state.users.find(u => String(u.id) === fromId);
         if (u) u.hasCamera = inMyRoom;
         else if (inMyRoom) ensureUser(fromId, payload.fromName, { hasCamera: true, online: true });
+        /* Forza re-render immediato */
         renderUsers();
         
         /* Events room: update grid when cam-opened received */
