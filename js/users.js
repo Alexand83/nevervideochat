@@ -212,24 +212,34 @@ export function syncPresence(presenceState, roomId) {
 
   const myId = String(state.currentUser.id);
 
-  /* Update room-local users map */
-  room.users = {};
+  /* Update room-local users map - NON resettare completamente, preserva hasCamera se già presente */
   Object.entries(presenceState).forEach(([uid, presences]) => {
     if (String(uid) === myId) return;
     const info = presences[0];
     /* info.name è il display_name dalla presenza */
+    const existingUser = room.users[String(uid)];
+    const hasCamera = info.hasCamera !== undefined ? !!info.hasCamera : (existingUser?.hasCamera || false);
+    
     const user = {
       id: String(uid),
       name:      info.name || info.username || 'User',  /* display_name dalla presenza */
       username:  info.username || null,  /* username dell'account */
       isGuest:   info.isGuest,
       online:    true,
-      hasCamera: !!info.hasCamera,
+      hasCamera: hasCamera,  /* Preserva hasCamera se già presente, altrimenti usa quello dalla presenza */
       avatarUrl: info.avatarUrl || null,
     };
     room.users[String(uid)] = user;
     /* Also keep the global state.users in sync */
-    ensureUser(String(uid), info.name || info.username || 'User', { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null });
+    ensureUser(String(uid), info.name || info.username || 'User', { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: hasCamera, avatarUrl: info.avatarUrl || null });
+  });
+  
+  /* Rimuovi utenti che non sono più nella presenza */
+  const presentUserIds = new Set(Object.keys(presenceState).map(String));
+  Object.keys(room.users).forEach(uid => {
+    if (uid !== myId && !presentUserIds.has(uid)) {
+      delete room.users[uid];
+    }
   });
 
   if (rId === state.activeRoom) renderUsers();

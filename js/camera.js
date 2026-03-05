@@ -362,9 +362,12 @@ export async function startOwnCamera() {
     broadcastAll('cam-opened', { room_id: state.cameraRoom });
     await updateAllRoomPresences(); 
     /* Forza re-render per assicurarsi che l'icona cam appaia */
-    setTimeout(() => {
+    renderUsers();
+    /* Aggiorna di nuovo dopo un breve delay per assicurarsi che la presenza sia sincronizzata */
+    setTimeout(async () => {
+      await updateAllRoomPresences();
       renderUsers();
-    }, 100);
+    }, 300);
     
     if (isEventsRoom) {
       /* Automatically share with all users in Events room */

@@ -86,14 +86,23 @@ export async function joinRoom(roomId) {
       if (uid === String(state.currentUser.id)) return;
       const info = newPresences[0];
       if (!state.rooms[roomIdStr]) return;
+      
+      /* Preserva hasCamera esistente se presente, altrimenti usa quello dalla presenza */
+      const existingUser = state.rooms[roomIdStr].users[uid];
+      const hasCamera = info.hasCamera !== undefined ? !!info.hasCamera : (existingUser?.hasCamera || false);
+      
       state.rooms[roomIdStr].users[uid] = {
         id: uid, name: info.name, username: info.username || null,
         isGuest: info.isGuest, online: true,
-        hasCamera: !!info.hasCamera, avatarUrl: info.avatarUrl || null,
+        hasCamera: hasCamera, avatarUrl: info.avatarUrl || null,
       };
       if (roomIdStr === String(state.activeRoom)) {
         renderUsers();
-        showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
+        /* Mostra toast solo se è un vero join, non un update presenza */
+        const wasAlreadyOnline = existingUser?.online;
+        if (!wasAlreadyOnline) {
+          showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
+        }
       }
     })
     .on('presence', { event: 'leave' }, ({ key }) => {
@@ -103,7 +112,13 @@ export async function joinRoom(roomId) {
       if (roomIdStr === String(state.activeRoom)) renderUsers();
     })
     .subscribe(async status => {
-      if (status === 'SUBSCRIBED') await updateOwnPresence(presenceCh);
+      if (status === 'SUBSCRIBED') {
+        await updateOwnPresence(presenceCh);
+        /* Dopo aver aggiornato la presenza, forza un re-sync per assicurarsi che tutti vedano lo stato corretto */
+        setTimeout(() => {
+          syncPresence(presenceCh.presenceState(), roomIdStr);
+        }, 200);
+      }
     });
 
   state.rooms[roomIdStr].presenceCh = presenceCh;
