@@ -21,6 +21,22 @@ export async function registerUser(nick, password) {
   const { data, error } = await state.supa.auth.signUp({ email: nickToEmail(nick), password });
   if (error) throw error;
   const userId = data.user.id;
+  
+  /* Get the default "user" role ID from custom_roles */
+  let defaultRoleId = null;
+  try {
+    const { data: userRole } = await state.supa
+      .from('custom_roles')
+      .select('id')
+      .eq('name', 'user')
+      .single();
+    if (userRole) {
+      defaultRoleId = userRole.id;
+    }
+  } catch (err) {
+    console.warn('[Auth] Could not find default "user" role:', err);
+  }
+  
   await state.supa.from('profiles').upsert(
     { 
       id: userId, 
@@ -28,7 +44,7 @@ export async function registerUser(nick, password) {
       display_name: nick, 
       is_guest: false,
       role: 'user',  /* Default role for new users */
-      custom_role_id: 'user'  /* Assign default "user" custom role */
+      custom_role_id: defaultRoleId  /* Assign default "user" custom role if found */
     },
     { onConflict: 'id' }
   );
