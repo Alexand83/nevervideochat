@@ -127,6 +127,10 @@ export async function joinRoom(roomId) {
         /* Dopo aver aggiornato la presenza, forza un re-sync per assicurarsi che tutti vedano lo stato corretto */
         setTimeout(() => {
           syncPresence(presenceCh.presenceState(), roomIdStr);
+          /* Forza renderUsers dopo il sync per assicurarsi che la lista utenti sia visibile */
+          if (roomIdStr === String(state.activeRoom)) {
+            renderUsers();
+          }
         }, 200);
       }
     });
