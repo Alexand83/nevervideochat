@@ -60,31 +60,39 @@ export async function verifySessionImmediately(userId, accessToken) {
       return false;
     }
     
-    /* Verifica nel database */
-    const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
-      p_user_id: userId,
-      p_session_id: sessionId
-    });
-    
-    if (checkError) {
-      console.error('[Auth] IMMEDIATE CHECK: Error checking session:', checkError);
-      if (checkError.message?.includes('function') || checkError.code === '42883') {
-        console.error('[Auth] CRITICAL: is_session_valid function not found! Execute supabase_active_sessions.sql!');
-        showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
-        /* Se la funzione non esiste, blocca la sessione per sicurezza */
-        return false;
+    /* APPROCCIO SEMPLICE: Controlla direttamente la tabella active_sessions */
+    try {
+      const { data: activeSession, error: checkError } = await state.supa
+        .from('active_sessions')
+        .select('session_id')
+        .eq('user_id', userId)
+        .single();
+      
+      if (checkError) {
+        /* Se la tabella non esiste, usa localStorage come fallback */
+        const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
+        if (activeSessionData && activeSessionData.userId === userId) {
+          if (activeSessionData.sessionId !== sessionId) {
+            console.warn('[Auth] IMMEDIATE CHECK: Session ID mismatch (localStorage) - disconnecting NOW');
+            const { showDisconnectedOverlay } = await import('./supabase-client.js');
+            showDisconnectedOverlay();
+            clearAuthSession();
+            return false;
+          }
+        }
+      } else if (activeSession) {
+        /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
+        if (activeSession.session_id !== sessionId) {
+          console.warn('[Auth] IMMEDIATE CHECK: Session ID mismatch (database) - disconnecting NOW');
+          const { showDisconnectedOverlay } = await import('./supabase-client.js');
+          showDisconnectedOverlay();
+          clearAuthSession();
+          return false;
+        }
       }
-      /* Per altri errori, blocca comunque per sicurezza */
-      console.warn('[Auth] IMMEDIATE CHECK: Unknown error - blocking session for security');
-      return false;
-    }
-    
-    if (isValid === false) {
-      /* Questa NON è la sessione attiva - disconnettere IMMEDIATAMENTE */
-      console.warn('[Auth] IMMEDIATE CHECK: Session is NOT valid - disconnecting NOW');
-      const { showDisconnectedOverlay } = await import('./supabase-client.js');
-      showDisconnectedOverlay();
-      clearAuthSession();
+    } catch (err) {
+      console.error('[Auth] IMMEDIATE CHECK: Error:', err);
+      /* In caso di errore, blocca per sicurezza */
       return false;
     }
     
@@ -157,9 +165,9 @@ export async function loginUser(nick, password) {
             timestamp: Date.now()
           };
           localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
-          console.log('[Auth] Saved to localStorage fallback');
+          console.log('[Auth] Saved to localStorage fallback (table might not exist)');
         } else {
-          console.log('[Auth] ✅ Saved active session to database');
+          console.log('[Auth] ✅ Successfully registered new active session in database - old sessions are now invalid');
         }
       } catch (dbErr) {
         console.warn('[Auth] Database error - using localStorage fallback:', dbErr);
@@ -169,6 +177,7 @@ export async function loginUser(nick, password) {
           timestamp: Date.now()
         };
         localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
+        console.log('[Auth] Saved to localStorage fallback');
       }
     } catch (err) {
       console.error('[Auth] Error registering active session:', err);
@@ -223,16 +232,7 @@ export async function loginUser(nick, password) {
     console.warn('[Auth] Could not disconnect old sessions (this is OK if first login):', signOutErr);
   }
   
-  if (data.session) {
-    persistAuthSession(data.session);
-    
-    /* IMPORTANTE: Assicurati che la sessione sia disponibile per getSession() */
-    /* Forza il refresh della sessione nel client Supabase */
-    await state.supa.auth.setSession({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token
-    });
-  }
+  if (data.session) persistAuthSession(data.session);
   
   /* Marca la sessione come nuova anche dopo il persist */
   const { markSessionAsNew: markNew } = await import('./supabase-client.js');
