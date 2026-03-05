@@ -393,6 +393,9 @@ async function loadUsers() {
           </div>
         </div>
         <div class="admin-item-actions">
+          <select class="admin-role-select" data-user-id="${user.id}" onchange="assignRoleToUserFromSelect('${user.id}', this.value)">
+            <option value="">Assign Role...</option>
+          </select>
           <button class="admin-action-btn" data-action="kick" data-user-id="${user.id}">👢 Kick</button>
           <button class="admin-action-btn" data-action="mute" data-user-id="${user.id}">🔇 Mute</button>
           <button class="admin-action-btn admin-action-danger" data-action="ban" data-user-id="${user.id}">🚫 Ban</button>
@@ -753,6 +756,42 @@ import {
   toggleAnnouncement,
   deleteAnnouncement,
 } from './admin-extensions.js';
+
+/* ── Popola select ruoli ─────────────────────────────────────── */
+async function populateRoleSelect(select, currentRoleId = null) {
+  if (!state.supa) return;
+  
+  try {
+    const { data, error } = await state.supa
+      .from('custom_roles')
+      .select('id, name')
+      .order('name');
+    if (error) throw error;
+    
+    /* Clear existing options except first */
+    while (select.options.length > 1) {
+      select.remove(1);
+    }
+    
+    /* Add "No Role" option */
+    const noRoleOption = document.createElement('option');
+    noRoleOption.value = '';
+    noRoleOption.textContent = 'No Role';
+    if (!currentRoleId) noRoleOption.selected = true;
+    select.appendChild(noRoleOption);
+    
+    /* Add roles */
+    data.forEach(role => {
+      const option = document.createElement('option');
+      option.value = role.id;
+      option.textContent = role.name;
+      if (role.id === currentRoleId) option.selected = true;
+      select.appendChild(option);
+    });
+  } catch (err) {
+    console.error('[Admin] Error populating role select:', err);
+  }
+}
 
 /* ── Log azione admin (wrapper) ───────────────────────────────── */
 async function logAdminActionLocal(action, targetType, targetId, targetName, details = {}) {
