@@ -7,6 +7,7 @@ import { showToast, escHtml } from './utils.js';
 
 let announcementsListener = null;
 let activeAnnouncements = [];
+let expirationCheckInterval = null;
 
 /* ── Carica e visualizza annunci ─────────────────────────────── */
 export async function loadAndDisplayAnnouncements() {
@@ -30,6 +31,7 @@ export async function loadAndDisplayAnnouncements() {
     
     activeAnnouncements = valid;
     renderAnnouncements();
+    startExpirationChecker();
   } catch (err) {
     console.error('[Announcements] Error loading:', err);
   }
@@ -39,12 +41,20 @@ export async function loadAndDisplayAnnouncements() {
 function renderAnnouncements() {
   if (!dom.announcementsBanner) return;
   
+  /* Filter out expired announcements */
+  const now = new Date();
+  const valid = activeAnnouncements.filter(ann => 
+    !ann.expires_at || new Date(ann.expires_at) > now
+  );
+  
   /* Show persistent announcements as banner */
-  const persistent = activeAnnouncements.filter(ann => ann.is_persistent);
+  const persistent = valid.filter(ann => ann.is_persistent);
   
   if (persistent.length === 0) {
     dom.announcementsBanner.hidden = true;
     dom.announcementsBanner.innerHTML = '';
+    /* Update header position when banner is hidden */
+    updateHeaderPosition();
     return;
   }
   
@@ -58,9 +68,23 @@ function renderAnnouncements() {
       <strong class="announcement-title">${escHtml(ann.title)}</strong>
       <span class="announcement-text">${escHtml(ann.content)}</span>
     </div>
-    <button class="announcement-close" onclick="this.parentElement.hidden=true">✕</button>
+    <button class="announcement-close" id="announcementCloseBtn">✕</button>
   `;
+  
+  /* Add close button event listener */
+  const closeBtn = document.getElementById('announcementCloseBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      dom.announcementsBanner.hidden = true;
+      updateHeaderPosition();
+    });
+  }
   dom.announcementsBanner.hidden = false;
+  
+  /* Update header position when banner is shown - use setTimeout to ensure DOM is updated */
+  setTimeout(() => {
+    updateHeaderPosition();
+  }, 0);
   
   /* Show non-persistent announcements as toasts */
   const nonPersistent = activeAnnouncements.filter(ann => !ann.is_persistent);
@@ -106,10 +130,57 @@ export async function initAnnouncementsListener() {
   channel.subscribe();
 }
 
+/* ── Aggiorna posizione header quando banner appare/scompare ─── */
+export function updateHeaderPosition() {
+  const banner = dom.announcementsBanner;
+  const header = document.querySelector('.app-header');
+  
+  if (!banner || !header) return;
+  
+  if (banner.hidden) {
+    header.style.marginTop = '0';
+    document.documentElement.style.setProperty('--banner-height', '0px');
+  } else {
+    const bannerHeight = banner.offsetHeight;
+    header.style.marginTop = `${bannerHeight}px`;
+    document.documentElement.style.setProperty('--banner-height', `${bannerHeight}px`);
+  }
+}
+
+/* ── Controlla periodicamente se gli annunci sono scaduti ────── */
+function startExpirationChecker() {
+  /* Clear existing interval */
+  if (expirationCheckInterval) {
+    clearInterval(expirationCheckInterval);
+  }
+  
+  /* Check every 30 seconds for expired announcements */
+  expirationCheckInterval = setInterval(() => {
+    const now = new Date();
+    const hadExpired = activeAnnouncements.some(ann => 
+      ann.expires_at && new Date(ann.expires_at) <= now
+    );
+    
+    if (hadExpired) {
+      console.log('[Announcements] Checking for expired announcements...');
+      /* Filter out expired */
+      activeAnnouncements = activeAnnouncements.filter(ann => 
+        !ann.expires_at || new Date(ann.expires_at) > now
+      );
+      /* Re-render to hide expired announcements */
+      renderAnnouncements();
+    }
+  }, 30000); /* Check every 30 seconds */
+}
+
 /* ── Cleanup ─────────────────────────────────────────────────── */
 export function cleanupAnnouncements() {
   if (announcementsListener) {
     announcementsListener.unsubscribe();
     announcementsListener = null;
+  }
+  if (expirationCheckInterval) {
+    clearInterval(expirationCheckInterval);
+    expirationCheckInterval = null;
   }
 }
