@@ -47,7 +47,10 @@ export async function loginUser(nick, password) {
   if (data.session?.access_token) {
     try {
       /* Crea un ID univoco per questa sessione (hash del token) */
-      const sessionId = await createSessionId(data.session.access_token);
+      const sessionId = createSessionId(data.session.access_token);
+      
+      /* Salva l'ID della sessione nel localStorage per riutilizzarlo */
+      saveSessionId(sessionId);
       
       /* Registra questa sessione come attiva nel database */
       const { error: sessionError } = await state.supa.rpc('upsert_active_session', {
@@ -150,7 +153,19 @@ export async function tryRestoreSession() {
         /* CRITICO: Verifica che questa sia la sessione attiva */
         if (data.session?.access_token) {
           try {
-            const sessionId = await createSessionId(data.session.access_token);
+            const sessionId = createSessionId(data.session.access_token);
+            const savedSessionId = getSavedSessionId();
+            
+            /* Se l'ID salvato non corrisponde, questa è una vecchia sessione */
+            if (savedSessionId && savedSessionId !== sessionId) {
+              console.warn('[Auth] Restored session ID does not match saved session - disconnecting');
+              const { showDisconnectedOverlay } = await import('./supabase-client.js');
+              showDisconnectedOverlay();
+              clearAuthSession();
+              return null;
+            }
+            
+            /* Verifica anche nel database */
             const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
               p_user_id: data.user.id,
               p_session_id: sessionId
@@ -165,6 +180,11 @@ export async function tryRestoreSession() {
               showDisconnectedOverlay();
               clearAuthSession();
               return null;
+            }
+            
+            /* Salva l'ID della sessione se non è già salvato */
+            if (!savedSessionId) {
+              saveSessionId(sessionId);
             }
           } catch (err) {
             console.warn('[Auth] Error verifying restored session:', err);

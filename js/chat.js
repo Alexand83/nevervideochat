@@ -15,9 +15,15 @@ let _broadcast       = null;
 let _handleGameCommand = null;
 
 /* ── Crea un ID univoco per la sessione (hash del token) ── */
-async function createSessionId(accessToken) {
-  /* Usa una parte del token come ID univoco (primi 32 caratteri) */
-  return accessToken.substring(0, 32) + '_' + Date.now();
+function createSessionId(accessToken) {
+  /* Usa una parte del token come ID univoco (primi 40 caratteri) */
+  /* NON includere Date.now() perché deve essere lo stesso per tutta la durata della sessione */
+  return accessToken.substring(0, 40);
+}
+
+/* ── Ottieni l'ID della sessione salvato ── */
+function getSavedSessionId() {
+  return localStorage.getItem('nvc_session_id');
 }
 export function setChatDeps(openCtx, uploadStorage, supaReady, renderTabs, broadcast, handleGameCmd) {
   _openContextMenu = openCtx;
@@ -224,7 +230,18 @@ export async function sendMessage() {
     try {
       const session = await state.supa.auth.getSession();
       if (session?.data?.session?.access_token) {
-        const sessionId = await createSessionId(session.data.session.access_token);
+        const sessionId = createSessionId(session.data.session.access_token);
+        const savedSessionId = getSavedSessionId();
+        
+        /* Controllo rapido: se l'ID salvato non corrisponde, questa è una vecchia sessione */
+        if (savedSessionId && savedSessionId !== sessionId) {
+          console.warn('[Chat] Session ID mismatch - this is not the active session - disconnecting');
+          const { showDisconnectedOverlay } = await import('./supabase-client.js');
+          showDisconnectedOverlay();
+          return;
+        }
+        
+        /* Verifica anche nel database per sicurezza */
         const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
           p_user_id: state.currentUser.id,
           p_session_id: sessionId
