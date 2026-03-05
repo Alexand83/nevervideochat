@@ -538,11 +538,16 @@ export async function tryRestoreSession() {
       }
     }
   }
+  /* CRITICO: Non permettere a utenti registrati di entrare senza sessione valida */
+  /* Se non c'è sessione, devono fare login */
   try {
     const cached = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
     if (cached?.id && cached?.name && cached.isGuest === false) {
-      showToast('⚠️ Session offline — using cached profile.');
-      return { ...cached, online: true, hasCamera: false };
+      /* Utente registrato senza sessione - rimuovi cache e richiedi login */
+      console.log('[Auth] Registered user without session - clearing cache and requiring login');
+      localStorage.removeItem('nvc_identity');
+      /* NON restituire l'utente - deve fare login */
+      return null;
     }
   } catch {}
   return null;
