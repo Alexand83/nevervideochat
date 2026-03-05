@@ -97,6 +97,8 @@ export function openRoleEditModal(role = null) {
     document.getElementById('permCanViewLogs').checked = perms.can_view_logs === true;
     document.getElementById('permCanManageAnnouncements').checked = perms.can_manage_announcements === true;
     document.getElementById('permCanViewStatistics').checked = perms.can_view_statistics === true;
+    document.getElementById('permCanChangeAvatar').checked = perms.can_change_avatar !== false;
+    document.getElementById('permCanChangeNickname').checked = perms.can_change_nickname !== false;
   } else {
     /* Reset form per nuovo ruolo */
     dom.roleEditForm.reset();
@@ -106,6 +108,8 @@ export function openRoleEditModal(role = null) {
       idField.removeAttribute('value'); /* Forza il reset */
     }
     document.getElementById('permCanPostMessages').checked = true;
+    document.getElementById('permCanChangeAvatar').checked = true;
+    document.getElementById('permCanChangeNickname').checked = true;
     console.log('[Admin] Form reset for new role. ID field value:', idField?.value);
   }
   
@@ -168,6 +172,8 @@ export async function saveRole() {
       can_view_logs: document.getElementById('permCanViewLogs').checked,
       can_manage_announcements: document.getElementById('permCanManageAnnouncements').checked,
       can_view_statistics: document.getElementById('permCanViewStatistics').checked,
+      can_change_avatar: document.getElementById('permCanChangeAvatar').checked,
+      can_change_nickname: document.getElementById('permCanChangeNickname').checked,
     };
     
     const { checkAdminAccess } = await import('./admin.js');
