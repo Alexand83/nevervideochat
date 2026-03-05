@@ -130,7 +130,18 @@ export async function loginUser(nick, password) {
   const { data, error } = await state.supa.auth.signInWithPassword({ email: nickToEmail(nick), password });
   if (error) throw error;
   
-  /* IMPORTANTE: Registra questa come sessione attiva nel database PRIMA di tutto */
+  /* IMPORTANTE: Imposta la sessione PRIMA di tutto, così auth.uid() è disponibile per RLS */
+  if (data.session) {
+    persistAuthSession(data.session);
+    /* Forza il refresh della sessione nel client Supabase */
+    await state.supa.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token
+    });
+    console.log('[Auth] Session set in Supabase client - auth.uid() should be available now');
+  }
+  
+  /* IMPORTANTE: Registra questa come sessione attiva nel database DOPO aver impostato la sessione */
   /* Questo invalida immediatamente tutte le altre sessioni */
   if (data.session?.access_token) {
     try {
