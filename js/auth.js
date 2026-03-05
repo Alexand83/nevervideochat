@@ -112,6 +112,11 @@ export async function tryRestoreSession() {
       });
       if (!error && data?.user) {
         if (data.session) persistAuthSession(data.session);
+        
+        /* Marca la sessione come nuova per evitare che checkSessionInvalid la disconnetta */
+        const { markSessionAsNew } = await import('./supabase-client.js');
+        markSessionAsNew();
+        
         const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
         const cachedId    = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
         const displayName = profile?.display_name || profile?.username || cachedId?.name || `User_${data.user.id.slice(0, 6)}`;
