@@ -53,10 +53,10 @@ export function initAdminPanel() {
     dom.adminModal.hidden = true;
   });
 
-  /* Tab switching */
-  document.querySelectorAll('.admin-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const tabName = tab.dataset.tab;
+  /* Tab switching - sidebar items */
+  document.querySelectorAll('.admin-sidebar-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const tabName = item.dataset.tab;
       switchAdminTab(tabName);
     });
   });
@@ -184,9 +184,12 @@ export function initAdminPanel() {
 }
 
 async function switchAdminTab(tabName) {
-  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  /* Update sidebar items */
+  document.querySelectorAll('.admin-sidebar-item').forEach(item => item.classList.remove('active'));
+  document.querySelector(`.admin-sidebar-item[data-tab="${tabName}"]`)?.classList.add('active');
+  
+  /* Update tab content */
   document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
-  document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
   const tabId = tabName.charAt(0).toUpperCase() + tabName.slice(1);
   document.getElementById(`adminTab${tabId}`)?.classList.add('active');
   
