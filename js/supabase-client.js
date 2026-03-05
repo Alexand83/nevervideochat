@@ -258,6 +258,19 @@ export async function connectSupabase() {
   try {
     /* ── Global signal channel (WebRTC, PM, cam requests — user-to-user) ── */
     state.signalCh = state.supa.channel('broadcast:signals-main');
+    
+    /* CRITICO: Se c'è un pending session invalidation broadcast, invialo ora che il canale è pronto */
+    if (state.pendingSessionInvalidation) {
+      try {
+        const { broadcastAll } = await import('./broadcast.js');
+        broadcastAll('session-invalidated', state.pendingSessionInvalidation);
+        console.log('[Supabase] 📢 Sent pending session-invalidated broadcast');
+        delete state.pendingSessionInvalidation;
+      } catch (err) {
+        console.error('[Supabase] Error sending pending session-invalidated broadcast:', err);
+      }
+    }
+    
     state.signalCh
       .on('broadcast', { event: 'typing'       }, ({ payload }) => handleTyping(payload))
       .on('broadcast', { event: 'pm'           }, ({ payload }) => handleIncomingPM(payload))

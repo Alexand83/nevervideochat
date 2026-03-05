@@ -341,30 +341,30 @@ export async function tryRestoreSession() {
           const sessionId = createSessionId(data.session.access_token);
           
           try {
-            /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
-            const { data: activeSession, error: checkError } = await state.supa
-              .from('active_sessions')
-              .select('session_id')
-              .eq('user_id', data.user.id)
-              .single();
+            /* CRITICO: Verifica usando funzione SQL - più sicuro */
+            const { data: isValid, error: checkError } = await state.supa
+              .rpc('is_session_valid', {
+                p_user_id: data.user.id,
+                p_session_id: sessionId
+              });
             
             if (checkError) {
-              console.error('[Auth] Error reading from database on restore:', checkError);
-              /* Se la tabella non esiste, permettere il restore (sistema non configurato) */
-              console.warn('[Auth] Database check failed - allowing restore (system might not be configured)');
-            } else if (activeSession) {
-              /* Se la sessione nel database non corrisponde, questa è una vecchia sessione da un altro browser */
-              if (activeSession.session_id !== sessionId) {
-                console.warn('[Auth] Restored session is NOT the active one - this is an OLD session from another browser - disconnecting');
-                const { showDisconnectedOverlay } = await import('./supabase-client.js');
-                showDisconnectedOverlay();
-                clearAuthSession();
-                return null;
+              console.error('[Auth] Error calling is_session_valid RPC on restore:', checkError);
+              /* Se la funzione non esiste, permettere il restore (sistema non configurato) */
+              if (checkError.code === '42883' || checkError.message?.includes('function') || checkError.message?.includes('does not exist')) {
+                console.warn('[Auth] SQL function does not exist - allowing restore (system not configured)');
+              } else {
+                console.warn('[Auth] Database check failed - allowing restore (might be first login)');
               }
-              console.log('[Auth] ✅ Restored session matches database - this is the active session');
+            } else if (isValid === false) {
+              /* La sessione non è valida - è una vecchia sessione da un altro browser */
+              console.warn('[Auth] Restored session is NOT valid - this is an OLD session from another browser - disconnecting');
+              const { showDisconnectedOverlay } = await import('./supabase-client.js');
+              showDisconnectedOverlay();
+              clearAuthSession();
+              return null;
             } else {
-              /* Nessuna sessione nel database - potrebbe essere il primo login, permettere */
-              console.log('[Auth] No active session in database (first login?) - allowing restore');
+              console.log('[Auth] ✅ Restored session is valid - this is the active session');
             }
           } catch (err) {
             console.error('[Auth] Error checking session on restore:', err);
