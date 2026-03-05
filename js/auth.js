@@ -43,38 +43,43 @@ export async function loginUser(nick, password) {
   if (error) throw error;
   
   /* IMPORTANTE: Disconnettere tutte le altre sessioni per permettere solo 1 sessione attiva */
-  /* Strategia: Prima facciamo signOut globale, poi ripristiniamo la sessione corrente */
+  /* Usa scope: 'others' per disconnettere solo le altre sessioni, non quella corrente - PIÙ ISTANTANEO! */
   try {
-    /* Salva la sessione corrente prima di disconnettere */
-    const currentAccessToken = data.session?.access_token;
-    const currentRefreshToken = data.session?.refresh_token;
+    /* Marca questa come nuova sessione PRIMA di disconnettere le altre */
+    const { markSessionAsNew } = await import('./supabase-client.js');
+    markSessionAsNew();
     
-    if (currentAccessToken && currentRefreshToken) {
-      /* Disconnettere tutte le sessioni (inclusa quella corrente) */
-      await state.supa.auth.signOut({ scope: 'global' });
+    /* Prova prima con scope: 'others' (più istantaneo - disconnette solo le altre) */
+    try {
+      await state.supa.auth.signOut({ scope: 'others' });
+      console.log('[Auth] Disconnected all other sessions using scope: others (instant)');
+    } catch (othersErr) {
+      /* Se scope: 'others' non è supportato, usa il metodo fallback */
+      console.warn('[Auth] scope: others not supported, using fallback method');
+      const currentAccessToken = data.session?.access_token;
+      const currentRefreshToken = data.session?.refresh_token;
       
-      /* Ripristina immediatamente la sessione corrente */
-      await state.supa.auth.setSession({
-        access_token: currentAccessToken,
-        refresh_token: currentRefreshToken,
-      });
-      
-      /* Marca questa come nuova sessione per evitare che checkSessionInvalid la disconnetta */
-      const { markSessionAsNew } = await import('./supabase-client.js');
-      markSessionAsNew();
-      
-      console.log('[Auth] Disconnected all other sessions, kept current session active');
+      if (currentAccessToken && currentRefreshToken) {
+        /* Fallback: disconnettere tutte le sessioni e ripristinare quella corrente */
+        await state.supa.auth.signOut({ scope: 'global' });
+        await state.supa.auth.setSession({
+          access_token: currentAccessToken,
+          refresh_token: currentRefreshToken,
+        });
+        markSessionAsNew(); /* Marca di nuovo dopo il restore */
+        console.log('[Auth] Disconnected all other sessions using fallback method');
+      }
     }
   } catch (signOutErr) {
-    /* Se fallisce, continua comunque - la sessione corrente è già valida */
+    /* Se fallisce completamente, continua comunque - la sessione corrente è già valida */
     console.warn('[Auth] Could not disconnect old sessions (this is OK if first login):', signOutErr);
   }
   
   if (data.session) persistAuthSession(data.session);
   
   /* Marca la sessione come nuova anche dopo il persist */
-  const { markSessionAsNew } = await import('./supabase-client.js');
-  markSessionAsNew();
+  const { markSessionAsNew: markNew } = await import('./supabase-client.js');
+  markNew();
   const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
   const displayName = profile?.display_name || profile?.username || nick;
   return { 
