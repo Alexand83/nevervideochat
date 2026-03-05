@@ -132,13 +132,29 @@ export async function loginUser(nick, password) {
   
   /* IMPORTANTE: Imposta la sessione PRIMA di tutto, così auth.uid() è disponibile per RLS */
   if (data.session) {
+    /* Salva manualmente in localStorage (backup) */
     persistAuthSession(data.session);
-    /* Forza il refresh della sessione nel client Supabase */
-    await state.supa.auth.setSession({
+    
+    /* IMPORTANTE: Imposta la sessione nel client Supabase PRIMA di tutto */
+    /* Questo rende auth.uid() disponibile per RLS e getSession() */
+    const { error: setSessionError } = await state.supa.auth.setSession({
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token
     });
-    console.log('[Auth] Session set in Supabase client - auth.uid() should be available now');
+    
+    if (setSessionError) {
+      console.error('[Auth] Error setting session:', setSessionError);
+    } else {
+      console.log('[Auth] ✅ Session set in Supabase client - auth.uid() should be available now');
+      
+      /* Verifica che la sessione sia effettivamente disponibile */
+      const { data: verifySession } = await state.supa.auth.getSession();
+      if (verifySession?.session) {
+        console.log('[Auth] ✅ Session verified - getSession() works');
+      } else {
+        console.warn('[Auth] ⚠️ Session set but getSession() returns null - this is a problem!');
+      }
+    }
   }
   
   /* IMPORTANTE: Registra questa come sessione attiva nel database DOPO aver impostato la sessione */

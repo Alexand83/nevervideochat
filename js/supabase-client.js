@@ -173,12 +173,30 @@ function startSessionCheckInterval() {
     }
     
     try {
-      const session = await state.supa.auth.getSession();
+      /* Prova prima con getSession() */
+      let session = await state.supa.auth.getSession();
+      
+      /* Se getSession() non trova la sessione, prova a recuperarla da localStorage */
+      if (!session?.data?.session?.access_token) {
+        const stored = JSON.parse(localStorage.getItem('nvc_auth_session') || 'null');
+        if (stored?.access_token) {
+          console.log('[Session Check] getSession() returned null, trying to restore from localStorage...');
+          const { error: restoreError } = await state.supa.auth.setSession({
+            access_token: stored.access_token,
+            refresh_token: stored.refresh_token
+          });
+          if (!restoreError) {
+            session = await state.supa.auth.getSession();
+            console.log('[Session Check] Session restored from localStorage');
+          }
+        }
+      }
+      
       if (!session?.data?.session?.access_token) {
         /* Se non c'è sessione ma l'utente è registrato, potrebbe essere un problema */
         /* Ma non loggare come warning se è un guest */
         if (!state.currentUser.isGuest) {
-          console.warn('[Session Check] No active session found for registered user');
+          console.warn('[Session Check] No active session found for registered user (even after restore attempt)');
         }
         return;
       }

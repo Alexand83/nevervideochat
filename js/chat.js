@@ -229,7 +229,25 @@ export async function sendMessage() {
   /* Solo per utenti registrati (non guest) */
   if (state.supa && state.currentUser.id && !state.currentUser.isGuest) {
     try {
-      const session = await state.supa.auth.getSession();
+      /* Prova prima con getSession() */
+      let session = await state.supa.auth.getSession();
+      
+      /* Se getSession() non trova la sessione, prova a recuperarla da localStorage */
+      if (!session?.data?.session?.access_token) {
+        const stored = JSON.parse(localStorage.getItem('nvc_auth_session') || 'null');
+        if (stored?.access_token) {
+          console.log('[Chat] getSession() returned null, trying to restore from localStorage...');
+          const { error: restoreError } = await state.supa.auth.setSession({
+            access_token: stored.access_token,
+            refresh_token: stored.refresh_token
+          });
+          if (!restoreError) {
+            session = await state.supa.auth.getSession();
+            console.log('[Chat] Session restored from localStorage');
+          }
+        }
+      }
+      
       if (!session?.data?.session?.access_token) {
         console.warn('[Chat] No session found - cannot verify. Blocking message.');
         showToast('⚠️ Session expired. Please refresh the page.');
