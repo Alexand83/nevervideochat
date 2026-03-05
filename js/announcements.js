@@ -62,11 +62,21 @@ function renderAnnouncements() {
   const ann = persistent[0];
   const typeClass = `announcement-${ann.type || 'info'}`;
   
+  const icon = {
+    info: 'ℹ️',
+    success: '✅',
+    warning: '⚠️',
+    error: '❌',
+  }[ann.type || 'info'] || 'ℹ️';
+  
   dom.announcementsBanner.className = `announcements-banner ${typeClass}`;
   dom.announcementsBanner.innerHTML = `
     <div class="announcement-content">
-      <strong class="announcement-title">${escHtml(ann.title)}</strong>
-      <span class="announcement-text">${escHtml(ann.content)}</span>
+      <span class="announcement-icon">${icon}</span>
+      <div class="announcement-text-wrapper">
+        <strong class="announcement-title">${escHtml(ann.title)}</strong>
+        <span class="announcement-text">${escHtml(ann.content)}</span>
+      </div>
     </div>
     <button class="announcement-close" id="announcementCloseBtn">✕</button>
   `;
@@ -134,15 +144,18 @@ export async function initAnnouncementsListener() {
 export function updateHeaderPosition() {
   const banner = dom.announcementsBanner;
   const header = document.querySelector('.app-header');
+  const appMain = document.querySelector('.app-main');
   
   if (!banner || !header) return;
   
   if (banner.hidden) {
     header.style.marginTop = '0';
+    if (appMain) appMain.style.marginTop = '0';
     document.documentElement.style.setProperty('--banner-height', '0px');
   } else {
     const bannerHeight = banner.offsetHeight;
     header.style.marginTop = `${bannerHeight}px`;
+    if (appMain) appMain.style.marginTop = `${bannerHeight}px`;
     document.documentElement.style.setProperty('--banner-height', `${bannerHeight}px`);
   }
 }
