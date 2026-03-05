@@ -314,21 +314,38 @@ export async function tryRestoreSession() {
               return null;
             }
             
-            /* Verifica anche nel database */
-            const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
-              p_user_id: data.user.id,
-              p_session_id: sessionId
-            });
-            
-            if (checkError) {
-              console.warn('[Auth] Error checking session validity on restore:', checkError);
-            } else if (isValid === false) {
-              /* Questa NON è la sessione attiva - disconnettere immediatamente */
-              console.warn('[Auth] Restored session is not the active one - disconnecting');
-              const { showDisconnectedOverlay } = await import('./supabase-client.js');
-              showDisconnectedOverlay();
-              clearAuthSession();
-              return null;
+            /* APPROCCIO SEMPLICE: Controlla direttamente la tabella active_sessions */
+            try {
+              const { data: activeSession, error: checkError } = await state.supa
+                .from('active_sessions')
+                .select('session_id')
+                .eq('user_id', data.user.id)
+                .single();
+              
+              if (checkError) {
+                /* Se la tabella non esiste, usa localStorage come fallback */
+                const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
+                if (activeSessionData && activeSessionData.userId === data.user.id) {
+                  if (activeSessionData.sessionId !== sessionId) {
+                    console.warn('[Auth] Restored session ID mismatch (localStorage) - disconnecting');
+                    const { showDisconnectedOverlay } = await import('./supabase-client.js');
+                    showDisconnectedOverlay();
+                    clearAuthSession();
+                    return null;
+                  }
+                }
+              } else if (activeSession) {
+                /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
+                if (activeSession.session_id !== sessionId) {
+                  console.warn('[Auth] Restored session is not the active one (database) - disconnecting');
+                  const { showDisconnectedOverlay } = await import('./supabase-client.js');
+                  showDisconnectedOverlay();
+                  clearAuthSession();
+                  return null;
+                }
+              }
+            } catch (err) {
+              console.warn('[Auth] Error checking session on restore:', err);
             }
             
             /* Salva l'ID della sessione se non è già salvato */
