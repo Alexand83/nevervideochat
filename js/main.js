@@ -179,11 +179,21 @@ export async function finishInit() {
   /* Reset games panel width CSS variable after rooms are loaded */
   document.documentElement.style.setProperty('--games-panel-width', '0px');
 
+  /* CRITICO: Connetti a Supabase PRIMA di renderizzare utenti e messaggi */
+  /* Questo assicura che i dati siano caricati prima di mostrare l'UI */
+  try {
+    await connectSupabase();
+    console.log('[Main] ✅ Supabase connected - UI ready');
+  } catch (err) {
+    console.error('[NVC] Error connecting to Supabase:', err);
+    showToast('⚠️ Error connecting to server. Some features may not work.');
+  }
+  
+  /* Ora che Supabase è connesso, renderizza utenti e inizializza UI */
   renderUsers();
   updateHeaderUser();
   updateAdminButton(); /* Check admin access and show/hide button */
   initGames(); /* Initialize games system */
-  connectSupabase().catch(err => console.error('[NVC]', err));
   
   /* Su mobile, assicura che il pannello utenti parta chiuso nelle stanze normali */
   document.documentElement.style.setProperty('--users-panel-width', '0px');
