@@ -159,10 +159,16 @@ export function initAdminPanel() {
   /* Users filters */
   document.getElementById('adminUsersSearch')?.addEventListener('input', (e) => {
     clearTimeout(window.usersSearchTimeout);
-    window.usersSearchTimeout = setTimeout(filterAndRenderUsers, 300);
+    window.usersSearchTimeout = setTimeout(async () => {
+      await filterAndRenderUsers();
+    }, 300);
   });
-  document.getElementById('adminUsersRoleFilter')?.addEventListener('change', filterAndRenderUsers);
-  document.getElementById('adminUsersStatusFilter')?.addEventListener('change', filterAndRenderUsers);
+  document.getElementById('adminUsersRoleFilter')?.addEventListener('change', async () => {
+    await filterAndRenderUsers();
+  });
+  document.getElementById('adminUsersStatusFilter')?.addEventListener('change', async () => {
+    await filterAndRenderUsers();
+  });
 
   /* Room edit modal */
   dom.roomEditModalClose?.addEventListener('click', () => {
@@ -459,14 +465,14 @@ async function loadUsers() {
     });
     
     /* Apply filters and render */
-    filterAndRenderUsers();
+    await filterAndRenderUsers();
   } catch (err) {
     console.error('[Admin] Load users error:', err);
     showToast('⚠️ Failed to load users.');
   }
 }
 
-function filterAndRenderUsers() {
+async function filterAndRenderUsers() {
   if (!dom.adminUsersList) return;
   
   const searchTerm = (document.getElementById('adminUsersSearch')?.value || '').toLowerCase().trim();
