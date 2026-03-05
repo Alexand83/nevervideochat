@@ -1061,6 +1061,17 @@
   </div>
 </div>
 
+<!-- Disconnected Overlay -->
+<div class="nvc-modal-backdrop disconnected-overlay" id="disconnectedOverlay" role="dialog" aria-modal="true" hidden>
+  <div class="disconnected-content">
+    <div class="disconnected-icon">🔌</div>
+    <h2>Sei stato disconnesso</h2>
+    <p>Un'altra sessione si è connessa con il tuo account. Solo una sessione è permessa alla volta.</p>
+    <p class="disconnected-hint">Ricarica la pagina per accedere di nuovo.</p>
+    <button class="auth-btn-primary" onclick="location.reload()">Ricarica Pagina</button>
+  </div>
+</div>
+
 <!-- Mute User Modal -->
 <div class="nvc-modal-backdrop" id="muteModal" role="dialog" aria-modal="true" hidden>
   <div class="nvc-modal action-modal">

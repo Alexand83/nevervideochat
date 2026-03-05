@@ -19,7 +19,29 @@ export function initSupabaseClient() {
   state.supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
+  
+  /* Listener per rilevare quando la sessione viene invalidata (disconnessione da altra sessione) */
+  state.supa.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+      console.warn('[Auth] Session invalidated - user was disconnected');
+      showDisconnectedOverlay();
+    }
+  });
+  
   return true;
+}
+
+/* ── Mostra overlay di disconnessione ── */
+export function showDisconnectedOverlay() {
+  const overlay = document.getElementById('disconnectedOverlay');
+  if (overlay) {
+    overlay.hidden = false;
+    /* Nascondi tutto il resto */
+    const appMain = document.querySelector('.app-main');
+    const appHeader = document.querySelector('.app-header');
+    if (appMain) appMain.style.display = 'none';
+    if (appHeader) appHeader.style.display = 'none';
+  }
 }
 
 /* ── Load and subscribe to a specific room ── */
@@ -303,6 +325,34 @@ export async function connectSupabase() {
     console.log('[NVC] Supabase connected.');
   } catch (err) {
     console.error('[NVC] Connection error:', err);
-    showToast('⚠️ Could not connect — check your credentials.');
+    /* Se è un errore 403, significa che la sessione è stata invalidata */
+    if (err?.status === 403 || err?.message?.includes('403') || err?.code === 'PGRST301') {
+      showDisconnectedOverlay();
+    } else {
+      showToast('⚠️ Could not connect — check your credentials.');
+    }
+  }
+}
+
+/* ── Controlla se la sessione è ancora valida ── */
+async function checkSessionInvalid() {
+  if (!state.supa || !state.currentUser) return false;
+  
+  try {
+    const { data: { user }, error } = await state.supa.auth.getUser();
+    if (error || !user) {
+      console.warn('[Auth] Session invalid - user was disconnected');
+      showDisconnectedOverlay();
+      return true;
+    }
+    return false;
+  } catch (err) {
+    /* Se è un errore 403, la sessione è stata invalidata */
+    if (err?.status === 403 || err?.message?.includes('403')) {
+      console.warn('[Auth] Session invalid (403) - user was disconnected');
+      showDisconnectedOverlay();
+      return true;
+    }
+    return false;
   }
 }

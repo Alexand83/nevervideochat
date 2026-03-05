@@ -121,8 +121,23 @@ export async function tryRestoreSession() {
         localStorage.setItem('nvc_identity', JSON.stringify(user));
         return user;
       }
+      /* Se l'errore è 403, significa che la sessione è stata invalidata da un'altra sessione */
+      if (error?.status === 403 || error?.message?.includes('403')) {
+        console.warn('[Auth] Session invalidated (403) - user was disconnected from another session');
+        const { showDisconnectedOverlay } = await import('./supabase-client.js');
+        showDisconnectedOverlay();
+        clearAuthSession();
+        return null;
+      }
       clearAuthSession();
-    } catch (netErr) { console.warn('[Auth] Session restore error:', netErr); }
+    } catch (netErr) { 
+      console.warn('[Auth] Session restore error:', netErr);
+      /* Se è un errore 403, mostra overlay di disconnessione */
+      if (netErr?.status === 403 || netErr?.message?.includes('403')) {
+        const { showDisconnectedOverlay } = await import('./supabase-client.js');
+        showDisconnectedOverlay();
+      }
+    }
   }
   try {
     const cached = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
