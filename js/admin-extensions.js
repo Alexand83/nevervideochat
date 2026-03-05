@@ -214,31 +214,54 @@ export async function deleteRole(roleId) {
 
 /* ── Assegna ruolo a utente ──────────────────────────────────── */
 export async function assignRoleToUser(userId, roleId) {
-  if (!state.supa) return;
+  if (!state.supa) {
+    console.error('[Admin] Supabase not available');
+    return false;
+  }
   
   try {
     const { checkAdminAccess } = await import('./admin.js');
     const hasAccess = await checkAdminAccess();
-    if (!hasAccess) {
-      showToast('🚫 Admin access required.');
-      return;
+    if (!hasAccess && !hasPermission('can_manage_users')) {
+      showToast('🚫 You do not have permission to assign roles.');
+      return false;
     }
     
-    const { error } = await state.supa
+    /* If roleId is empty string or null, set to null */
+    const finalRoleId = roleId && roleId.trim() !== '' ? roleId.trim() : null;
+    
+    console.log('[Admin] Assigning role:', { userId, roleId, finalRoleId });
+    
+    const { error, data } = await state.supa
       .from('profiles')
-      .update({ custom_role_id: roleId || null })
-      .eq('id', String(userId));
+      .update({ custom_role_id: finalRoleId })
+      .eq('id', String(userId))
+      .select()
+      .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('[Admin] Assign role DB error:', error);
+      throw error;
+    }
     
-    const user = state.users.find(u => u.id === userId);
-    await logAdminAction('assign_role', 'user', userId, user?.name || userId, { role_id: roleId });
+    console.log('[Admin] Role assigned successfully:', data);
+    
+    /* Find user in state */
+    const user = state.users?.[userId] || Object.values(state.users || {}).find(u => u.id === userId);
+    await logAdminAction('assign_role', 'user', userId, user?.name || userId, { role_id: finalRoleId });
     
     showToast('✅ Role assigned!');
-    await loadUserPermissions(); /* Refresh permissions if current user */
+    
+    /* Refresh permissions if current user */
+    if (String(userId) === String(state.currentUser?.id)) {
+      await loadUserPermissions();
+    }
+    
+    return true;
   } catch (err) {
     console.error('[Admin] Assign role error:', err);
-    showToast('⚠️ Failed to assign role.');
+    showToast('⚠️ Failed to assign role: ' + (err.message || 'Unknown error'));
+    return false;
   }
 }
 

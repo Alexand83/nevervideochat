@@ -22,7 +22,14 @@ export async function registerUser(nick, password) {
   if (error) throw error;
   const userId = data.user.id;
   await state.supa.from('profiles').upsert(
-    { id: userId, username: nick, display_name: nick, is_guest: false },
+    { 
+      id: userId, 
+      username: nick, 
+      display_name: nick, 
+      is_guest: false,
+      role: 'user',  /* Default role for new users */
+      custom_role_id: 'user'  /* Assign default "user" custom role */
+    },
     { onConflict: 'id' }
   );
   if (data.session) persistAuthSession(data.session);

@@ -432,8 +432,13 @@ async function loadUsers() {
         await populateRoleSelect(roleSelect, profile?.custom_role_id);
         roleSelect.addEventListener('change', async (e) => {
           const { assignRoleToUser } = await import('./admin-extensions.js');
-          await assignRoleToUser(user.id, e.target.value || null);
-          loadUsers(); /* Reload to show updated role */
+          const success = await assignRoleToUser(user.id, e.target.value || null);
+          if (success) {
+            /* Wait a bit for DB to update, then reload */
+            setTimeout(() => {
+              loadUsers(); /* Reload to show updated role */
+            }, 300);
+          }
         });
       }
       
