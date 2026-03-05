@@ -438,7 +438,7 @@ async function loadUsers() {
       }
       
       dom.adminUsersList.appendChild(item);
-    });
+    }
   } catch (err) {
     console.error('[Admin] Load users error:', err);
     showToast('⚠️ Failed to load users.');
