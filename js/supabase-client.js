@@ -197,38 +197,42 @@ function startSessionCheckInterval() {
         return;
       }
       
-      /* Verifica SEMPLICE: controlla localStorage (funziona sempre) */
-      const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
-      if (activeSessionData && activeSessionData.userId === state.currentUser.id) {
-        if (activeSessionData.sessionId !== sessionId) {
-          console.warn('[Session Check] Session ID mismatch - disconnecting old session');
-          showDisconnectedOverlay();
-          if (sessionCheckInterval) {
-            clearInterval(sessionCheckInterval);
-            sessionCheckInterval = null;
-          }
-          return;
-        }
-      }
-      
-      /* Verifica anche nel database (opzionale, se le funzioni esistono) */
+      /* APPROCCIO SEMPLICE: Controlla direttamente la tabella active_sessions */
       try {
-        const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
-          p_user_id: state.currentUser.id,
-          p_session_id: sessionId
-        });
+        const { data: activeSession, error: checkError } = await state.supa
+          .from('active_sessions')
+          .select('session_id')
+          .eq('user_id', state.currentUser.id)
+          .single();
         
-        if (!checkError && isValid === false) {
-          console.warn('[Session Check] Database says session is not valid - disconnecting');
-          showDisconnectedOverlay();
-          if (sessionCheckInterval) {
-            clearInterval(sessionCheckInterval);
-            sessionCheckInterval = null;
+        if (checkError) {
+          /* Se la tabella non esiste, usa localStorage come fallback */
+          const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
+          if (activeSessionData && activeSessionData.userId === state.currentUser.id) {
+            if (activeSessionData.sessionId !== sessionId) {
+              console.warn('[Session Check] Session ID mismatch (localStorage) - disconnecting');
+              showDisconnectedOverlay();
+              if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+                sessionCheckInterval = null;
+              }
+              return;
+            }
+          }
+        } else if (activeSession) {
+          /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
+          if (activeSession.session_id !== sessionId) {
+            console.warn('[Session Check] Session ID mismatch (database) - disconnecting old session');
+            showDisconnectedOverlay();
+            if (sessionCheckInterval) {
+              clearInterval(sessionCheckInterval);
+              sessionCheckInterval = null;
+            }
+            return;
           }
         }
-        /* Ignora errori database - usa solo localStorage */
-      } catch (dbErr) {
-        /* Ignora */
+      } catch (err) {
+        /* Ignora errori */
       }
     } catch (err) {
       console.warn('[Session Check] Error in periodic check:', err);

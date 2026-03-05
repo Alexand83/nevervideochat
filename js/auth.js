@@ -135,36 +135,40 @@ export async function loginUser(nick, password) {
       saveSessionId(sessionId);
       console.log('[Auth] Saved session ID to localStorage');
       
-      /* Registra questa sessione come attiva nel database */
-      /* Usa un approccio semplice: salva nel localStorage con timestamp */
-      /* Questo funziona anche senza le funzioni SQL */
-      const sessionData = {
-        userId: data.user.id,
-        sessionId: sessionId,
-        timestamp: Date.now()
-      };
-      localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
-      console.log('[Auth] ✅ Saved active session to localStorage:', sessionData);
-      
-      /* Prova anche a registrare nel database (se le funzioni esistono) */
+      /* APPROCCIO SEMPLICE: Salva direttamente nella tabella active_sessions (senza funzioni SQL) */
+      /* Questo funziona sempre, anche se le funzioni SQL non esistono */
       try {
-        const { error: sessionError } = await state.supa.rpc('upsert_active_session', {
-          p_user_id: data.user.id,
-          p_session_id: sessionId
-        });
+        const { error: sessionError } = await state.supa
+          .from('active_sessions')
+          .upsert({
+            user_id: data.user.id,
+            session_id: sessionId,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id'
+          });
         
         if (sessionError) {
-          /* Se la funzione non esiste, usa solo localStorage (fallback) */
-          if (sessionError.message?.includes('function') || sessionError.code === '42883') {
-            console.warn('[Auth] Database functions not found - using localStorage fallback');
-          } else {
-            console.error('[Auth] Error registering in database:', sessionError);
-          }
+          console.error('[Auth] Error saving active session:', sessionError);
+          /* Se la tabella non esiste, salva solo in localStorage come fallback */
+          const sessionData = {
+            userId: data.user.id,
+            sessionId: sessionId,
+            timestamp: Date.now()
+          };
+          localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
+          console.log('[Auth] Saved to localStorage fallback');
         } else {
-          console.log('[Auth] ✅ Also registered in database');
+          console.log('[Auth] ✅ Saved active session to database');
         }
       } catch (dbErr) {
-        console.warn('[Auth] Database registration failed - using localStorage only:', dbErr);
+        console.warn('[Auth] Database error - using localStorage fallback:', dbErr);
+        const sessionData = {
+          userId: data.user.id,
+          sessionId: sessionId,
+          timestamp: Date.now()
+        };
+        localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
       }
     } catch (err) {
       console.error('[Auth] Error registering active session:', err);

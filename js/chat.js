@@ -247,35 +247,39 @@ export async function sendMessage() {
         return;
       }
       
-      /* Verifica SEMPLICE: controlla localStorage (funziona sempre, anche senza database) */
-      const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
-      if (activeSessionData && activeSessionData.userId === state.currentUser.id) {
-        /* Se l'ID della sessione salvata non corrisponde, questa è una vecchia sessione */
-        if (activeSessionData.sessionId !== sessionId) {
-          console.warn('[Chat] Session ID mismatch - this is an old session - disconnecting');
-          const { showDisconnectedOverlay } = await import('./supabase-client.js');
-          showDisconnectedOverlay();
-          return;
-        }
-      }
-      
-      /* Verifica anche nel database (se le funzioni esistono) - fallback opzionale */
+      /* APPROCCIO SEMPLICE: Controlla direttamente la tabella active_sessions */
       try {
-        const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
-          p_user_id: state.currentUser.id,
-          p_session_id: sessionId
-        });
+        const { data: activeSession, error: checkError } = await state.supa
+          .from('active_sessions')
+          .select('session_id')
+          .eq('user_id', state.currentUser.id)
+          .single();
         
-        if (!checkError && isValid === false) {
-          /* Questa NON è la sessione attiva - disconnettere immediatamente */
-          console.warn('[Chat] Database says session is not valid - disconnecting');
-          const { showDisconnectedOverlay } = await import('./supabase-client.js');
-          showDisconnectedOverlay();
-          return;
+        if (checkError) {
+          /* Se la tabella non esiste, usa localStorage come fallback */
+          const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
+          if (activeSessionData && activeSessionData.userId === state.currentUser.id) {
+            if (activeSessionData.sessionId !== sessionId) {
+              console.warn('[Chat] Session ID mismatch (localStorage) - disconnecting');
+              const { showDisconnectedOverlay } = await import('./supabase-client.js');
+              showDisconnectedOverlay();
+              return;
+            }
+          }
+        } else if (activeSession) {
+          /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
+          if (activeSession.session_id !== sessionId) {
+            console.warn('[Chat] Session ID mismatch (database) - this is an old session - disconnecting');
+            const { showDisconnectedOverlay } = await import('./supabase-client.js');
+            showDisconnectedOverlay();
+            return;
+          }
         }
-        /* Se c'è un errore (funzione non esiste), ignora e usa solo localStorage */
-      } catch (dbErr) {
-        /* Ignora errori database - usa solo localStorage */
+      } catch (err) {
+        console.warn('[Chat] Error checking session:', err);
+        /* In caso di errore, blocca per sicurezza */
+        showToast('⚠️ Cannot verify session. Message blocked.');
+        return;
       }
     } catch (err) {
       console.error('[Chat] Error verifying session:', err);
