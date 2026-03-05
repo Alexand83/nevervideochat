@@ -27,7 +27,7 @@ DROP POLICY IF EXISTS "Public read admin_logs" ON public.admin_logs;
 DROP POLICY IF EXISTS "Admin insert admin_logs" ON public.admin_logs;
 
 CREATE POLICY "Public read admin_logs" ON public.admin_logs FOR SELECT USING (true);
-CREATE POLICY "Admin insert admin_logs" ON public.admin_logs FOR INSERT USING (
+CREATE POLICY "Admin insert admin_logs" ON public.admin_logs FOR INSERT WITH CHECK (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
 );
 
@@ -58,6 +58,8 @@ CREATE POLICY "Public read announcements" ON public.announcements FOR SELECT USI
 );
 CREATE POLICY "Admin manage announcements" ON public.announcements FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
+) WITH CHECK (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin'))
 );
 
 -- ── Tabella messaggi segnalati ────────────────────────────────
@@ -87,6 +89,8 @@ CREATE POLICY "Admin read reported_messages" ON public.reported_messages FOR SEL
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin', 'moderator'))
 );
 CREATE POLICY "Admin update reported_messages" ON public.reported_messages FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin', 'moderator'))
+) WITH CHECK (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid()::text AND role IN ('owner', 'admin', 'moderator'))
 );
 
