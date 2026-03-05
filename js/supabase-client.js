@@ -230,7 +230,17 @@ function startSessionCheckInterval() {
         return;
       }
       
-      const sessionId = session.data.session.access_token.substring(0, 40);
+      /* CRITICO: Usa lo stesso sessionId salvato in localStorage, non generarne uno nuovo dal token */
+      /* Il database ha l'UUID salvato, non i primi 40 caratteri del JWT */
+      const { getSavedSessionId, createSessionId } = await import('./auth.js');
+      const savedSessionId = getSavedSessionId();
+      const sessionId = savedSessionId || createSessionId(session.data.session.access_token);
+      
+      console.log('[Session Check] Verifying session:', {
+        userId: state.currentUser.id,
+        hasSavedSessionId: !!savedSessionId,
+        sessionId: sessionId?.substring(0, 20) + '...'
+      });
       
       /* CRITICO: Verifica usando funzione SQL - più sicuro */
       try {
