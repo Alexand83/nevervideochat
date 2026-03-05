@@ -73,6 +73,12 @@ async function init() {
   /* 2. Create Supabase client (needed for auth) */
   initSupabaseClient();
 
+  /* CRITICO: Imposta finishInit PRIMA che l'utente possa fare login */
+  /* Questo assicura che _finishInit sia disponibile quando viene chiamato dopo il login */
+  const { setFinishInit } = await import('./auth.js');
+  setFinishInit(finishInit);
+  console.log('[Main] ✅ finishInit registered in auth module');
+
   /* 3. Try to restore a registered session */
   const restoredUser = await tryRestoreSession();
   if (restoredUser) {
@@ -150,10 +156,6 @@ export async function finishInit() {
   document.documentElement.style.setProperty('--games-panel-width', '0px');
   /* Reset users panel width CSS variable on init */
   document.documentElement.style.setProperty('--users-panel-width', '0px');
-
-  /* Wire the auth module's finishInit reference */
-  const { setFinishInit } = await import('./auth.js');
-  setFinishInit(finishInit);
 
   /* Reply cancel button */
   dom.replyPreviewCancel?.addEventListener('click', clearReplyTo);
