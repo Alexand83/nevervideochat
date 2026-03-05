@@ -53,6 +53,11 @@ export async function verifySessionImmediately(userId, accessToken) {
     
     /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
     try {
+      console.log('[Auth] 🔍 IMMEDIATE CHECK: Verifying session in database...', {
+        userId: userId,
+        sessionId: sessionId.substring(0, 20) + '...'
+      });
+      
       const { data: activeSession, error: checkError } = await state.supa
         .from('active_sessions')
         .select('session_id')
@@ -60,30 +65,48 @@ export async function verifySessionImmediately(userId, accessToken) {
         .single();
       
       if (checkError) {
-        console.error('[Auth] IMMEDIATE CHECK: Error reading from database:', checkError);
+        console.error('[Auth] ❌ IMMEDIATE CHECK: Error reading from database:', checkError);
+        console.error('[Auth] ❌ Error code:', checkError.code);
+        console.error('[Auth] ❌ Error message:', checkError.message);
+        console.error('[Auth] ❌ Error status:', checkError.status);
+        console.error('[Auth] ❌ Full error:', JSON.stringify(checkError, null, 2));
+        
+        /* Se è un errore "not found" (PGRST116), potrebbe essere il primo login */
+        if (checkError.code === 'PGRST116') {
+          console.log('[Auth] ⚠️ IMMEDIATE CHECK: No session found in database (first login?) - allowing');
+          return true; /* Permetti il primo login */
+        }
+        
         /* Se la tabella non esiste o c'è un errore, blocca per sicurezza */
-        console.warn('[Auth] IMMEDIATE CHECK: Cannot verify session - blocking for security');
+        console.warn('[Auth] ⚠️ IMMEDIATE CHECK: Cannot verify session - blocking for security');
         return false;
       }
       
       if (!activeSession) {
         /* Nessuna sessione registrata nel database - potrebbe essere il primo login */
-        console.log('[Auth] IMMEDIATE CHECK: No active session in database (first login?)');
+        console.log('[Auth] ⚠️ IMMEDIATE CHECK: No active session in database (first login?) - allowing');
         return true; /* Permetti il primo login */
       }
       
+      console.log('[Auth] 🔍 IMMEDIATE CHECK: Found session in database:', {
+        dbSessionId: activeSession.session_id.substring(0, 20) + '...',
+        currentSessionId: sessionId.substring(0, 20) + '...',
+        match: activeSession.session_id === sessionId
+      });
+      
       /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
       if (activeSession.session_id !== sessionId) {
-        console.warn('[Auth] IMMEDIATE CHECK: Session ID mismatch - this is an OLD session from another browser - disconnecting NOW');
+        console.warn('[Auth] 🚨 IMMEDIATE CHECK: Session ID mismatch - this is an OLD session from another browser - disconnecting NOW');
         const { showDisconnectedOverlay } = await import('./supabase-client.js');
         showDisconnectedOverlay();
         clearAuthSession();
         return false;
       }
       
-      console.log('[Auth] IMMEDIATE CHECK: ✅ Session matches database - this is the active session');
+      console.log('[Auth] ✅ IMMEDIATE CHECK: Session matches database - this is the active session');
     } catch (err) {
-      console.error('[Auth] IMMEDIATE CHECK: Exception:', err);
+      console.error('[Auth] ❌ IMMEDIATE CHECK: Exception:', err);
+      console.error('[Auth] ❌ Exception stack:', err.stack);
       /* In caso di errore, blocca per sicurezza */
       return false;
     }
