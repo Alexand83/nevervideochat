@@ -341,14 +341,9 @@ export async function tryRestoreSession() {
             console.error('[Auth] Error checking session on restore:', err);
             /* In caso di errore, permettere il restore per non bloccare l'utente */
           }
-            
-            /* Salva l'ID della sessione se non è già salvato */
-            if (!savedSessionId) {
-              saveSessionId(sessionId);
-            }
-          } catch (err) {
-            console.warn('[Auth] Error verifying restored session:', err);
-          }
+          
+          /* Salva l'ID della sessione per riferimento locale (non usato per verifica) */
+          saveSessionId(sessionId);
         }
         
         /* CONTROLLO IMMEDIATO: Verifica che questa sia la sessione attiva subito dopo il restore */
