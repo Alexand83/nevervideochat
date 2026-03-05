@@ -31,7 +31,37 @@ setPChatDeps(supabaseReady);
 setUIDeps(uploadToStorage, supabaseReady);
 
 /* ── Main init ── */
+/* ── Filtra warning innocui dei cookie Cloudflare ── */
+function filterCookieWarnings() {
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  
+  console.warn = function(...args) {
+    const message = args.join(' ');
+    /* Ignora warning innocui dei cookie Cloudflare */
+    if (message.includes('__cf_bm') || 
+        message.includes('cookie') && message.includes('rifiutato') ||
+        message.includes('cookie') && message.includes('domain')) {
+      return; /* Non mostrare questi warning */
+    }
+    originalWarn.apply(console, args);
+  };
+  
+  console.error = function(...args) {
+    const message = args.join(' ');
+    /* Ignora errori innocui dei cookie Cloudflare */
+    if (message.includes('__cf_bm') || 
+        (message.includes('cookie') && message.includes('rifiutato')) ||
+        (message.includes('cookie') && message.includes('domain'))) {
+      return; /* Non mostrare questi errori */
+    }
+    originalError.apply(console, args);
+  };
+}
+
 async function init() {
+  /* Filtra warning cookie prima di inizializzare */
+  filterCookieWarnings();
   /* 1. Init UI subsystems */
   initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording();
   initContextMenu(); initCameraSystem(); initCallControls();
@@ -141,65 +171,7 @@ export async function finishInit() {
   /* Su mobile, assicura che il pannello utenti parta chiuso nelle stanze normali */
   document.documentElement.style.setProperty('--users-panel-width', '0px');
   
-  /* Fix per mobile: assicura che il textarea sia focusabile */
-  fixMobileTextarea();
-  
-  /* Non fare focus automatico su mobile per evitare problemi con la tastiera */
-  if (!isMobileDevice()) {
-    dom.msgInput?.focus();
-  }
-}
-
-/* ── Fix per textarea su mobile ── */
-function fixMobileTextarea() {
-  if (!dom.msgInput) return;
-  
-  /* Su mobile, assicura che il contenteditable funzioni correttamente */
-  if (isMobileDevice()) {
-    /* Rimuovi eventuali attributi che potrebbero interferire */
-    dom.msgInput.setAttribute('contenteditable', 'true');
-    dom.msgInput.setAttribute('inputmode', 'text');
-    dom.msgInput.setAttribute('autocorrect', 'on');
-    dom.msgInput.setAttribute('autocapitalize', 'sentences');
-    dom.msgInput.setAttribute('spellcheck', 'true');
-    
-    /* Fix per iOS: previeni zoom su focus */
-    const viewport = document.querySelector('meta[name="viewport"]');
-    if (viewport && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
-      const originalContent = viewport.getAttribute('content');
-      dom.msgInput.addEventListener('focus', () => {
-        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
-      });
-      dom.msgInput.addEventListener('blur', () => {
-        if (originalContent) {
-          viewport.setAttribute('content', originalContent);
-        }
-      });
-    }
-    
-    /* Fix per Android: assicura che il focus funzioni */
-    dom.msgInput.addEventListener('touchstart', (e) => {
-      if (dom.msgInput !== document.activeElement) {
-        e.preventDefault();
-        setTimeout(() => {
-          dom.msgInput.focus();
-          /* Metti il cursore alla fine del testo */
-          const range = document.createRange();
-          const sel = window.getSelection();
-          range.selectNodeContents(dom.msgInput);
-          range.collapse(false);
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }, 100);
-      }
-    }, { passive: false });
-  }
-}
-
-/* ── Verifica se è un dispositivo mobile ── */
-function isMobileDevice() {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-         (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+  dom.msgInput?.focus();
 }
 
 /* ── Assicura che l'utente abbia un profilo nel database con ruoli di default ── */
