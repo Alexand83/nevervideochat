@@ -51,9 +51,13 @@ export function extractQuote(content) {
 
 /* ── Add a message to the active room and render it ── */
 export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, quoteName = null, username = null, reactions = null, msgId = null }, roomId) {
+  console.log('[Chat] addMessage called:', { userId, roomId: roomId || state.activeRoom, hasHtml: !!html, msgId });
   const rId  = roomId || state.activeRoom;
   const room = state.rooms[rId];
-  if (!room) return;
+  if (!room) {
+    console.warn('[Chat] addMessage: Room not found', rId);
+    return;
+  }
 
   /* Filter ignored users */
   if (userId && userId !== 'me' && state.ignoredUsers[String(userId)]) return;
@@ -87,9 +91,12 @@ export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, qu
 
   /* Only render if this is the active room */
   if (rId === state.activeRoom) {
+    console.log('[Chat] Rendering message in active room:', { msgId: msg.id, userId: msg.userId });
     renderMessage(msg);
     /* Hide welcome banner when first message arrives */
     if (dom.welcomeBanner?.parentNode) dom.welcomeBanner.remove();
+  } else {
+    console.log('[Chat] Message not rendered (not active room):', { msgId: msg.id, activeRoom: state.activeRoom, messageRoom: rId });
   }
 }
 
