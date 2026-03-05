@@ -295,13 +295,13 @@ export async function connectSupabase() {
       .subscribe();
     
     /* ── Monitora cambiamenti di autenticazione per rilevare disconnessioni ── */
-    state.supa.auth.onAuthStateChange((event, session) => {
+    state.supa.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT' && state.currentUser && !state.currentUser.isGuest) {
         /* Sessione invalidata - probabilmente login da altro dispositivo */
         console.log('[Auth] Session signed out - possible login from another device');
         showToast('⚠️ Your session has been terminated. You may have logged in from another device.');
         const { logoutUser } = await import('./auth.js');
-        logoutUser();
+        await logoutUser();
       }
     });
 
