@@ -14,17 +14,8 @@ let _renderRoomTabs  = null;
 let _broadcast       = null;
 let _handleGameCommand = null;
 
-/* ── Crea un ID univoco per la sessione (hash del token) ── */
-function createSessionId(accessToken) {
-  /* Usa una parte del token come ID univoco (primi 40 caratteri) */
-  /* NON includere Date.now() perché deve essere lo stesso per tutta la durata della sessione */
-  return accessToken.substring(0, 40);
-}
-
-/* ── Ottieni l'ID della sessione salvato ── */
-function getSavedSessionId() {
-  return localStorage.getItem('nvc_session_id');
-}
+/* ── Le funzioni createSessionId e getSavedSessionId sono ora in auth.js ── */
+/* ── Importale quando necessario ── */
 export function setChatDeps(openCtx, uploadStorage, supaReady, renderTabs, broadcast, handleGameCmd) {
   _openContextMenu = openCtx;
   _uploadToStorage = uploadStorage;
@@ -261,7 +252,15 @@ export async function sendMessage() {
         return;
       }
       
-      const sessionId = createSessionId(session.data.session.access_token);
+      /* CRITICO: Usa lo stesso sessionId salvato in localStorage, non generarne uno nuovo */
+      const { createSessionId, getSavedSessionId } = await import('./auth.js');
+      const savedSessionId = getSavedSessionId();
+      const sessionId = savedSessionId || createSessionId(session.data.session.access_token);
+      console.log('[Chat] Session check:', { 
+        hasSavedSessionId: !!savedSessionId, 
+        sessionId: sessionId?.substring(0, 20) + '...',
+        userId: state.currentUser.id 
+      });
       
       /* CRITICO: Verifica usando funzione SQL - più sicuro */
       try {

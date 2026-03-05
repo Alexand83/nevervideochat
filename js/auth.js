@@ -46,8 +46,9 @@ function saveSessionId(sessionId) {
 }
 
 /* ── Ottieni l'ID della sessione salvato ── */
-function getSavedSessionId() {
-  return localStorage.getItem('nvc_session_id');
+export function getSavedSessionId() {
+  /* Usa nvc_browser_session_id invece di nvc_session_id per coerenza */
+  return localStorage.getItem('nvc_browser_session_id');
 }
 
 /* ── Verifica immediatamente se la sessione è valida ── */
@@ -595,6 +596,7 @@ export function initAuthModal() {
       const user = await loginUser(nick, pwd);
       applyAuthIdentity(user.userId, user.nick, user.username, user.avatarUrl, false);
       dom.authModal.hidden = true;
+      console.log('[Auth] Calling _finishInit after login:', { hasFinishInit: !!_finishInit });
       _finishInit?.();
     } catch (err) {
       showAuthError('loginError', err.message?.includes('Invalid') ? 'Incorrect nickname or password.' : (err.message || 'Sign-in failed.'));
