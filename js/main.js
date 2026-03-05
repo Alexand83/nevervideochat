@@ -201,18 +201,18 @@ export async function finishInit() {
   }
   
   /* Ora che Supabase è connesso, renderizza utenti e inizializza UI */
-  /* Aspetta un po' per permettere alla presenza di sincronizzarsi */
+  /* CRITICO: Aspetta un po' per permettere alla presenza di sincronizzarsi */
   setTimeout(() => {
     renderUsers();
     updateHeaderUser();
     updateAdminButton(); /* Check admin access and show/hide button */
     initGames(); /* Initialize games system */
-  }, 500); /* 500ms per permettere alla presenza di sincronizzarsi */
-  
-  /* Su mobile, assicura che il pannello utenti parta chiuso nelle stanze normali */
-  document.documentElement.style.setProperty('--users-panel-width', '0px');
-  
-  dom.msgInput?.focus();
+    
+    /* Su mobile, assicura che il pannello utenti parta chiuso nelle stanze normali */
+    document.documentElement.style.setProperty('--users-panel-width', '0px');
+    
+    dom.msgInput?.focus();
+  }, 500); /* Aspetta 500ms per permettere alla presenza di sincronizzarsi */
 }
 
 /* ── Assicura che l'utente abbia un profilo nel database con ruoli di default ── */
