@@ -962,7 +962,72 @@ export function openAnnouncementEditModal(ann = null) {
     document.getElementById('announcementEditId').value = '';
   }
   
+  /* Setup preview update listeners */
+  setupAnnouncementPreview();
+  updateAnnouncementPreview();
+  
   dom.announcementEditModal.hidden = false;
+}
+
+/* ── Setup preview update listeners ─────────────────────────────── */
+function setupAnnouncementPreview() {
+  const titleInput = document.getElementById('announcementEditTitle');
+  const contentInput = document.getElementById('announcementEditContent');
+  const typeSelect = document.getElementById('announcementEditType');
+  const persistentCheckbox = document.getElementById('announcementEditIsPersistent');
+  
+  if (titleInput) titleInput.addEventListener('input', updateAnnouncementPreview);
+  if (contentInput) contentInput.addEventListener('input', updateAnnouncementPreview);
+  if (typeSelect) typeSelect.addEventListener('change', updateAnnouncementPreview);
+  if (persistentCheckbox) persistentCheckbox.addEventListener('change', updateAnnouncementPreview);
+}
+
+/* ── Update preview banner ───────────────────────────────────────── */
+function updateAnnouncementPreview() {
+  const previewContainer = document.getElementById('announcementPreviewContainer');
+  const preview = document.getElementById('announcementPreview');
+  if (!previewContainer || !preview) return;
+  
+  const title = document.getElementById('announcementEditTitle')?.value.trim() || '';
+  const content = document.getElementById('announcementEditContent')?.value.trim() || '';
+  const type = document.getElementById('announcementEditType')?.value || 'info';
+  const isPersistent = document.getElementById('announcementEditIsPersistent')?.checked || false;
+  
+  /* Show preview only if there's content and it's persistent */
+  if (title && content && isPersistent) {
+    previewContainer.style.display = 'block';
+    const typeClass = `announcement-${type}`;
+    preview.className = `announcements-banner ${typeClass}`;
+    preview.innerHTML = `
+      <div class="announcement-content">
+        <strong class="announcement-title">${escHtml(title)}</strong>
+        <span class="announcement-text">${escHtml(content)}</span>
+      </div>
+      <button class="announcement-close" style="opacity: 0.5;" disabled>✕</button>
+    `;
+  } else if (title && content && !isPersistent) {
+    /* Show preview for toast */
+    previewContainer.style.display = 'block';
+    preview.className = 'announcements-banner';
+    const icon = {
+      info: 'ℹ️',
+      success: '✅',
+      warning: '⚠️',
+      error: '❌',
+    }[type] || 'ℹ️';
+    preview.innerHTML = `
+      <div class="announcement-content" style="padding: 12px; background: var(--bg3); border-radius: var(--r2); border-left: 4px solid var(--clr-primary);">
+        <div style="font-size: var(--fz-sm); color: var(--tx0);">
+          <strong>${icon} ${escHtml(title)}:</strong> ${escHtml(content)}
+        </div>
+        <div style="font-size: var(--fz-xs); color: var(--tx2); margin-top: 4px;">
+          (Will appear as toast notification - bottom right, 8 seconds)
+        </div>
+      </div>
+    `;
+  } else {
+    previewContainer.style.display = 'none';
+  }
 }
 
 export async function saveAnnouncement() {

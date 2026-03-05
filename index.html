@@ -1185,8 +1185,23 @@
       
       <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
         <input type="checkbox" id="announcementEditIsPersistent">
-        <span>Persistent Banner (always visible)</span>
+        <span><strong>Persistent Banner</strong> (always visible at top of page)</span>
       </label>
+      <p class="settings-hint" style="margin-top: -8px; margin-bottom: 16px; padding-left: 24px;">
+        ☝️ <strong>If checked:</strong> Shows as a banner at the top of the page (above header)<br>
+        👇 <strong>If unchecked:</strong> Shows as a temporary toast notification (bottom right)
+      </p>
+      
+      <!-- Preview Banner -->
+      <div id="announcementPreviewContainer" style="display: none; margin: 16px 0; border: 2px dashed var(--border); border-radius: var(--r2); padding: 16px; background: var(--bg2);">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <strong style="color: var(--tx0);">📋 Preview:</strong>
+          <span style="font-size: var(--fz-xs); color: var(--tx2);">How it will appear</span>
+        </div>
+        <div id="announcementPreview" class="announcements-banner" style="position: relative; margin: 0;">
+          <!-- Preview content will be inserted here -->
+        </div>
+      </div>
       
       <label class="settings-label" for="announcementEditExpiresAt">Expires At (optional)</label>
       <input type="datetime-local" id="announcementEditExpiresAt" class="settings-input">
