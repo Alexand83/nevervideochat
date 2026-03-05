@@ -196,8 +196,8 @@ async function switchAdminTab(tabName) {
   /* Load tab data */
   if (tabName === 'rooms') loadRooms();
   else if (tabName === 'users') {
-    loadUsers();
-    populateUsersRoleFilter();
+    await loadUsers();
+    await populateUsersRoleFilter();
   }
   else if (tabName === 'roles') loadCustomRoles();
   else if (tabName === 'messages') loadMessages();
