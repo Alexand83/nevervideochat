@@ -384,16 +384,22 @@ async function loadUsers() {
     users.forEach(user => {
       const item = document.createElement('div');
       item.className = 'admin-list-item';
+      const customRole = user.custom_roles;
+      const roleBadge = customRole 
+        ? `<span class="admin-badge" style="background: ${customRole.color || '#8b949e'}; margin-left: 8px;">${escHtml(customRole.name)}</span>`
+        : '';
+      
       item.innerHTML = `
         <div class="admin-item-info">
           <span class="admin-item-avatar">${user.name.charAt(0).toUpperCase()}</span>
           <div>
             <strong>${escHtml(user.name)}</strong>
             <span class="admin-item-id">ID: ${escHtml(user.id)}</span>
+            ${roleBadge}
           </div>
         </div>
         <div class="admin-item-actions">
-          <select class="admin-role-select" data-user-id="${user.id}" onchange="assignRoleToUserFromSelect('${user.id}', this.value)">
+          <select class="admin-role-select" data-user-id="${user.id}">
             <option value="">Assign Role...</option>
           </select>
           <button class="admin-action-btn" data-action="kick" data-user-id="${user.id}">👢 Kick</button>
@@ -404,6 +410,17 @@ async function loadUsers() {
       item.querySelector('[data-action="kick"]')?.addEventListener('click', () => kickUser(user.id, user.name));
       item.querySelector('[data-action="mute"]')?.addEventListener('click', () => muteUser(user.id, user.name));
       item.querySelector('[data-action="ban"]')?.addEventListener('click', () => banUser(user.id, user.name));
+      
+      /* Populate role select */
+      const roleSelect = item.querySelector('.admin-role-select');
+      if (roleSelect) {
+        await populateRoleSelect(roleSelect, user.custom_role_id);
+        roleSelect.addEventListener('change', async (e) => {
+          await assignRoleToUser(user.id, e.target.value || null);
+          loadUsers(); /* Reload to show updated role */
+        });
+      }
+      
       dom.adminUsersList.appendChild(item);
     });
   } catch (err) {
