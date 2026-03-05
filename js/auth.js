@@ -165,7 +165,33 @@ export async function loginUser(nick, password) {
       /* APPROCCIO SEMPLICE: Salva direttamente nella tabella active_sessions (senza funzioni SQL) */
       /* Questo funziona sempre, anche se le funzioni SQL non esistono */
       try {
-        console.log('[Auth] Attempting to upsert active session to database...');
+        /* Verifica che auth.uid() sia disponibile PRIMA dell'upsert */
+        const { data: currentSession } = await state.supa.auth.getSession();
+        console.log('[Auth] 🔍 DEBUG: Current session before upsert:', {
+          hasSession: !!currentSession?.session,
+          hasAccessToken: !!currentSession?.session?.access_token,
+          userId: data.user.id,
+          sessionId: sessionId.substring(0, 20) + '...'
+        });
+        
+        /* Verifica auth.uid() direttamente */
+        try {
+          const { data: testQuery } = await state.supa
+            .from('active_sessions')
+            .select('user_id')
+            .limit(1);
+          console.log('[Auth] 🔍 DEBUG: Test query to active_sessions succeeded (RLS allows read)');
+        } catch (testErr) {
+          console.error('[Auth] 🔍 DEBUG: Test query to active_sessions failed:', testErr);
+        }
+        
+        console.log('[Auth] 📝 Attempting to upsert active session to database...');
+        console.log('[Auth] 📝 Upsert data:', {
+          user_id: data.user.id,
+          session_id: sessionId.substring(0, 20) + '...',
+          updated_at: new Date().toISOString()
+        });
+        
         const { data: upsertData, error: sessionError } = await state.supa
           .from('active_sessions')
           .upsert({
@@ -178,12 +204,17 @@ export async function loginUser(nick, password) {
           .select(); /* Aggiungi select per vedere il risultato */
         
         if (sessionError) {
-          console.error('[Auth] ❌ Error saving active session to database:', sessionError);
-          console.error('[Auth] Error details:', JSON.stringify(sessionError, null, 2));
+          console.error('[Auth] ❌ ERROR saving active session to database!');
+          console.error('[Auth] ❌ Error object:', sessionError);
+          console.error('[Auth] ❌ Error code:', sessionError.code);
+          console.error('[Auth] ❌ Error message:', sessionError.message);
+          console.error('[Auth] ❌ Error status:', sessionError.status);
+          console.error('[Auth] ❌ Error details (full):', JSON.stringify(sessionError, null, 2));
           
           /* Se è un errore RLS (403 o PGRST301), le policies potrebbero bloccare */
           if (sessionError.code === 'PGRST301' || sessionError.status === 403 || sessionError.message?.includes('permission') || sessionError.message?.includes('policy')) {
-            console.error('[Auth] CRITICAL: RLS policy blocking insert! Check active_sessions RLS policies in Supabase!');
+            console.error('[Auth] 🚨 CRITICAL: RLS policy blocking insert! Check active_sessions RLS policies in Supabase!');
+            console.error('[Auth] 🚨 The RLS policy "Public upsert own session" must allow INSERT and UPDATE for auth.uid() = user_id');
             showToast('⚠️ Session management blocked by RLS. Check database policies.');
           }
           
@@ -194,9 +225,10 @@ export async function loginUser(nick, password) {
             timestamp: Date.now()
           };
           localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
-          console.log('[Auth] Saved to localStorage fallback');
+          console.log('[Auth] 💾 Saved to localStorage fallback (database failed)');
         } else {
-          console.log('[Auth] ✅ Successfully registered new active session in database:', upsertData);
+          console.log('[Auth] ✅ SUCCESS! Registered new active session in database');
+          console.log('[Auth] ✅ Upsert result:', upsertData);
           console.log('[Auth] Old sessions are now invalid');
         }
       } catch (dbErr) {
