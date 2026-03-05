@@ -31,10 +31,10 @@ export function initSupabaseClient() {
       /* Sessione appena creata/aggiornata - imposta flag per non controllare subito */
       sessionJustCreated = true;
       sessionCreationTime = Date.now();
-      /* Dopo 15 secondi, rimuovi il flag (allineato con markSessionAsNew) */
+      /* Dopo 30 secondi, rimuovi il flag (allineato con markSessionAsNew) */
       setTimeout(() => {
         sessionJustCreated = false;
-      }, 15000);
+      }, 30000);
     }
     if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
       /* Solo se non è una nuova sessione appena creata E non stiamo disconnettingo altre sessioni */
@@ -99,8 +99,8 @@ export async function connectRoom(roomId) {
   /* ── 2. Subscribe to new messages (Postgres Changes filtered by room_id) ── */
   const dbSub = state.supa.channel(`db-messages-${roomId}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, async ({ new: m }) => {
-      /* Controlla se la sessione è ancora valida */
-      if (await checkSessionInvalid()) return;
+      /* NON controllare la sessione ad ogni messaggio - troppo aggressivo e causa falsi positivi */
+      /* La sessione viene controllata solo in caso di errori espliciti (403, etc.) */
       try {
       if (m.user_id === state.currentUser.id) {
         /* This is our own message - update the temp ID with the DB UUID */
@@ -372,6 +372,7 @@ export async function connectSupabase() {
 }
 
 /* ── Controlla se la sessione è ancora valida ── */
+/* ── Controlla se la sessione è ancora valida (chiamato solo in caso di errori espliciti) ── */
 async function checkSessionInvalid() {
   if (!state.supa || !state.currentUser) return false;
   
@@ -383,8 +384,8 @@ async function checkSessionInvalid() {
   /* NON controllare se la sessione è appena stata creata (durante inizializzazione) */
   if (sessionJustCreated) {
     const timeSinceCreation = Date.now() - sessionCreationTime;
-    /* Se è passato meno di 15 secondi dalla creazione, non controllare */
-    if (timeSinceCreation < 15000) {
+    /* Se è passato meno di 30 secondi dalla creazione, non controllare (aumentato per sicurezza) */
+    if (timeSinceCreation < 30000) {
       return false;
     }
   }

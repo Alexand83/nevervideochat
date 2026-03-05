@@ -330,6 +330,12 @@ export async function sendMessage() {
       reactions: {},
     }).then(({ data, error }) => {
       if (error) {
+        /* Se è un errore 403, la sessione è stata invalidata */
+        if (error?.status === 403 || error?.message?.includes('403') || error?.code === 'PGRST301') {
+          const { checkSessionInvalid } = await import('./supabase-client.js');
+          await checkSessionInvalid();
+          return;
+        }
         console.warn('[NVC] msg insert:', error);
         return;
       }
