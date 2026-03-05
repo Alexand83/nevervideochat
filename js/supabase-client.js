@@ -63,7 +63,9 @@ export async function connectRoom(roomId) {
 
   /* ── 2. Subscribe to new messages (Postgres Changes filtered by room_id) ── */
   const dbSub = state.supa.channel(`db-messages-${roomId}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, ({ new: m }) => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, async ({ new: m }) => {
+      /* Controlla se la sessione è ancora valida */
+      if (await checkSessionInvalid()) return;
       try {
       if (m.user_id === state.currentUser.id) {
         /* This is our own message - update the temp ID with the DB UUID */
