@@ -30,8 +30,7 @@ function createSessionId(accessToken) {
       const v = c === 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
     });
-    /* Aggiungi timestamp per garantire unicità */
-    sessionId += '-' + Date.now();
+    /* NON aggiungere timestamp - deve essere lo stesso per tutta la durata della sessione */
     localStorage.setItem('nvc_browser_session_id', sessionId);
     console.log('[Auth] Generated new browser session ID:', sessionId.substring(0, 30) + '...');
   } else {
