@@ -1,8 +1,9 @@
 /* ─── 4. MAIN LAYOUT ─── */
 .app-main {
   display: flex;
-  height: calc(100dvh - var(--hdr-h));
+  height: calc(100dvh - var(--hdr-h) - var(--banner-height, 0px));
   overflow: hidden;
+  transition: height 0.3s ease-out;
 }
 
 /* Vertical drag bar between chat area and users panel */

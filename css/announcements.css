@@ -1,9 +1,6 @@
 /* ─── ANNOUNCEMENTS BANNER ─── */
 .announcements-banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   width: 100%;
   padding: 10px 16px;
   background: var(--bg2);
@@ -15,6 +12,7 @@
   z-index: 1000;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   animation: slideDown 0.3s ease-out;
+  flex-shrink: 0;
 }
 
 @keyframes slideDown {
@@ -28,10 +26,7 @@
   }
 }
 
-/* Sposta l'header sotto il banner quando è visibile */
-.app-header {
-  transition: margin-top 0.3s ease-out;
-}
+/* Il banner è ora nel flow normale, quindi non serve spostare nulla */
 
 .announcement-content {
   display: flex;

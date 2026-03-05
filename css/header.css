@@ -1,16 +1,20 @@
 /* ─── 3. APP HEADER ─── */
 .app-header {
-  height: var(--hdr-h);
   background: var(--bg1);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
   display: flex;
-  align-items: center;
+  flex-direction: column;
 }
 
+/* Header inner content */
 .header-inner {
+  height: var(--hdr-h);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
   width: 100%;
   padding: 0 var(--s4);
   display: grid;

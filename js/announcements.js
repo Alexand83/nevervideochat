@@ -94,7 +94,7 @@ function renderAnnouncements() {
   /* Update header position when banner is shown - use setTimeout to ensure DOM is updated */
   setTimeout(() => {
     updateHeaderPosition();
-  }, 0);
+  }, 100); /* Slightly longer delay to ensure DOM is fully rendered */
   
   /* Show non-persistent announcements as toasts */
   const nonPersistent = activeAnnouncements.filter(ann => !ann.is_persistent);
@@ -140,24 +140,25 @@ export async function initAnnouncementsListener() {
   channel.subscribe();
 }
 
-/* ── Aggiorna posizione header quando banner appare/scompare ─── */
+/* ── Aggiorna altezza app-main quando banner appare/scompare ─── */
 export function updateHeaderPosition() {
   const banner = dom.announcementsBanner;
-  const header = document.querySelector('.app-header');
   const appMain = document.querySelector('.app-main');
   
-  if (!banner || !header) return;
+  if (!banner || !appMain) return;
   
   if (banner.hidden) {
-    header.style.marginTop = '0';
-    if (appMain) appMain.style.marginTop = '0';
     document.documentElement.style.setProperty('--banner-height', '0px');
   } else {
-    const bannerHeight = banner.offsetHeight;
-    header.style.marginTop = `${bannerHeight}px`;
-    if (appMain) appMain.style.marginTop = `${bannerHeight}px`;
+    const bannerHeight = banner.offsetHeight || 0;
     document.documentElement.style.setProperty('--banner-height', `${bannerHeight}px`);
   }
+  
+  /* Aggiorna l'altezza di app-main per tenere conto del banner */
+  const headerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hdr-h')) || 60;
+  const bannerHeight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--banner-height')) || 0;
+  const totalTopHeight = headerHeight + bannerHeight;
+  appMain.style.height = `calc(100dvh - ${totalTopHeight}px)`;
 }
 
 /* ── Controlla periodicamente se gli annunci sono scaduti ────── */
