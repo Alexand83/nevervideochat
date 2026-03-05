@@ -82,7 +82,11 @@ export function showDisconnectedOverlay() {
 
 /* ── Load and subscribe to a specific room ── */
 export async function connectRoom(roomId) {
-  if (!state.supa || !state.rooms[roomId]) return;
+  console.log('[Supabase] connectRoom called for room:', roomId);
+  if (!state.supa || !state.rooms[roomId]) {
+    console.warn('[Supabase] connectRoom: Missing supa or room', { hasSupa: !!state.supa, hasRoom: !!state.rooms[roomId] });
+    return;
+  }
   const room = state.rooms[roomId];
 
   /* ── 1. Clear old messages - new users don't see old messages ── */
@@ -96,6 +100,7 @@ export async function connectRoom(roomId) {
   }
 
   /* ── 2. Don't load old messages - only show new ones from now on ── */
+  console.log('[Supabase] connectRoom: Setting up message subscription for room', roomId);
 
   /* ── 2. Subscribe to new messages (Postgres Changes filtered by room_id) ── */
   const dbSub = state.supa.channel(`db-messages-${roomId}`)
@@ -140,9 +145,11 @@ export async function connectRoom(roomId) {
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log(`[Supabase] Subscribed to messages for room ${roomId}`);
+        console.log(`[Supabase] ✅ Subscribed to messages for room ${roomId}`);
       } else if (status === 'CHANNEL_ERROR') {
-        console.error(`[Supabase] Error subscribing to messages for room ${roomId}`);
+        console.error(`[Supabase] ❌ Error subscribing to messages for room ${roomId}`);
+      } else {
+        console.log(`[Supabase] Message subscription status for room ${roomId}:`, status);
       }
     });
 
