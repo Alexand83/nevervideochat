@@ -23,7 +23,7 @@ export function initSupabaseClient() {
     console.warn('[NVC] Supabase not configured — local-only mode.'); return false;
   }
   state.supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
   });
   
   /* Listener per rilevare quando la sessione viene invalidata (disconnessione da altra sessione) */

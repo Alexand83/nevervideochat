@@ -205,7 +205,16 @@ export async function loginUser(nick, password) {
     console.warn('[Auth] Could not disconnect old sessions (this is OK if first login):', signOutErr);
   }
   
-  if (data.session) persistAuthSession(data.session);
+  if (data.session) {
+    persistAuthSession(data.session);
+    
+    /* IMPORTANTE: Assicurati che la sessione sia disponibile per getSession() */
+    /* Forza il refresh della sessione nel client Supabase */
+    await state.supa.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token
+    });
+  }
   
   /* Marca la sessione come nuova anche dopo il persist */
   const { markSessionAsNew: markNew } = await import('./supabase-client.js');
