@@ -182,11 +182,13 @@ export async function saveRole() {
     }
     
     /* Verifica autenticazione Supabase */
-    const { data: { user: authUser } } = await state.supa.auth.getUser();
-    console.log('[Admin] Auth user:', authUser);
+    const { data: { user: authUser }, error: authError } = await state.supa.auth.getUser();
+    console.log('[Admin] Auth user:', JSON.stringify(authUser, null, 2));
     console.log('[Admin] Current user ID:', state.currentUser.id);
+    console.log('[Admin] Auth error:', authError);
     
     if (!authUser) {
+      console.error('[Admin] No authenticated user found');
       showToast('🚫 Authentication required. Please log in again.');
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -204,7 +206,7 @@ export async function saveRole() {
       .single();
     
     if (profileError) {
-      console.error('[Admin] Error checking profile:', profileError);
+      console.error('[Admin] Error checking profile:', JSON.stringify(profileError, null, 2));
       showToast('⚠️ Could not verify your role. Please try again.');
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -214,9 +216,14 @@ export async function saveRole() {
       return;
     }
     
-    console.log('[Admin] Current user profile:', profile);
+    console.log('[Admin] Current user profile:', JSON.stringify(profile, null, 2));
+    console.log('[Admin] User role:', profile?.role);
+    console.log('[Admin] Is owner or admin?', profile?.role === 'owner' || profile?.role === 'admin');
+    
     if (!profile || (profile.role !== 'owner' && profile.role !== 'admin')) {
-      showToast('🚫 You must be owner or admin to manage roles. Your role: ' + (profile?.role || 'unknown'));
+      const roleMsg = profile?.role || 'unknown';
+      console.error('[Admin] User does not have required role. Current role:', roleMsg);
+      showToast('🚫 You must be owner or admin to manage roles. Your role: ' + roleMsg);
       if (saveBtn) {
         saveBtn.disabled = false;
         saveBtn.textContent = '💾 Save Role';
@@ -244,15 +251,23 @@ export async function saveRole() {
     
     if (id) {
       roleData.id = id;
-      console.log('[Admin] Updating role:', { id, roleData });
-      const { data, error } = await state.supa
+      console.log('[Admin] Updating role:', JSON.stringify({ id, roleData }, null, 2));
+      const { data, error, status, statusText } = await state.supa
         .from('custom_roles')
         .update(roleData)
         .eq('id', id)
         .select();
       
+      console.log('[Admin] Update response:', { 
+        hasData: !!data, 
+        dataLength: data?.length, 
+        error: error ? JSON.stringify(error, null, 2) : null,
+        status,
+        statusText
+      });
+      
       if (error) {
-        console.error('[Admin] Update role error:', error);
+        console.error('[Admin] Update role error:', JSON.stringify(error, null, 2));
         throw error;
       }
       
@@ -261,19 +276,27 @@ export async function saveRole() {
         throw new Error('No rows updated. Check database permissions.');
       }
       
-      console.log('[Admin] Role updated successfully:', data);
+      console.log('[Admin] Role updated successfully:', JSON.stringify(data, null, 2));
       await logAdminAction('update_role', 'role', id, name);
     } else {
       const roleId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
       roleData.id = roleId;
-      console.log('[Admin] Creating role:', { roleId, roleData });
-      const { data, error } = await state.supa
+      console.log('[Admin] Creating role:', JSON.stringify({ roleId, roleData }, null, 2));
+      const { data, error, status, statusText } = await state.supa
         .from('custom_roles')
         .insert(roleData)
         .select();
       
+      console.log('[Admin] Insert response:', { 
+        hasData: !!data, 
+        dataLength: data?.length, 
+        error: error ? JSON.stringify(error, null, 2) : null,
+        status,
+        statusText
+      });
+      
       if (error) {
-        console.error('[Admin] Insert role error:', error);
+        console.error('[Admin] Insert role error:', JSON.stringify(error, null, 2));
         throw error;
       }
       
@@ -282,7 +305,7 @@ export async function saveRole() {
         throw new Error('No rows inserted. Check database permissions.');
       }
       
-      console.log('[Admin] Role created successfully:', data);
+      console.log('[Admin] Role created successfully:', JSON.stringify(data, null, 2));
       await logAdminAction('create_role', 'role', roleId, name);
     }
     
