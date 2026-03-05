@@ -364,9 +364,10 @@ export async function tryRestoreSession() {
         
         /* CRITICO: Verifica che questa sia la sessione attiva - SOLO database, localStorage è per-browser */
         if (data.session?.access_token) {
+          /* Crea sessionId FUORI dal try così è disponibile per tutto il blocco */
+          const sessionId = createSessionId(data.session.access_token);
+          
           try {
-            const sessionId = createSessionId(data.session.access_token);
-            
             /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
             const { data: activeSession, error: checkError } = await state.supa
               .from('active_sessions')
