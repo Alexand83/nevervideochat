@@ -211,6 +211,14 @@ export async function sendMessage() {
   /* Check if current user can send messages (not muted/banned) */
   if (!state.currentUser) return;
   
+  /* Check permissions */
+  const { hasPermission, loadUserPermissions } = await import('./permissions.js');
+  await loadUserPermissions(); /* Ensure permissions are loaded */
+  if (!hasPermission('can_post_messages')) {
+    showToast('🚫 You do not have permission to post messages.');
+    return;
+  }
+  
   /* Check if banned */
   const { checkIsBanned } = await import('./users.js');
   if (checkIsBanned(state.currentUser.id)) {

@@ -434,7 +434,9 @@ export async function restoreMessage(messageId) {
 export async function loadStatistics() {
   if (!dom.adminStatisticsContent || !state.supa) return;
   
-  if (!hasPermission('can_view_statistics')) {
+  const { checkAdminAccess } = await import('./admin.js');
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess && !hasPermission('can_view_statistics')) {
     dom.adminStatisticsContent.innerHTML = '<p class="admin-empty">🚫 You do not have permission to view statistics.</p>';
     return;
   }
@@ -638,7 +640,9 @@ export function openAnnouncementEditModal(ann = null) {
 export async function saveAnnouncement() {
   if (!state.supa) return;
   
-  if (!hasPermission('can_manage_announcements')) {
+  const { checkAdminAccess } = await import('./admin.js');
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess && !hasPermission('can_manage_announcements')) {
     showToast('🚫 You do not have permission to manage announcements.');
     return;
   }

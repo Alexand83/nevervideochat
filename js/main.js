@@ -70,6 +70,14 @@ async function init() {
 
 /** Called after a user identity has been established */
 export async function finishInit() {
+  /* Load user permissions */
+  const { loadUserPermissions } = await import('./permissions.js');
+  await loadUserPermissions();
+  
+  /* Load and display announcements */
+  const { loadAndDisplayAnnouncements, initAnnouncementsListener } = await import('./announcements.js');
+  await loadAndDisplayAnnouncements();
+  initAnnouncementsListener();
   state.pendingCamRequests = {};
   state.rejectedCamUsers   = loadRejectedCams();
   state.ignoredUsers       = loadIgnoredUsers();

@@ -154,6 +154,7 @@ function switchAdminTab(tabName) {
 }
 
 async function openAdminPanel() {
+  await ensurePermissionsLoaded(); /* Load permissions before opening */
   dom.adminModal.hidden = false;
   switchAdminTab('rooms');
 }
@@ -341,10 +342,9 @@ async function saveRoom() {
 }
 
 async function deleteRoom(roomId) {
-  /* Security: Verify admin access */
-  const hasAccess = await checkAdminAccess();
-  if (!hasAccess) {
-    showToast('🚫 Admin access required.');
+  /* Check permissions */
+  if (!hasPermission('can_manage_rooms')) {
+    showToast('🚫 You do not have permission to delete rooms.');
     return;
   }
   
@@ -444,10 +444,9 @@ async function loadUsers() {
 }
 
 async function kickUser(userId, userName) {
-  /* Security: Verify admin access */
-  const hasAccess = await checkAdminAccess();
-  if (!hasAccess) {
-    showToast('🚫 Admin access required.');
+  /* Check permissions */
+  if (!hasPermission('can_kick')) {
+    showToast('🚫 You do not have permission to kick users.');
     return;
   }
   
@@ -467,10 +466,9 @@ async function kickUser(userId, userName) {
 }
 
 async function muteUser(userId, userName) {
-  /* Security: Verify admin access */
-  const hasAccess = await checkAdminAccess();
-  if (!hasAccess) {
-    showToast('🚫 Admin access required.');
+  /* Check permissions */
+  if (!hasPermission('can_mute')) {
+    showToast('🚫 You do not have permission to mute users.');
     return;
   }
   
@@ -507,10 +505,9 @@ async function muteUser(userId, userName) {
 }
 
 async function banUser(userId, userName) {
-  /* Security: Verify admin access */
-  const hasAccess = await checkAdminAccess();
-  if (!hasAccess) {
-    showToast('🚫 Admin access required.');
+  /* Check permissions */
+  if (!hasPermission('can_ban')) {
+    showToast('🚫 You do not have permission to ban users.');
     return;
   }
   

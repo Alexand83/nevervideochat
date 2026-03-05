@@ -159,6 +159,9 @@ export const dom = {
   ignoredUsersSection: $('ignoredUsersSection'),
   ignoredUsersList:    $('ignoredUsersList'),
 
+  /* Announcements */
+  announcementsBanner: $('announcementsBanner'),
+  
   /* Admin panel */
   headerAdminBtn:      $('headerAdminBtn'),
   adminModal:          $('adminModal'),

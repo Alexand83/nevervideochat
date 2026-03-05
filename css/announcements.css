@@ -1,0 +1,69 @@
+/* ─── ANNOUNCEMENTS BANNER ─── */
+.announcements-banner {
+  position: relative;
+  padding: 12px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 100;
+}
+
+.announcement-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.announcement-title {
+  font-size: var(--fz-sm);
+  font-weight: 600;
+  color: var(--tx0);
+}
+
+.announcement-text {
+  font-size: var(--fz-xs);
+  color: var(--tx2);
+}
+
+.announcement-close {
+  background: none;
+  border: none;
+  color: var(--tx2);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--r2);
+  transition: background var(--tf), color var(--tf);
+  flex-shrink: 0;
+}
+
+.announcement-close:hover {
+  background: var(--bg-hover);
+  color: var(--tx0);
+}
+
+/* Announcement types */
+.announcements-banner.announcement-info {
+  background: rgba(31, 111, 235, 0.1);
+  border-bottom-color: rgba(31, 111, 235, 0.3);
+}
+
+.announcements-banner.announcement-success {
+  background: rgba(59, 185, 80, 0.1);
+  border-bottom-color: rgba(59, 185, 80, 0.3);
+}
+
+.announcements-banner.announcement-warning {
+  background: rgba(210, 153, 34, 0.1);
+  border-bottom-color: rgba(210, 153, 34, 0.3);
+}
+
+.announcements-banner.announcement-error {
+  background: rgba(218, 54, 51, 0.1);
+  border-bottom-color: rgba(218, 54, 51, 0.3);
+}
