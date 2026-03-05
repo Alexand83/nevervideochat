@@ -374,14 +374,28 @@ async function loadUsers() {
   if (!dom.adminUsersList || !state.supa) return;
   try {
     const users = Object.values(state.rooms[state.activeRoom]?.users || {});
-    dom.adminUsersList.innerHTML = '';
-    
     if (users.length === 0) {
       dom.adminUsersList.innerHTML = '<p class="admin-empty">No users online.</p>';
       return;
     }
     
-    users.forEach(user => {
+    /* Load user roles from database */
+    const userIds = users.map(u => u.id);
+    const { data: profiles, error: profileError } = await state.supa
+      .from('profiles')
+      .select('id, custom_role_id, custom_roles(name, color)')
+      .in('id', userIds);
+    
+    const profileMap = {};
+    if (profiles && !profileError) {
+      profiles.forEach(p => {
+        profileMap[p.id] = p;
+      });
+    }
+    
+    dom.adminUsersList.innerHTML = '';
+    
+    for (const user of users) {
       const item = document.createElement('div');
       item.className = 'admin-list-item';
       const customRole = user.custom_roles;

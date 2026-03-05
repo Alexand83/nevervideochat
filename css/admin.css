@@ -189,3 +189,94 @@
   padding: var(--s4);
   font-size: var(--fz-sm);
 }
+
+/* ── Nuove funzionalità admin ────────────────────────────────── */
+.admin-filters {
+  display: flex;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  flex-wrap: wrap;
+}
+
+.admin-filter-select,
+.admin-filter-input {
+  padding: 8px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  color: var(--tx1);
+  font-size: var(--fz-sm);
+  flex: 1;
+  min-width: 150px;
+}
+
+.admin-filter-input {
+  flex: 2;
+}
+
+.admin-role-select {
+  padding: 6px 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  color: var(--tx1);
+  font-size: var(--fz-xs);
+  min-width: 140px;
+}
+
+.admin-permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+
+.admin-permission-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  cursor: pointer;
+  transition: background var(--tf);
+}
+
+.admin-permission-item:hover {
+  background: var(--bg-hover);
+}
+
+.admin-permission-item input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.admin-stat-card {
+  padding: var(--s4);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r3);
+  text-align: center;
+}
+
+.admin-stat-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: var(--s1);
+}
+
+.admin-stat-label {
+  font-size: var(--fz-sm);
+  color: var(--tx2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
