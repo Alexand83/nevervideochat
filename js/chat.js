@@ -256,37 +256,35 @@ export async function sendMessage() {
       
       const sessionId = createSessionId(session.data.session.access_token);
       
-      /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
+      /* CRITICO: Verifica usando funzione SQL - più sicuro */
       try {
-        const { data: activeSession, error: checkError } = await state.supa
-          .from('active_sessions')
-          .select('session_id')
-          .eq('user_id', state.currentUser.id)
-          .single();
+        const { data: isValid, error: checkError } = await state.supa
+          .rpc('is_session_valid', {
+            p_user_id: state.currentUser.id,
+            p_session_id: sessionId
+          });
         
         if (checkError) {
-          console.error('[Chat] Error reading from database:', checkError);
-          /* Se la tabella non esiste o c'è un errore, blocca per sicurezza */
-          showToast('⚠️ Cannot verify session. Message blocked.');
+          console.error('[Chat] Error calling is_session_valid RPC:', checkError);
+          /* Se la funzione non esiste, blocca per sicurezza */
+          if (checkError.code === '42883' || checkError.message?.includes('function') || checkError.message?.includes('does not exist')) {
+            console.warn('[Chat] SQL function does not exist - blocking message for security');
+            showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql');
+          } else {
+            showToast('⚠️ Cannot verify session. Message blocked.');
+          }
           return;
         }
         
-        if (!activeSession) {
-          /* Nessuna sessione registrata - potrebbe essere il primo login, ma blocca comunque per sicurezza */
-          console.warn('[Chat] No active session in database - blocking message');
-          showToast('⚠️ Session not registered. Please refresh the page.');
-          return;
-        }
-        
-        /* Se la sessione nel database non corrisponde, questa è una vecchia sessione da un altro browser */
-        if (activeSession.session_id !== sessionId) {
-          console.warn('[Chat] Session ID mismatch - this is an OLD session from another browser - disconnecting');
+        /* La funzione restituisce TRUE se la sessione è valida, FALSE altrimenti */
+        if (!isValid) {
+          console.warn('[Chat] Session is NOT valid - this is an OLD session from another browser - disconnecting');
           const { showDisconnectedOverlay } = await import('./supabase-client.js');
           showDisconnectedOverlay();
           return;
         }
         
-        console.log('[Chat] ✅ Session verified - matches database');
+        console.log('[Chat] ✅ Session verified - is valid');
       } catch (err) {
         console.error('[Chat] Error checking session:', err);
         /* In caso di errore, blocca per sicurezza */

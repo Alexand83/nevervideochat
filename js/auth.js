@@ -185,60 +185,33 @@ export async function loginUser(nick, password) {
       saveSessionId(sessionId);
       console.log('[Auth] Saved session ID to localStorage');
       
-      /* APPROCCIO SEMPLICE: Salva direttamente nella tabella active_sessions (senza funzioni SQL) */
-      /* Questo funziona sempre, anche se le funzioni SQL non esistono */
+      /* APPROCCIO SICURO: Usa funzione SQL SECURITY DEFINER per bypassare RLS */
       try {
-        /* Verifica che auth.uid() sia disponibile PRIMA dell'upsert */
-        const { data: currentSession } = await state.supa.auth.getSession();
-        console.log('[Auth] 🔍 DEBUG: Current session before upsert:', {
-          hasSession: !!currentSession?.session,
-          hasAccessToken: !!currentSession?.session?.access_token,
+        console.log('[Auth] 📝 Registering new active session via SQL function...', {
           userId: data.user.id,
           sessionId: sessionId.substring(0, 20) + '...'
         });
         
-        /* Verifica auth.uid() direttamente */
-        try {
-          const { data: testQuery } = await state.supa
-            .from('active_sessions')
-            .select('user_id')
-            .limit(1);
-          console.log('[Auth] 🔍 DEBUG: Test query to active_sessions succeeded (RLS allows read)');
-        } catch (testErr) {
-          console.error('[Auth] 🔍 DEBUG: Test query to active_sessions failed:', testErr);
-        }
-        
-        console.log('[Auth] 📝 Attempting to upsert active session to database...');
-        console.log('[Auth] 📝 Upsert data:', {
-          user_id: data.user.id,
-          session_id: sessionId.substring(0, 20) + '...',
-          updated_at: new Date().toISOString()
-        });
-        
-        const { data: upsertData, error: sessionError } = await state.supa
-          .from('active_sessions')
-          .upsert({
-            user_id: data.user.id,
-            session_id: sessionId,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id'
-          })
-          .select(); /* Aggiungi select per vedere il risultato */
+        /* Chiama la funzione SQL che gestisce tutto lato server */
+        const { data: rpcData, error: sessionError } = await state.supa
+          .rpc('upsert_active_session', {
+            p_user_id: data.user.id,
+            p_session_id: sessionId
+          });
         
         if (sessionError) {
-          console.error('[Auth] ❌ ERROR saving active session to database!');
+          console.error('[Auth] ❌ ERROR calling upsert_active_session RPC!');
           console.error('[Auth] ❌ Error object:', sessionError);
           console.error('[Auth] ❌ Error code:', sessionError.code);
           console.error('[Auth] ❌ Error message:', sessionError.message);
           console.error('[Auth] ❌ Error status:', sessionError.status);
           console.error('[Auth] ❌ Error details (full):', JSON.stringify(sessionError, null, 2));
           
-          /* Se è un errore RLS (403 o PGRST301), le policies potrebbero bloccare */
-          if (sessionError.code === 'PGRST301' || sessionError.status === 403 || sessionError.message?.includes('permission') || sessionError.message?.includes('policy')) {
-            console.error('[Auth] 🚨 CRITICAL: RLS policy blocking insert! Check active_sessions RLS policies in Supabase!');
-            console.error('[Auth] 🚨 The RLS policy "Public upsert own session" must allow INSERT and UPDATE for auth.uid() = user_id');
-            showToast('⚠️ Session management blocked by RLS. Check database policies.');
+          /* Se la funzione non esiste, mostra messaggio chiaro */
+          if (sessionError.code === '42883' || sessionError.message?.includes('function') || sessionError.message?.includes('does not exist')) {
+            console.error('[Auth] 🚨 CRITICAL: SQL function upsert_active_session does not exist!');
+            console.error('[Auth] 🚨 Please run supabase_active_sessions.sql in your Supabase SQL editor!');
+            showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
           }
           
           /* Salva comunque in localStorage come fallback */
@@ -248,10 +221,10 @@ export async function loginUser(nick, password) {
             timestamp: Date.now()
           };
           localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
-          console.log('[Auth] 💾 Saved to localStorage fallback (database failed)');
+          console.log('[Auth] 💾 Saved to localStorage fallback (RPC failed)');
         } else {
-          console.log('[Auth] ✅ SUCCESS! Registered new active session in database');
-          console.log('[Auth] ✅ Upsert result:', upsertData);
+          console.log('[Auth] ✅ SUCCESS! Registered new active session via SQL function');
+          console.log('[Auth] ✅ RPC result:', rpcData);
           console.log('[Auth] Old sessions are now invalid');
         }
       } catch (dbErr) {
@@ -402,43 +375,33 @@ export async function tryRestoreSession() {
           /* Questo è necessario perché se l'utente ha già una sessione salvata (cookie/localStorage), */
           /* non passa per loginUser() e quindi la sessione non viene mai registrata nel database */
           try {
-            console.log('[Auth] 📝 RESTORE: Registering restored session in database...', {
+            console.log('[Auth] 📝 RESTORE: Registering restored session via SQL function...', {
               userId: data.user.id,
               sessionId: sessionId.substring(0, 20) + '...'
             });
             
-            /* Verifica che auth.uid() sia disponibile PRIMA dell'upsert */
-            const { data: currentSession } = await state.supa.auth.getSession();
-            console.log('[Auth] 🔍 RESTORE: Current session before upsert:', {
-              hasSession: !!currentSession?.session,
-              hasAccessToken: !!currentSession?.session?.access_token,
-              userId: data.user.id
-            });
-            
-            const { data: upsertData, error: sessionError } = await state.supa
-              .from('active_sessions')
-              .upsert({
-                user_id: data.user.id,
-                session_id: sessionId,
-                updated_at: new Date().toISOString()
-              }, {
-                onConflict: 'user_id'
-              })
-              .select();
+            /* Usa funzione SQL SECURITY DEFINER per bypassare RLS */
+            const { data: rpcData, error: sessionError } = await state.supa
+              .rpc('upsert_active_session', {
+                p_user_id: data.user.id,
+                p_session_id: sessionId
+              });
             
             if (sessionError) {
-              console.error('[Auth] ❌ RESTORE: Error saving restored session to database!');
+              console.error('[Auth] ❌ RESTORE: Error calling upsert_active_session RPC!');
               console.error('[Auth] ❌ Error object:', sessionError);
               console.error('[Auth] ❌ Error code:', sessionError.code);
               console.error('[Auth] ❌ Error message:', sessionError.message);
               console.error('[Auth] ❌ Error status:', sessionError.status);
               console.error('[Auth] ❌ Error details (full):', JSON.stringify(sessionError, null, 2));
               
-              if (sessionError.code === 'PGRST301' || sessionError.status === 403 || sessionError.message?.includes('permission') || sessionError.message?.includes('policy')) {
-                console.error('[Auth] 🚨 RESTORE: RLS policy blocking insert! Check active_sessions RLS policies in Supabase!');
+              if (sessionError.code === '42883' || sessionError.message?.includes('function') || sessionError.message?.includes('does not exist')) {
+                console.error('[Auth] 🚨 RESTORE: SQL function upsert_active_session does not exist!');
+                console.error('[Auth] 🚨 Please run supabase_active_sessions.sql in your Supabase SQL editor!');
               }
             } else {
-              console.log('[Auth] ✅ RESTORE: Successfully registered restored session in database:', upsertData);
+              console.log('[Auth] ✅ RESTORE: Successfully registered restored session via SQL function');
+              console.log('[Auth] ✅ RPC result:', rpcData);
             }
             
             /* Salva l'ID della sessione per riferimento locale */

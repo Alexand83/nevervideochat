@@ -34,12 +34,16 @@ CREATE POLICY "Public upsert own session"
   WITH CHECK (user_id = auth.uid()::text);
 
 -- ── Funzione per aggiornare/creare sessione attiva ────────────
+-- Questa funzione sovrascrive automaticamente la vecchia sessione
+-- SECURITY DEFINER permette di bypassare RLS per garantire che funzioni sempre
 CREATE OR REPLACE FUNCTION public.upsert_active_session(p_user_id TEXT, p_session_id TEXT)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
+  -- Inserisci o aggiorna la sessione attiva
+  -- Se esiste già una sessione per questo utente, viene sovrascritta
   INSERT INTO public.active_sessions (user_id, session_id, updated_at)
   VALUES (p_user_id, p_session_id, NOW())
   ON CONFLICT (user_id)

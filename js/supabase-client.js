@@ -203,29 +203,26 @@ function startSessionCheckInterval() {
       
       const sessionId = session.data.session.access_token.substring(0, 40);
       
-      /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
+      /* CRITICO: Verifica usando funzione SQL - più sicuro */
       try {
-        const { data: activeSession, error: checkError } = await state.supa
-          .from('active_sessions')
-          .select('session_id')
-          .eq('user_id', state.currentUser.id)
-          .single();
+        const { data: isValid, error: checkError } = await state.supa
+          .rpc('is_session_valid', {
+            p_user_id: state.currentUser.id,
+            p_session_id: sessionId
+          });
         
         if (checkError) {
-          console.error('[Session Check] Error reading from database:', checkError);
-          /* Se la tabella non esiste o c'è un errore, continua (non bloccare se il sistema non è configurato) */
+          console.error('[Session Check] Error calling is_session_valid RPC:', checkError);
+          /* Se la funzione non esiste, continua (sistema non configurato) */
+          if (checkError.code === '42883' || checkError.message?.includes('function') || checkError.message?.includes('does not exist')) {
+            console.log('[Session Check] SQL function does not exist - skipping check (system not configured)');
+          }
           return;
         }
         
-        if (!activeSession) {
-          /* Nessuna sessione registrata - potrebbe essere il primo login */
-          console.log('[Session Check] No active session in database (first login?)');
-          return;
-        }
-        
-        /* Se la sessione nel database non corrisponde, questa è una vecchia sessione da un altro browser */
-        if (activeSession.session_id !== sessionId) {
-          console.warn('[Session Check] Session ID mismatch - this is an OLD session from another browser - disconnecting');
+        /* La funzione restituisce TRUE se la sessione è valida, FALSE altrimenti */
+        if (!isValid) {
+          console.warn('[Session Check] Session is NOT valid - this is an OLD session from another browser - disconnecting');
           showDisconnectedOverlay();
           if (sessionCheckInterval) {
             clearInterval(sessionCheckInterval);
@@ -234,7 +231,7 @@ function startSessionCheckInterval() {
           return;
         }
         
-        console.log('[Session Check] ✅ Session verified - matches database');
+        console.log('[Session Check] ✅ Session verified - is valid');
       } catch (err) {
         console.error('[Session Check] Exception:', err);
         /* Ignora errori per non bloccare l'app */
