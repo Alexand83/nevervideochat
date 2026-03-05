@@ -88,10 +88,16 @@ export function initAdminPanel() {
   dom.roleEditCancelBtn?.addEventListener('click', () => {
     dom.roleEditModal.hidden = true;
   });
-  dom.roleEditForm?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    await saveRole();
-  });
+  /* Role edit form - use one-time handler to prevent duplicates */
+  if (dom.roleEditForm && !dom.roleEditForm.dataset.listenerAttached) {
+    dom.roleEditForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const { saveRole } = await import('./admin-extensions.js');
+      await saveRole();
+    });
+    dom.roleEditForm.dataset.listenerAttached = 'true';
+  }
 
   /* Announcement edit modal */
   dom.announcementEditModalClose?.addEventListener('click', () => {
