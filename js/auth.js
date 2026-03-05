@@ -45,9 +45,14 @@ export async function loginUser(nick, password) {
   /* IMPORTANTE: Disconnettere tutte le altre sessioni per permettere solo 1 sessione attiva */
   /* Usa scope: 'others' per disconnettere solo le altre sessioni, non quella corrente - PIÙ ISTANTANEO! */
   try {
+    /* Importa le funzioni necessarie */
+    const { markSessionAsNew, markDisconnectingOthers } = await import('./supabase-client.js');
+    
     /* Marca questa come nuova sessione PRIMA di disconnettere le altre */
-    const { markSessionAsNew } = await import('./supabase-client.js');
     markSessionAsNew();
+    
+    /* Marca che stiamo disconnettingo le altre sessioni (evita falsi positivi in checkSessionInvalid) */
+    markDisconnectingOthers();
     
     /* Prova prima con scope: 'others' (più istantaneo - disconnette solo le altre) */
     try {
@@ -67,6 +72,7 @@ export async function loginUser(nick, password) {
           refresh_token: currentRefreshToken,
         });
         markSessionAsNew(); /* Marca di nuovo dopo il restore */
+        markDisconnectingOthers(); /* Marca di nuovo che stiamo disconnettingo */
         console.log('[Auth] Disconnected all other sessions using fallback method');
       }
     }

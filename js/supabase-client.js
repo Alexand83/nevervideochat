@@ -15,6 +15,7 @@ import { clearPendingCamRequest } from './storage.js';
 /* Flag per indicare se la sessione è appena stata creata (non controllare subito) */
 let sessionJustCreated = false;
 let sessionCreationTime = 0;
+let isDisconnectingOthers = false; /* Flag per indicare che stiamo disconnettingo le altre sessioni */
 
 export function initSupabaseClient() {
   if (!SUPABASE_URL.includes('supabase.co') || SUPABASE_ANON_KEY.startsWith('YOUR_')) {
@@ -30,14 +31,14 @@ export function initSupabaseClient() {
       /* Sessione appena creata/aggiornata - imposta flag per non controllare subito */
       sessionJustCreated = true;
       sessionCreationTime = Date.now();
-      /* Dopo 3 secondi, rimuovi il flag */
+      /* Dopo 15 secondi, rimuovi il flag (allineato con markSessionAsNew) */
       setTimeout(() => {
         sessionJustCreated = false;
-      }, 3000);
+      }, 15000);
     }
     if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
-      /* Solo se non è una nuova sessione appena creata */
-      if (!sessionJustCreated) {
+      /* Solo se non è una nuova sessione appena creata E non stiamo disconnettingo altre sessioni */
+      if (!sessionJustCreated && !isDisconnectingOthers) {
         console.warn('[Auth] Session invalidated - user was disconnected');
         showDisconnectedOverlay();
       }
@@ -51,9 +52,18 @@ export function initSupabaseClient() {
 export function markSessionAsNew() {
   sessionJustCreated = true;
   sessionCreationTime = Date.now();
+  /* Aumenta il tempo di protezione a 15 secondi per dare tempo alla sessione di stabilizzarsi */
   setTimeout(() => {
     sessionJustCreated = false;
-  }, 5000); /* 5 secondi di grazia per stabilizzare la sessione */
+  }, 15000); /* 15 secondi di grazia per stabilizzare la sessione */
+}
+
+/* ── Marca che stiamo disconnettingo le altre sessioni (per evitare falsi positivi) ── */
+export function markDisconnectingOthers() {
+  isDisconnectingOthers = true;
+  setTimeout(() => {
+    isDisconnectingOthers = false;
+  }, 10000); /* 10 secondi di protezione durante la disconnessione */
 }
 
 /* ── Mostra overlay di disconnessione ── */
@@ -365,11 +375,16 @@ export async function connectSupabase() {
 async function checkSessionInvalid() {
   if (!state.supa || !state.currentUser) return false;
   
+  /* NON controllare se stiamo disconnettingo le altre sessioni (evita falsi positivi) */
+  if (isDisconnectingOthers) {
+    return false;
+  }
+  
   /* NON controllare se la sessione è appena stata creata (durante inizializzazione) */
   if (sessionJustCreated) {
     const timeSinceCreation = Date.now() - sessionCreationTime;
-    /* Se è passato meno di 5 secondi dalla creazione, non controllare */
-    if (timeSinceCreation < 5000) {
+    /* Se è passato meno di 15 secondi dalla creazione, non controllare */
+    if (timeSinceCreation < 15000) {
       return false;
     }
   }
@@ -377,8 +392,8 @@ async function checkSessionInvalid() {
   try {
     const { data: { user }, error } = await state.supa.auth.getUser();
     if (error || !user) {
-      /* Solo se non è una nuova sessione appena creata */
-      if (!sessionJustCreated) {
+      /* Solo se non è una nuova sessione appena creata E non stiamo disconnettingo altre sessioni */
+      if (!sessionJustCreated && !isDisconnectingOthers) {
         console.warn('[Auth] Session invalid - user was disconnected');
         showDisconnectedOverlay();
         return true;
@@ -389,8 +404,8 @@ async function checkSessionInvalid() {
   } catch (err) {
     /* Se è un errore 403, la sessione è stata invalidata */
     if (err?.status === 403 || err?.message?.includes('403')) {
-      /* Solo se non è una nuova sessione appena creata */
-      if (!sessionJustCreated) {
+      /* Solo se non è una nuova sessione appena creata E non stiamo disconnettingo altre sessioni */
+      if (!sessionJustCreated && !isDisconnectingOthers) {
         console.warn('[Auth] Session invalid (403) - user was disconnected');
         showDisconnectedOverlay();
         return true;
