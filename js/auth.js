@@ -36,7 +36,10 @@ function getSavedSessionId() {
 
 /* ── Verifica immediatamente se la sessione è valida ── */
 export async function verifySessionImmediately(userId, accessToken) {
-  if (!state.supa || !userId || !accessToken) return;
+  if (!state.supa || !userId || !accessToken) {
+    console.warn('[Auth] IMMEDIATE CHECK: Missing parameters', { hasSupa: !!state.supa, userId, hasToken: !!accessToken });
+    return false;
+  }
   
   try {
     const sessionId = createSessionId(accessToken);
@@ -64,12 +67,16 @@ export async function verifySessionImmediately(userId, accessToken) {
     });
     
     if (checkError) {
-      console.warn('[Auth] IMMEDIATE CHECK: Error checking session:', checkError);
+      console.error('[Auth] IMMEDIATE CHECK: Error checking session:', checkError);
       if (checkError.message?.includes('function') || checkError.code === '42883') {
         console.error('[Auth] CRITICAL: is_session_valid function not found! Execute supabase_active_sessions.sql!');
+        showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
+        /* Se la funzione non esiste, blocca la sessione per sicurezza */
+        return false;
       }
-      /* In caso di errore, continua comunque (non bloccare se il sistema non è configurato) */
-      return true;
+      /* Per altri errori, blocca comunque per sicurezza */
+      console.warn('[Auth] IMMEDIATE CHECK: Unknown error - blocking session for security');
+      return false;
     }
     
     if (isValid === false) {
@@ -84,9 +91,9 @@ export async function verifySessionImmediately(userId, accessToken) {
     console.log('[Auth] IMMEDIATE CHECK: ✅ Session is valid');
     return true;
   } catch (err) {
-    console.error('[Auth] IMMEDIATE CHECK: Error:', err);
-    /* In caso di errore, continua comunque */
-    return true;
+    console.error('[Auth] IMMEDIATE CHECK: Exception:', err);
+    /* In caso di errore, blocca per sicurezza */
+    return false;
   }
 }
 

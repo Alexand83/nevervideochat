@@ -160,6 +160,9 @@ function startSessionCheckInterval() {
   sessionCheckInterval = setInterval(async () => {
     if (!state.supa || !state.currentUser) return;
     
+    /* NON controllare per utenti guest (non hanno sessione Supabase) */
+    if (state.currentUser.isGuest) return;
+    
     /* NON controllare se stiamo disconnettingo le altre sessioni */
     if (isDisconnectingOthers) return;
     
@@ -172,7 +175,11 @@ function startSessionCheckInterval() {
     try {
       const session = await state.supa.auth.getSession();
       if (!session?.data?.session?.access_token) {
-        console.warn('[Session Check] No active session found');
+        /* Se non c'è sessione ma l'utente è registrato, potrebbe essere un problema */
+        /* Ma non loggare come warning se è un guest */
+        if (!state.currentUser.isGuest) {
+          console.warn('[Session Check] No active session found for registered user');
+        }
         return;
       }
       

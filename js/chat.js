@@ -226,40 +226,58 @@ export async function sendMessage() {
   if (!state.currentUser) return;
   
   /* CRITICO: Verifica che questa sia la sessione attiva - solo la nuova sessione può scrivere */
-  if (state.supa && state.currentUser.id) {
+  /* Solo per utenti registrati (non guest) */
+  if (state.supa && state.currentUser.id && !state.currentUser.isGuest) {
     try {
       const session = await state.supa.auth.getSession();
-      if (session?.data?.session?.access_token) {
-        const sessionId = createSessionId(session.data.session.access_token);
-        const savedSessionId = getSavedSessionId();
-        
-        /* Controllo rapido: se l'ID salvato non corrisponde, questa è una vecchia sessione */
-        if (savedSessionId && savedSessionId !== sessionId) {
-          console.warn('[Chat] Session ID mismatch - this is not the active session - disconnecting');
-          const { showDisconnectedOverlay } = await import('./supabase-client.js');
-          showDisconnectedOverlay();
+      if (!session?.data?.session?.access_token) {
+        console.warn('[Chat] No session found - cannot verify. Blocking message.');
+        showToast('⚠️ Session expired. Please refresh the page.');
+        return;
+      }
+      
+      const sessionId = createSessionId(session.data.session.access_token);
+      const savedSessionId = getSavedSessionId();
+      
+      /* Controllo rapido: se l'ID salvato non corrisponde, questa è una vecchia sessione */
+      if (savedSessionId && savedSessionId !== sessionId) {
+        console.warn('[Chat] Session ID mismatch - this is not the active session - disconnecting');
+        const { showDisconnectedOverlay } = await import('./supabase-client.js');
+        showDisconnectedOverlay();
+        return;
+      }
+      
+      /* Verifica anche nel database per sicurezza */
+      const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
+        p_user_id: state.currentUser.id,
+        p_session_id: sessionId
+      });
+      
+      if (checkError) {
+        console.error('[Chat] Error checking session validity:', checkError);
+        /* Se la funzione non esiste, blocca comunque per sicurezza */
+        if (checkError.message?.includes('function') || checkError.code === '42883') {
+          console.error('[Chat] CRITICAL: is_session_valid function not found! Execute supabase_active_sessions.sql!');
+          showToast('⚠️ Session management not configured. Message blocked for security.');
           return;
         }
-        
-        /* Verifica anche nel database per sicurezza */
-        const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
-          p_user_id: state.currentUser.id,
-          p_session_id: sessionId
-        });
-        
-        if (checkError) {
-          console.warn('[Chat] Error checking session validity:', checkError);
-        } else if (isValid === false) {
-          /* Questa NON è la sessione attiva - disconnettere immediatamente */
-          console.warn('[Chat] This session is not the active one - disconnecting');
-          const { showDisconnectedOverlay } = await import('./supabase-client.js');
-          showDisconnectedOverlay();
-          return;
-        }
+        /* Per altri errori, blocca comunque per sicurezza */
+        showToast('⚠️ Cannot verify session. Message blocked.');
+        return;
+      }
+      
+      if (isValid === false) {
+        /* Questa NON è la sessione attiva - disconnettere immediatamente */
+        console.warn('[Chat] This session is not the active one - disconnecting');
+        const { showDisconnectedOverlay } = await import('./supabase-client.js');
+        showDisconnectedOverlay();
+        return;
       }
     } catch (err) {
-      console.warn('[Chat] Error verifying session:', err);
-      /* In caso di errore, continua comunque (non bloccare l'utente) */
+      console.error('[Chat] Error verifying session:', err);
+      /* In caso di errore, blocca il messaggio per sicurezza */
+      showToast('⚠️ Error verifying session. Message blocked.');
+      return;
     }
   }
   
