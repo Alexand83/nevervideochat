@@ -59,6 +59,10 @@ export async function loginUser(nick, password) {
         refresh_token: currentRefreshToken,
       });
       
+      /* Marca questa come nuova sessione per evitare che checkSessionInvalid la disconnetta */
+      const { markSessionAsNew } = await import('./supabase-client.js');
+      markSessionAsNew();
+      
       console.log('[Auth] Disconnected all other sessions, kept current session active');
     }
   } catch (signOutErr) {
@@ -67,6 +71,10 @@ export async function loginUser(nick, password) {
   }
   
   if (data.session) persistAuthSession(data.session);
+  
+  /* Marca la sessione come nuova anche dopo il persist */
+  const { markSessionAsNew } = await import('./supabase-client.js');
+  markSessionAsNew();
   const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
   const displayName = profile?.display_name || profile?.username || nick;
   return { 
