@@ -170,6 +170,61 @@ export async function saveRole() {
       return;
     }
     
+    /* Verifica aggiuntiva: controlla il ruolo nel database e l'autenticazione */
+    if (!state.currentUser) {
+      showToast('🚫 You must be logged in to manage roles.');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Role';
+      }
+      isSavingRole = false;
+      return;
+    }
+    
+    /* Verifica autenticazione Supabase */
+    const { data: { user: authUser } } = await state.supa.auth.getUser();
+    console.log('[Admin] Auth user:', authUser);
+    console.log('[Admin] Current user ID:', state.currentUser.id);
+    
+    if (!authUser) {
+      showToast('🚫 Authentication required. Please log in again.');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Role';
+      }
+      isSavingRole = false;
+      return;
+    }
+    
+    /* Verifica aggiuntiva: controlla il ruolo nel database */
+    const { data: profile, error: profileError } = await state.supa
+      .from('profiles')
+      .select('id, role')
+      .eq('id', String(state.currentUser.id))
+      .single();
+    
+    if (profileError) {
+      console.error('[Admin] Error checking profile:', profileError);
+      showToast('⚠️ Could not verify your role. Please try again.');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Role';
+      }
+      isSavingRole = false;
+      return;
+    }
+    
+    console.log('[Admin] Current user profile:', profile);
+    if (!profile || (profile.role !== 'owner' && profile.role !== 'admin')) {
+      showToast('🚫 You must be owner or admin to manage roles. Your role: ' + (profile?.role || 'unknown'));
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Role';
+      }
+      isSavingRole = false;
+      return;
+    }
+    
     const roleData = {
       name: escHtml(name),
       color,
@@ -189,19 +244,45 @@ export async function saveRole() {
     
     if (id) {
       roleData.id = id;
-      const { error } = await state.supa
+      console.log('[Admin] Updating role:', { id, roleData });
+      const { data, error } = await state.supa
         .from('custom_roles')
         .update(roleData)
-        .eq('id', id);
-      if (error) throw error;
+        .eq('id', id)
+        .select();
+      
+      if (error) {
+        console.error('[Admin] Update role error:', error);
+        throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        console.warn('[Admin] No rows updated - possible RLS policy issue');
+        throw new Error('No rows updated. Check database permissions.');
+      }
+      
+      console.log('[Admin] Role updated successfully:', data);
       await logAdminAction('update_role', 'role', id, name);
     } else {
       const roleId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
       roleData.id = roleId;
-      const { error } = await state.supa
+      console.log('[Admin] Creating role:', { roleId, roleData });
+      const { data, error } = await state.supa
         .from('custom_roles')
-        .insert(roleData);
-      if (error) throw error;
+        .insert(roleData)
+        .select();
+      
+      if (error) {
+        console.error('[Admin] Insert role error:', error);
+        throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        console.warn('[Admin] No rows inserted - possible RLS policy issue');
+        throw new Error('No rows inserted. Check database permissions.');
+      }
+      
+      console.log('[Admin] Role created successfully:', data);
       await logAdminAction('create_role', 'role', roleId, name);
     }
     
@@ -213,7 +294,26 @@ export async function saveRole() {
     await loadCustomRoles();
   } catch (err) {
     console.error('[Admin] Save role error:', err);
-    showToast('⚠️ Failed to save role: ' + (err.message || 'Unknown error'));
+    console.error('[Admin] Error details:', {
+      message: err.message,
+      code: err.code,
+      details: err.details,
+      hint: err.hint,
+      fullError: err
+    });
+    
+    let errorMessage = '⚠️ Failed to save role: ';
+    if (err.code === '42501') {
+      errorMessage += 'Permission denied. You need admin/owner role.';
+    } else if (err.code === 'PGRST301' || err.message?.includes('permission denied')) {
+      errorMessage += 'Database permission denied. Check RLS policies.';
+    } else if (err.message) {
+      errorMessage += err.message;
+    } else {
+      errorMessage += 'Unknown error. Check console for details.';
+    }
+    
+    showToast(errorMessage);
   } finally {
     /* Re-enable save button */
     const btn = dom.roleEditForm?.querySelector('button[type="submit"]');

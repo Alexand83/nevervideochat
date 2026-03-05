@@ -199,3 +199,16 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.announcements;
   END IF;
 END $$;
+
+-- ── Fix policy RLS per custom_roles (più robusta) ─────────────────
+-- La policy verifica che l'utente autenticato abbia ruolo owner o admin
+DROP POLICY IF EXISTS "Admin manage custom_roles" ON public.custom_roles;
+CREATE POLICY "Admin manage custom_roles" ON public.custom_roles 
+FOR ALL 
+USING (
+  EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = COALESCE(auth.uid()::text, '')::text
+    AND role IN ('owner', 'admin')
+  )
+);
