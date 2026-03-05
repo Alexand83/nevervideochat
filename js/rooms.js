@@ -43,6 +43,7 @@ function mkRoom(id, name = null, icon = '💬', maxCams = null) {
 
 /* ── Join a room (subscribe presence + DB, load messages) ── */
 export async function joinRoom(roomId) {
+  console.log('[Rooms] 🚪 joinRoom called for room:', roomId);
   const roomIdStr = String(roomId);
   
   /* Reset games panel width CSS variable when joining a room */
@@ -515,11 +516,14 @@ export function setRenderMessage(fn) { _renderMessage = fn; }
 
 /* ── Init: load rooms from DB and join default ── */
 export async function initRooms() {
+  console.log('[Rooms] 🏠 initRooms called');
   await loadRoomsFromDB();
   // Cerca la stanza "General" per ID o nome
   const generalRoom = availableRoomsCache.find(r => r.name === 'General' || String(r.id) === '1');
   if (generalRoom) {
+    console.log('[Rooms] Joining general room:', generalRoom.id);
     await joinRoom(String(generalRoom.id));
+    console.log('[Rooms] ✅ Joined general room');
   } else {
     // Fallback: prova a unire la prima stanza disponibile
     if (availableRoomsCache.length > 0) {
