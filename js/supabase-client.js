@@ -283,7 +283,27 @@ export async function connectSupabase() {
           await checkActiveGame();
         }
       })
+      .on('broadcast', { event: 'force-logout' }, async ({ payload }) => {
+        /* Gestisci disconnessione forzata quando si accede da un altro dispositivo */
+        const targetId = payload.to || payload.user_id;
+        if (String(targetId) === String(state.currentUser?.id)) {
+          showToast('⚠️ You have been logged out. A new login was detected from another device.');
+          const { logoutUser } = await import('./auth.js');
+          await logoutUser();
+        }
+      })
       .subscribe();
+    
+    /* ── Monitora cambiamenti di autenticazione per rilevare disconnessioni ── */
+    state.supa.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' && state.currentUser && !state.currentUser.isGuest) {
+        /* Sessione invalidata - probabilmente login da altro dispositivo */
+        console.log('[Auth] Session signed out - possible login from another device');
+        showToast('⚠️ Your session has been terminated. You may have logged in from another device.');
+        const { logoutUser } = await import('./auth.js');
+        logoutUser();
+      }
+    });
 
     showToast('🟢 Connected to NeverVideoChat');
     console.log('[NVC] Supabase connected.');

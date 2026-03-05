@@ -154,9 +154,25 @@ export function handleIncomingPM(payload) {
   const fromName = payload.fromName || 'User';
   if (state.ignoredUsers[fromId]) return;   /* silently drop */
 
-  ensureUser(fromId, fromName, { online: true });
+  /* Prevenzione duplicati: controlla se il messaggio è già stato ricevuto */
   const chat = initOrGetPChat(fromId);
-  const msg  = { from: fromId, text: payload.text, ts: payload.ts || Date.now() };
+  const msgTimestamp = payload.ts || Date.now();
+  const msgText = payload.text;
+  
+  /* Controlla se esiste già un messaggio identico (stesso testo e timestamp simile) */
+  const isDuplicate = chat.msgs.some(m => 
+    m.from === fromId && 
+    m.text === msgText && 
+    Math.abs(m.ts - msgTimestamp) < 1000  /* Stesso messaggio se timestamp differisce di meno di 1 secondo */
+  );
+  
+  if (isDuplicate) {
+    console.log('[PM] Ignoring duplicate private message from', fromId);
+    return;
+  }
+
+  ensureUser(fromId, fromName, { online: true });
+  const msg  = { from: fromId, text: msgText, ts: msgTimestamp };
   chat.msgs.push(msg);
   playNotificationSound();
 
@@ -165,7 +181,7 @@ export function handleIncomingPM(payload) {
   } else if (chat.minimised) {
     chat.unread++;
     updateMinBadge(fromId);
-    showToast(`💬 ${fromName}: ${payload.text.slice(0, 60)}`);
+    showToast(`💬 ${fromName}: ${msgText.slice(0, 60)}`);
   } else {
     renderPMsg(fromId, msg);
   }

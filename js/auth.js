@@ -41,6 +41,40 @@ export async function registerUser(nick, password) {
 export async function loginUser(nick, password) {
   const { data, error } = await state.supa.auth.signInWithPassword({ email: nickToEmail(nick), password });
   if (error) throw error;
+  
+  /* IMPORTANTE: Invalida tutte le altre sessioni per questo utente (single-session) */
+  /* Questo forza la disconnessione su altri dispositivi */
+  try {
+    /* Ottieni tutte le sessioni attive per questo utente */
+    const { data: sessions } = await state.supa.auth.admin.listUserSessions(data.user.id);
+    if (sessions && sessions.length > 0) {
+      /* Invalida tutte le sessioni tranne quella corrente */
+      for (const session of sessions) {
+        if (session.id !== data.session.id) {
+          try {
+            await state.supa.auth.admin.signOut(session.id);
+          } catch (err) {
+            console.warn('[Auth] Error invalidating session:', err);
+          }
+        }
+      }
+    }
+  } catch (adminError) {
+    /* Se non abbiamo permessi admin, usa un approccio alternativo */
+    console.warn('[Auth] Cannot invalidate other sessions (admin required):', adminError);
+    /* Usa un canale broadcast per notificare la disconnessione agli altri dispositivi */
+    try {
+      const { broadcast } = await import('./broadcast.js');
+      broadcast('force-logout', data.user.id, { 
+        to: data.user.id,
+        user_id: data.user.id,
+        reason: 'New login from another device' 
+      });
+    } catch (broadcastError) {
+      console.warn('[Auth] Cannot send force-logout broadcast:', broadcastError);
+    }
+  }
+  
   if (data.session) persistAuthSession(data.session);
   const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
   const displayName = profile?.display_name || profile?.username || nick;
