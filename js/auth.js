@@ -42,37 +42,28 @@ export async function loginUser(nick, password) {
   const { data, error } = await state.supa.auth.signInWithPassword({ email: nickToEmail(nick), password });
   if (error) throw error;
   
-  /* IMPORTANTE: Invalida tutte le altre sessioni per questo utente (single-session) */
-  /* Questo forza la disconnessione su altri dispositivi */
+  /* IMPORTANTE: Disconnettere tutte le altre sessioni per permettere solo 1 sessione attiva */
+  /* Strategia: Prima facciamo signOut globale, poi ripristiniamo la sessione corrente */
   try {
-    /* Ottieni tutte le sessioni attive per questo utente */
-    const { data: sessions } = await state.supa.auth.admin.listUserSessions(data.user.id);
-    if (sessions && sessions.length > 0) {
-      /* Invalida tutte le sessioni tranne quella corrente */
-      for (const session of sessions) {
-        if (session.id !== data.session.id) {
-          try {
-            await state.supa.auth.admin.signOut(session.id);
-          } catch (err) {
-            console.warn('[Auth] Error invalidating session:', err);
-          }
-        }
-      }
-    }
-  } catch (adminError) {
-    /* Se non abbiamo permessi admin, usa un approccio alternativo */
-    console.warn('[Auth] Cannot invalidate other sessions (admin required):', adminError);
-    /* Usa un canale broadcast per notificare la disconnessione agli altri dispositivi */
-    try {
-      const { broadcast } = await import('./broadcast.js');
-      broadcast('force-logout', data.user.id, { 
-        to: data.user.id,
-        user_id: data.user.id,
-        reason: 'New login from another device' 
+    /* Salva la sessione corrente prima di disconnettere */
+    const currentAccessToken = data.session?.access_token;
+    const currentRefreshToken = data.session?.refresh_token;
+    
+    if (currentAccessToken && currentRefreshToken) {
+      /* Disconnettere tutte le sessioni (inclusa quella corrente) */
+      await state.supa.auth.signOut({ scope: 'global' });
+      
+      /* Ripristina immediatamente la sessione corrente */
+      await state.supa.auth.setSession({
+        access_token: currentAccessToken,
+        refresh_token: currentRefreshToken,
       });
-    } catch (broadcastError) {
-      console.warn('[Auth] Cannot send force-logout broadcast:', broadcastError);
+      
+      console.log('[Auth] Disconnected all other sessions, kept current session active');
     }
+  } catch (signOutErr) {
+    /* Se fallisce, continua comunque - la sessione corrente è già valida */
+    console.warn('[Auth] Could not disconnect old sessions (this is OK if first login):', signOutErr);
   }
   
   if (data.session) persistAuthSession(data.session);

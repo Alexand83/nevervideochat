@@ -42,6 +42,7 @@ export async function connectRoom(roomId) {
   /* ── 2. Subscribe to new messages (Postgres Changes filtered by room_id) ── */
   const dbSub = state.supa.channel(`db-messages-${roomId}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, ({ new: m }) => {
+      try {
       if (m.user_id === state.currentUser.id) {
         /* This is our own message - update the temp ID with the DB UUID */
         const room = state.rooms[roomId];
@@ -73,8 +74,17 @@ export async function connectRoom(roomId) {
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
       addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);
       if (roomId === state.activeRoom) playNotificationSound();
+      } catch (err) {
+        console.error('[Supabase] Error processing new message:', err);
+      }
     })
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log(`[Supabase] Subscribed to messages for room ${roomId}`);
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error(`[Supabase] Error subscribing to messages for room ${roomId}`);
+      }
+    });
 
   room.dbSub = dbSub;
 }
@@ -283,27 +293,7 @@ export async function connectSupabase() {
           await checkActiveGame();
         }
       })
-      .on('broadcast', { event: 'force-logout' }, async ({ payload }) => {
-        /* Gestisci disconnessione forzata quando si accede da un altro dispositivo */
-        const targetId = payload.to || payload.user_id;
-        if (String(targetId) === String(state.currentUser?.id)) {
-          showToast('⚠️ You have been logged out. A new login was detected from another device.');
-          const { logoutUser } = await import('./auth.js');
-          await logoutUser();
-        }
-      })
       .subscribe();
-    
-    /* ── Monitora cambiamenti di autenticazione per rilevare disconnessioni ── */
-    state.supa.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT' && state.currentUser && !state.currentUser.isGuest) {
-        /* Sessione invalidata - probabilmente login da altro dispositivo */
-        console.log('[Auth] Session signed out - possible login from another device');
-        showToast('⚠️ Your session has been terminated. You may have logged in from another device.');
-        const { logoutUser } = await import('./auth.js');
-        await logoutUser();
-      }
-    });
 
     showToast('🟢 Connected to NeverVideoChat');
     console.log('[NVC] Supabase connected.');
