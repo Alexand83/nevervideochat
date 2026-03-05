@@ -154,7 +154,7 @@ function switchAdminTab(tabName) {
 }
 
 async function openAdminPanel() {
-  await ensurePermissionsLoaded(); /* Load permissions before opening */
+  await loadUserPermissions(); /* Load permissions before opening */
   dom.adminModal.hidden = false;
   switchAdminTab('rooms');
 }
