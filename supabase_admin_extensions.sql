@@ -170,6 +170,23 @@ INSERT INTO public.custom_roles (id, name, color, permissions) VALUES
   }'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO public.custom_roles (id, name, color, permissions) VALUES
+  ('guest', 'Guest', '#9e9e9e', '{
+    "can_ban": false,
+    "can_mute": false,
+    "can_kick": false,
+    "can_delete_messages": false,
+    "can_edit_messages": false,
+    "can_manage_rooms": false,
+    "can_manage_users": false,
+    "can_manage_roles": false,
+    "can_view_logs": false,
+    "can_manage_announcements": false,
+    "can_view_statistics": false,
+    "can_post_messages": true
+  }'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
 -- ── Abilita Realtime per le nuove tabelle ─────────────────────
 DO $$
 BEGIN
