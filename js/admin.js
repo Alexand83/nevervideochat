@@ -99,8 +99,12 @@ function switchAdminTab(tabName) {
   if (tabName === 'rooms') loadRooms();
   else if (tabName === 'users') loadUsers();
   else if (tabName === 'roles') loadCustomRoles();
+  else if (tabName === 'messages') loadMessages();
   else if (tabName === 'banned') loadBannedUsers();
   else if (tabName === 'ips') loadBannedIPs();
+  else if (tabName === 'announcements') loadAnnouncements();
+  else if (tabName === 'statistics') loadStatistics();
+  else if (tabName === 'logs') loadAdminLogs();
   else if (tabName === 'themes') loadThemes();
 }
 
@@ -675,4 +679,28 @@ window.deleteTheme = async function(themeId) {
 async function hashPassword(password) {
   // Simple base64 encoding for now - in production use bcrypt or similar
   return btoa(password);
+}
+
+/* ================================================================
+   NUOVE FUNZIONALITÀ ADMIN - Ruoli, Moderazione, Statistiche, Log, Annunci
+================================================================ */
+
+/* ── Log azione admin ─────────────────────────────────────────── */
+async function logAdminAction(action, targetType, targetId, targetName, details = {}) {
+  if (!state.supa || !state.currentUser) return;
+  
+  try {
+    await state.supa.from('admin_logs').insert({
+      admin_id: String(state.currentUser.id),
+      admin_name: state.currentUser.name || state.currentUser.username || 'Unknown',
+      action,
+      target_type: targetType,
+      target_id: targetId ? String(targetId) : null,
+      target_name: targetName || null,
+      details,
+      ip_address: null,
+    });
+  } catch (err) {
+    console.error('[Admin] Error logging action:', err);
+  }
 }

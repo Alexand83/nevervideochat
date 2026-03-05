@@ -742,8 +742,13 @@
     <div class="admin-tabs" role="tablist">
       <button class="admin-tab active" data-tab="rooms" role="tab">🏠 Rooms</button>
       <button class="admin-tab" data-tab="users" role="tab">👥 Users</button>
+      <button class="admin-tab" data-tab="roles" role="tab">👑 Roles</button>
+      <button class="admin-tab" data-tab="messages" role="tab">💬 Messages</button>
       <button class="admin-tab" data-tab="banned" role="tab">🚫 Banned</button>
       <button class="admin-tab" data-tab="ips" role="tab">🌐 IP Blocks</button>
+      <button class="admin-tab" data-tab="announcements" role="tab">📢 Announcements</button>
+      <button class="admin-tab" data-tab="statistics" role="tab">📊 Statistics</button>
+      <button class="admin-tab" data-tab="logs" role="tab">📋 Logs</button>
       <button class="admin-tab" data-tab="themes" role="tab">🎨 Themes</button>
     </div>
 
@@ -795,6 +800,71 @@
         <h3 class="admin-section-title">Blocked IPs</h3>
         <button class="auth-btn-primary" id="adminBlockIpBtn">➕ Block IP</button>
         <div id="adminIpsList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages Moderation Tab -->
+    <div class="admin-tab-content" id="adminTabMessages" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Message Moderation</h3>
+        <div class="admin-filters">
+          <select id="adminMessagesRoomFilter" class="admin-filter-select">
+            <option value="">All Rooms</option>
+          </select>
+          <select id="adminMessagesStatusFilter" class="admin-filter-select">
+            <option value="all">All Messages</option>
+            <option value="reported">Reported</option>
+            <option value="deleted">Deleted</option>
+          </select>
+          <input type="text" id="adminMessagesSearch" class="admin-filter-input" placeholder="Search by user or content...">
+        </div>
+        <div id="adminMessagesList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Announcements Tab -->
+    <div class="admin-tab-content" id="adminTabAnnouncements" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Global Announcements</h3>
+        <button class="auth-btn-primary" id="adminCreateAnnouncementBtn">➕ Create Announcement</button>
+        <div id="adminAnnouncementsList" class="admin-list">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Statistics Tab -->
+    <div class="admin-tab-content" id="adminTabStatistics" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Statistics & Analytics</h3>
+        <div id="adminStatisticsContent" class="admin-stats-grid">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div class="admin-tab-content" id="adminTabLogs" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Admin Action Logs</h3>
+        <div class="admin-filters">
+          <select id="adminLogsActionFilter" class="admin-filter-select">
+            <option value="">All Actions</option>
+            <option value="ban">Ban</option>
+            <option value="mute">Mute</option>
+            <option value="kick">Kick</option>
+            <option value="delete_message">Delete Message</option>
+            <option value="edit_message">Edit Message</option>
+            <option value="create_room">Create Room</option>
+            <option value="delete_room">Delete Room</option>
+          </select>
+          <input type="text" id="adminLogsSearch" class="admin-filter-input" placeholder="Search by admin or target...">
+        </div>
+        <div id="adminLogsList" class="admin-list">
           <!-- Filled by JS -->
         </div>
       </div>
@@ -1000,6 +1070,128 @@
   </svg>
   <span class="floating-btn-badge" id="floatingUsersBadge">1</span>
 </button>
+
+<!-- Role Edit Modal -->
+<div class="nvc-modal-backdrop" id="roleEditModal" role="dialog" aria-modal="true" hidden>
+  <div class="nvc-modal">
+    <div class="nvc-modal-hdr">
+      <h2 id="roleEditModalTitle">Create Role</h2>
+      <button class="nvc-modal-close-btn" id="roleEditModalClose">✕</button>
+    </div>
+    <form id="roleEditForm" class="settings-form">
+      <input type="hidden" id="roleEditId">
+      
+      <label class="settings-label" for="roleEditName">
+        Role Name <span style="color: var(--clr-danger-h);">*</span>
+      </label>
+      <input type="text" id="roleEditName" class="settings-input" required placeholder="e.g., Moderator, VIP" autofocus>
+      
+      <label class="settings-label" for="roleEditColor">Badge Color</label>
+      <input type="color" id="roleEditColor" class="settings-input" value="#8b949e" style="height: 40px;">
+      
+      <h4 style="margin-top: 24px; margin-bottom: 12px;">Permissions</h4>
+      <div class="admin-permissions-grid">
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanPostMessages" checked>
+          <span>Post Messages</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanDeleteMessages">
+          <span>Delete Messages</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanEditMessages">
+          <span>Edit Messages</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanMute">
+          <span>Mute Users</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanKick">
+          <span>Kick Users</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanBan">
+          <span>Ban Users</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanManageRooms">
+          <span>Manage Rooms</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanManageUsers">
+          <span>Manage Users</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanManageRoles">
+          <span>Manage Roles</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanViewLogs">
+          <span>View Logs</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanManageAnnouncements">
+          <span>Manage Announcements</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanViewStatistics">
+          <span>View Statistics</span>
+        </label>
+      </div>
+      
+      <div class="settings-actions">
+        <button type="submit" class="auth-btn-primary">💾 Save Role</button>
+        <button type="button" class="auth-btn-ghost" id="roleEditCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Announcement Edit Modal -->
+<div class="nvc-modal-backdrop" id="announcementEditModal" role="dialog" aria-modal="true" hidden>
+  <div class="nvc-modal">
+    <div class="nvc-modal-hdr">
+      <h2 id="announcementEditModalTitle">Create Announcement</h2>
+      <button class="nvc-modal-close-btn" id="announcementEditModalClose">✕</button>
+    </div>
+    <form id="announcementEditForm" class="settings-form">
+      <input type="hidden" id="announcementEditId">
+      
+      <label class="settings-label" for="announcementEditTitle">
+        Title <span style="color: var(--clr-danger-h);">*</span>
+      </label>
+      <input type="text" id="announcementEditTitle" class="settings-input" required placeholder="Announcement title" autofocus>
+      
+      <label class="settings-label" for="announcementEditContent">
+        Content <span style="color: var(--clr-danger-h);">*</span>
+      </label>
+      <textarea id="announcementEditContent" class="settings-input" required rows="4" placeholder="Announcement content..."></textarea>
+      
+      <label class="settings-label" for="announcementEditType">Type</label>
+      <select id="announcementEditType" class="settings-input">
+        <option value="info">ℹ️ Info</option>
+        <option value="success">✅ Success</option>
+        <option value="warning">⚠️ Warning</option>
+        <option value="error">❌ Error</option>
+      </select>
+      
+      <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+        <input type="checkbox" id="announcementEditIsPersistent">
+        <span>Persistent Banner (always visible)</span>
+      </label>
+      
+      <label class="settings-label" for="announcementEditExpiresAt">Expires At (optional)</label>
+      <input type="datetime-local" id="announcementEditExpiresAt" class="settings-input">
+      
+      <div class="settings-actions">
+        <button type="submit" class="auth-btn-primary">💾 Save Announcement</button>
+        <button type="button" class="auth-btn-ghost" id="announcementEditCancelBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- Supabase JS SDK (CDN — no npm/bundler needed) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
