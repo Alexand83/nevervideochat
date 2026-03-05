@@ -202,20 +202,8 @@ function startSessionCheckInterval() {
       }
       
       const sessionId = session.data.session.access_token.substring(0, 40);
-      const savedSessionId = localStorage.getItem('nvc_session_id');
       
-      /* Controllo rapido: se l'ID salvato non corrisponde, questa è una vecchia sessione */
-      if (savedSessionId && savedSessionId !== sessionId) {
-        console.warn('[Session Check] Session ID mismatch - disconnecting old session');
-        showDisconnectedOverlay();
-        if (sessionCheckInterval) {
-          clearInterval(sessionCheckInterval);
-          sessionCheckInterval = null;
-        }
-        return;
-      }
-      
-      /* APPROCCIO SEMPLICE: Controlla direttamente la tabella active_sessions */
+      /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
       try {
         const { data: activeSession, error: checkError } = await state.supa
           .from('active_sessions')
@@ -224,33 +212,32 @@ function startSessionCheckInterval() {
           .single();
         
         if (checkError) {
-          /* Se la tabella non esiste, usa localStorage come fallback */
-          const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
-          if (activeSessionData && activeSessionData.userId === state.currentUser.id) {
-            if (activeSessionData.sessionId !== sessionId) {
-              console.warn('[Session Check] Session ID mismatch (localStorage) - disconnecting');
-              showDisconnectedOverlay();
-              if (sessionCheckInterval) {
-                clearInterval(sessionCheckInterval);
-                sessionCheckInterval = null;
-              }
-              return;
-            }
-          }
-        } else if (activeSession) {
-          /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
-          if (activeSession.session_id !== sessionId) {
-            console.warn('[Session Check] Session ID mismatch (database) - disconnecting old session');
-            showDisconnectedOverlay();
-            if (sessionCheckInterval) {
-              clearInterval(sessionCheckInterval);
-              sessionCheckInterval = null;
-            }
-            return;
-          }
+          console.error('[Session Check] Error reading from database:', checkError);
+          /* Se la tabella non esiste o c'è un errore, continua (non bloccare se il sistema non è configurato) */
+          return;
         }
+        
+        if (!activeSession) {
+          /* Nessuna sessione registrata - potrebbe essere il primo login */
+          console.log('[Session Check] No active session in database (first login?)');
+          return;
+        }
+        
+        /* Se la sessione nel database non corrisponde, questa è una vecchia sessione da un altro browser */
+        if (activeSession.session_id !== sessionId) {
+          console.warn('[Session Check] Session ID mismatch - this is an OLD session from another browser - disconnecting');
+          showDisconnectedOverlay();
+          if (sessionCheckInterval) {
+            clearInterval(sessionCheckInterval);
+            sessionCheckInterval = null;
+          }
+          return;
+        }
+        
+        console.log('[Session Check] ✅ Session verified - matches database');
       } catch (err) {
-        /* Ignora errori */
+        console.error('[Session Check] Exception:', err);
+        /* Ignora errori per non bloccare l'app */
       }
     } catch (err) {
       console.warn('[Session Check] Error in periodic check:', err);

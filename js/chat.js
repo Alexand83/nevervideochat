@@ -255,50 +255,44 @@ export async function sendMessage() {
       }
       
       const sessionId = createSessionId(session.data.session.access_token);
-      const savedSessionId = getSavedSessionId();
       
-      /* Controllo rapido: se l'ID salvato non corrisponde, questa è una vecchia sessione */
-      if (savedSessionId && savedSessionId !== sessionId) {
-        console.warn('[Chat] Session ID mismatch - this is not the active session - disconnecting');
-        const { showDisconnectedOverlay } = await import('./supabase-client.js');
-        showDisconnectedOverlay();
+      /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
+      try {
+        const { data: activeSession, error: checkError } = await state.supa
+          .from('active_sessions')
+          .select('session_id')
+          .eq('user_id', state.currentUser.id)
+          .single();
+        
+        if (checkError) {
+          console.error('[Chat] Error reading from database:', checkError);
+          /* Se la tabella non esiste o c'è un errore, blocca per sicurezza */
+          showToast('⚠️ Cannot verify session. Message blocked.');
+          return;
+        }
+        
+        if (!activeSession) {
+          /* Nessuna sessione registrata - potrebbe essere il primo login, ma blocca comunque per sicurezza */
+          console.warn('[Chat] No active session in database - blocking message');
+          showToast('⚠️ Session not registered. Please refresh the page.');
+          return;
+        }
+        
+        /* Se la sessione nel database non corrisponde, questa è una vecchia sessione da un altro browser */
+        if (activeSession.session_id !== sessionId) {
+          console.warn('[Chat] Session ID mismatch - this is an OLD session from another browser - disconnecting');
+          const { showDisconnectedOverlay } = await import('./supabase-client.js');
+          showDisconnectedOverlay();
+          return;
+        }
+        
+        console.log('[Chat] ✅ Session verified - matches database');
+      } catch (err) {
+        console.error('[Chat] Error checking session:', err);
+        /* In caso di errore, blocca per sicurezza */
+        showToast('⚠️ Error verifying session. Message blocked.');
         return;
       }
-      
-       /* APPROCCIO SEMPLICE: Controlla direttamente la tabella active_sessions */
-       try {
-         const { data: activeSession, error: checkError } = await state.supa
-           .from('active_sessions')
-           .select('session_id')
-           .eq('user_id', state.currentUser.id)
-           .single();
-         
-         if (checkError) {
-           /* Se la tabella non esiste, usa localStorage come fallback */
-           const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
-           if (activeSessionData && activeSessionData.userId === state.currentUser.id) {
-             if (activeSessionData.sessionId !== sessionId) {
-               console.warn('[Chat] Session ID mismatch (localStorage) - disconnecting');
-               const { showDisconnectedOverlay } = await import('./supabase-client.js');
-               showDisconnectedOverlay();
-               return;
-             }
-           }
-         } else if (activeSession) {
-           /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
-           if (activeSession.session_id !== sessionId) {
-             console.warn('[Chat] Session ID mismatch (database) - this is an old session - disconnecting');
-             const { showDisconnectedOverlay } = await import('./supabase-client.js');
-             showDisconnectedOverlay();
-             return;
-           }
-         }
-       } catch (err) {
-         console.warn('[Chat] Error checking session:', err);
-         /* In caso di errore, blocca per sicurezza */
-         showToast('⚠️ Cannot verify session. Message blocked.');
-         return;
-       }
     } catch (err) {
       console.error('[Chat] Error verifying session:', err);
       /* In caso di errore, blocca il messaggio per sicurezza */

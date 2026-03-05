@@ -51,16 +51,7 @@ export async function verifySessionImmediately(userId, accessToken) {
       savedSessionId: savedSessionId ? savedSessionId.substring(0, 20) + '...' : 'none'
     });
     
-    /* Controllo rapido: se l'ID salvato non corrisponde, questa è una vecchia sessione */
-    if (savedSessionId && savedSessionId !== sessionId) {
-      console.warn('[Auth] IMMEDIATE CHECK: Session ID mismatch - this is an old session - disconnecting NOW');
-      const { showDisconnectedOverlay } = await import('./supabase-client.js');
-      showDisconnectedOverlay();
-      clearAuthSession();
-      return false;
-    }
-    
-    /* APPROCCIO SEMPLICE: Controlla direttamente la tabella active_sessions */
+    /* CRITICO: Verifica SOLO nel database - localStorage è per-browser e non funziona tra browser diversi */
     try {
       const { data: activeSession, error: checkError } = await state.supa
         .from('active_sessions')
@@ -69,29 +60,30 @@ export async function verifySessionImmediately(userId, accessToken) {
         .single();
       
       if (checkError) {
-        /* Se la tabella non esiste, usa localStorage come fallback */
-        const activeSessionData = JSON.parse(localStorage.getItem('nvc_active_session') || 'null');
-        if (activeSessionData && activeSessionData.userId === userId) {
-          if (activeSessionData.sessionId !== sessionId) {
-            console.warn('[Auth] IMMEDIATE CHECK: Session ID mismatch (localStorage) - disconnecting NOW');
-            const { showDisconnectedOverlay } = await import('./supabase-client.js');
-            showDisconnectedOverlay();
-            clearAuthSession();
-            return false;
-          }
-        }
-      } else if (activeSession) {
-        /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
-        if (activeSession.session_id !== sessionId) {
-          console.warn('[Auth] IMMEDIATE CHECK: Session ID mismatch (database) - disconnecting NOW');
-          const { showDisconnectedOverlay } = await import('./supabase-client.js');
-          showDisconnectedOverlay();
-          clearAuthSession();
-          return false;
-        }
+        console.error('[Auth] IMMEDIATE CHECK: Error reading from database:', checkError);
+        /* Se la tabella non esiste o c'è un errore, blocca per sicurezza */
+        console.warn('[Auth] IMMEDIATE CHECK: Cannot verify session - blocking for security');
+        return false;
       }
+      
+      if (!activeSession) {
+        /* Nessuna sessione registrata nel database - potrebbe essere il primo login */
+        console.log('[Auth] IMMEDIATE CHECK: No active session in database (first login?)');
+        return true; /* Permetti il primo login */
+      }
+      
+      /* Se la sessione nel database non corrisponde, questa è una vecchia sessione */
+      if (activeSession.session_id !== sessionId) {
+        console.warn('[Auth] IMMEDIATE CHECK: Session ID mismatch - this is an OLD session from another browser - disconnecting NOW');
+        const { showDisconnectedOverlay } = await import('./supabase-client.js');
+        showDisconnectedOverlay();
+        clearAuthSession();
+        return false;
+      }
+      
+      console.log('[Auth] IMMEDIATE CHECK: ✅ Session matches database - this is the active session');
     } catch (err) {
-      console.error('[Auth] IMMEDIATE CHECK: Error:', err);
+      console.error('[Auth] IMMEDIATE CHECK: Exception:', err);
       /* In caso di errore, blocca per sicurezza */
       return false;
     }
