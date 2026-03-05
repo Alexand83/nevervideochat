@@ -281,7 +281,9 @@ function stopSessionCheckInterval() {
 
 /* ── Connect global signal channel + all rooms ── */
 export async function connectSupabase() {
+  console.log('[Supabase] 🔌 connectSupabase called');
   if (!state.supa) {
+    console.warn('[Supabase] connectSupabase: state.supa is null!');
     showToast('⚠️ Supabase not configured — local mode.'); return;
   }
   try {

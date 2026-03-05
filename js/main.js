@@ -111,6 +111,7 @@ async function init() {
 
 /** Called after a user identity has been established */
 export async function finishInit() {
+  console.log('[Main] 🚀 finishInit called', { hasCurrentUser: !!state.currentUser, userId: state.currentUser?.id });
   /* CONTROLLO IMMEDIATO: Verifica la sessione all'entrata iniziale (solo per utenti registrati) */
   if (state.currentUser && !state.currentUser.isGuest && state.supa) {
     try {
@@ -185,7 +186,9 @@ export async function finishInit() {
   }
 
   /* Init room system (joins general room, subscribes presence + DB) */
+  console.log('[Main] Initializing rooms...');
   await initRooms();
+  console.log('[Main] ✅ Rooms initialized');
   
   /* Reset games panel width CSS variable after rooms are loaded */
   document.documentElement.style.setProperty('--games-panel-width', '0px');
