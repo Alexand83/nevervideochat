@@ -134,9 +134,13 @@ export async function connectRoom(roomId) {
         }
         return; /* already rendered optimistically */
       }
-      if (state.ignoredUsers[String(m.user_id)]) return;
+      if (state.ignoredUsers[String(m.user_id)]) {
+        console.log('[Supabase] Message ignored (user is in ignored list)');
+        return;
+      }
       ensureUser(m.user_id, m.username);
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
+      console.log('[Supabase] Adding message to room:', { roomId, userId: m.user_id, hasHtml: !!html });
       addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);
       if (roomId === state.activeRoom) playNotificationSound();
       } catch (err) {
