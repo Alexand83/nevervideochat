@@ -39,9 +39,31 @@ export function renderUsers() {
      Fall back to global state.users for backward compatibility.       */
   const roomUsers = room ? Object.values(room.users || {}) : state.users.filter(u => u?.online);
 
+  console.log('[Users] renderUsers called:', {
+    roomId,
+    hasRoom: !!room,
+    roomUsersCount: roomUsers.length,
+    stateUsersCount: state.users.length,
+    hasCurrentUser: !!state.currentUser,
+    currentUserId: state.currentUser?.id
+  });
+
+  if (!dom.usersList) {
+    console.error('[Users] dom.usersList is null!');
+    return;
+  }
+
   dom.usersList.innerHTML = '';
+  
+  /* CRITICO: Assicurati che l'utente corrente sia sempre nella lista, anche se non è ancora nella presenza */
   const all    = [state.currentUser, ...roomUsers.filter(u => u && u.id !== state.currentUser?.id && u.online)];
   const online = all.length;
+  
+  console.log('[Users] Rendering users:', {
+    totalUsers: all.length,
+    currentUserIncluded: all.some(u => u?.id === state.currentUser?.id),
+    users: all.map(u => ({ id: u?.id, name: u?.name, online: u?.online }))
+  });
   if (dom.onlineCountLabel) dom.onlineCountLabel.textContent = online;
   if (dom.onlineBadge)      dom.onlineBadge.textContent      = online;
   if (dom.floatingUsersBadge) dom.floatingUsersBadge.textContent = online;

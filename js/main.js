@@ -201,18 +201,22 @@ export async function finishInit() {
   }
   
   /* Ora che Supabase è connesso, renderizza utenti e inizializza UI */
-  /* CRITICO: Aspetta un po' per permettere alla presenza di sincronizzarsi */
+  /* CRITICO: Renderizza subito l'utente corrente, poi aggiorna quando la presenza si sincronizza */
+  renderUsers(); /* Renderizza subito (almeno l'utente corrente dovrebbe apparire) */
+  updateHeaderUser();
+  updateAdminButton(); /* Check admin access and show/hide button */
+  initGames(); /* Initialize games system */
+  
+  /* Su mobile, assicura che il pannello utenti parta chiuso nelle stanze normali */
+  document.documentElement.style.setProperty('--users-panel-width', '0px');
+  
+  /* Renderizza di nuovo dopo che la presenza si è sincronizzata */
   setTimeout(() => {
+    console.log('[Main] Re-rendering users after presence sync');
     renderUsers();
-    updateHeaderUser();
-    updateAdminButton(); /* Check admin access and show/hide button */
-    initGames(); /* Initialize games system */
-    
-    /* Su mobile, assicura che il pannello utenti parta chiuso nelle stanze normali */
-    document.documentElement.style.setProperty('--users-panel-width', '0px');
-    
-    dom.msgInput?.focus();
-  }, 500); /* Aspetta 500ms per permettere alla presenza di sincronizzarsi */
+  }, 1000); /* Aspetta 1 secondo per permettere alla presenza di sincronizzarsi */
+  
+  dom.msgInput?.focus();
 }
 
 /* ── Assicura che l'utente abbia un profilo nel database con ruoli di default ── */
