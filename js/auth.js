@@ -219,10 +219,21 @@ export async function loginUser(nick, password) {
           
           /* CRITICO: Notifica tutte le altre sessioni di questo utente che sono state invalidate */
           /* Questo permette al browser 1 di disconnettersi immediatamente */
+          /* Il broadcast viene inviato anche se il canale non è ancora inizializzato - verrà inviato quando disponibile */
           try {
             const { broadcastAll } = await import('./broadcast.js');
-            broadcastAll('session-invalidated', { user_id: data.user.id, userId: data.user.id });
-            console.log('[Auth] 📢 Broadcasted session-invalidated to all other sessions');
+            if (state.signalCh) {
+              broadcastAll('session-invalidated', { user_id: data.user.id, userId: data.user.id });
+              console.log('[Auth] 📢 LOGIN: Broadcasted session-invalidated to all other sessions');
+            } else {
+              /* Canale non ancora inizializzato - salva per inviare dopo */
+              console.log('[Auth] ⏳ LOGIN: Signal channel not ready - will broadcast after connectSupabase()');
+              /* Salva un flag per inviare il broadcast dopo */
+              if (!state.pendingSessionInvalidation) {
+                state.pendingSessionInvalidation = [];
+              }
+              state.pendingSessionInvalidation.push({ user_id: data.user.id, userId: data.user.id });
+            }
           } catch (broadcastErr) {
             console.error('[Auth] Error broadcasting session-invalidated:', broadcastErr);
           }
