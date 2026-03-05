@@ -267,12 +267,29 @@ export async function assignRoleToUser(userId, roleId) {
     }
     
     if (!data) {
-      console.error('[Admin] User not found:', userId);
-      showToast('⚠️ User not found.');
-      return false;
+      console.error('[Admin] User not found in profiles table:', userId);
+      /* Try to create profile if it doesn't exist (shouldn't happen for registered users) */
+      const { error: insertError } = await state.supa
+        .from('profiles')
+        .insert({
+          id: String(userId),
+          username: user?.name || 'Unknown',
+          display_name: user?.name || 'Unknown',
+          is_guest: false,
+          role: 'user',
+          custom_role_id: finalRoleId
+        });
+      
+      if (insertError) {
+        console.error('[Admin] Failed to create profile:', insertError);
+        showToast('⚠️ User profile not found and could not be created.');
+        return false;
+      }
+      
+      console.log('[Admin] Profile created and role assigned');
+    } else {
+      console.log('[Admin] Role assigned successfully:', data);
     }
-    
-    console.log('[Admin] Role assigned successfully:', data);
     
     /* Find user in state */
     const user = state.users?.[userId] || Object.values(state.users || {}).find(u => u.id === userId);

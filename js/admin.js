@@ -426,9 +426,9 @@ async function loadUsers() {
       item.querySelector('[data-action="mute"]')?.addEventListener('click', () => muteUser(user.id, user.name));
       item.querySelector('[data-action="ban"]')?.addEventListener('click', () => banUser(user.id, user.name));
       
-      /* Populate role select */
+      /* Populate role select - only for registered users */
       const roleSelect = item.querySelector('.admin-role-select');
-      if (roleSelect) {
+      if (roleSelect && !user.id.startsWith('guest_')) {
         await populateRoleSelect(roleSelect, profile?.custom_role_id);
         roleSelect.addEventListener('change', async (e) => {
           const { assignRoleToUser } = await import('./admin-extensions.js');
@@ -437,9 +437,16 @@ async function loadUsers() {
             /* Wait a bit for DB to update, then reload */
             setTimeout(() => {
               loadUsers(); /* Reload to show updated role */
-            }, 300);
+            }, 500);
+          } else {
+            /* Reset to current role if assignment failed */
+            await populateRoleSelect(roleSelect, profile?.custom_role_id);
           }
         });
+      } else if (roleSelect) {
+        /* Disable for guest users */
+        roleSelect.disabled = true;
+        roleSelect.innerHTML = '<option value="">Guest users cannot have roles</option>';
       }
       
       dom.adminUsersList.appendChild(item);
@@ -803,15 +810,13 @@ async function populateRoleSelect(select, currentRoleId = null) {
       .order('name');
     if (error) throw error;
     
-    /* Clear existing options except first */
-    while (select.options.length > 1) {
-      select.remove(1);
-    }
+    /* Clear all existing options */
+    select.innerHTML = '';
     
-    /* Add "No Role" option */
+    /* Add "No Role" option first */
     const noRoleOption = document.createElement('option');
     noRoleOption.value = '';
-    noRoleOption.textContent = 'No Role';
+    noRoleOption.textContent = currentRoleId ? '— Remove Role —' : '— No Role —';
     if (!currentRoleId) noRoleOption.selected = true;
     select.appendChild(noRoleOption);
     
@@ -821,7 +826,10 @@ async function populateRoleSelect(select, currentRoleId = null) {
         const option = document.createElement('option');
         option.value = role.id;
         option.textContent = role.name;
-        if (role.id === currentRoleId) option.selected = true;
+        if (role.id === currentRoleId) {
+          option.selected = true;
+          option.textContent = `✓ ${role.name}`; /* Mark current role */
+        }
         select.appendChild(option);
       });
     }
