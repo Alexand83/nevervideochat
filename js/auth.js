@@ -42,6 +42,29 @@ export async function loginUser(nick, password) {
   const { data, error } = await state.supa.auth.signInWithPassword({ email: nickToEmail(nick), password });
   if (error) throw error;
   
+  /* IMPORTANTE: Registra questa come sessione attiva nel database PRIMA di tutto */
+  /* Questo invalida immediatamente tutte le altre sessioni */
+  if (data.session?.access_token) {
+    try {
+      /* Crea un ID univoco per questa sessione (hash del token) */
+      const sessionId = await createSessionId(data.session.access_token);
+      
+      /* Registra questa sessione come attiva nel database */
+      const { error: sessionError } = await state.supa.rpc('upsert_active_session', {
+        p_user_id: data.user.id,
+        p_session_id: sessionId
+      });
+      
+      if (sessionError) {
+        console.warn('[Auth] Could not register active session:', sessionError);
+      } else {
+        console.log('[Auth] Registered new active session - old sessions are now invalid');
+      }
+    } catch (err) {
+      console.warn('[Auth] Error registering active session:', err);
+    }
+  }
+  
   /* IMPORTANTE: Disconnettere tutte le altre sessioni per permettere solo 1 sessione attiva */
   /* Usa scope: 'others' per disconnettere solo le altre sessioni, non quella corrente - PIÙ ISTANTANEO! */
   try {
@@ -123,6 +146,30 @@ export async function tryRestoreSession() {
       });
       if (!error && data?.user) {
         if (data.session) persistAuthSession(data.session);
+        
+        /* CRITICO: Verifica che questa sia la sessione attiva */
+        if (data.session?.access_token) {
+          try {
+            const sessionId = await createSessionId(data.session.access_token);
+            const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
+              p_user_id: data.user.id,
+              p_session_id: sessionId
+            });
+            
+            if (checkError) {
+              console.warn('[Auth] Error checking session validity on restore:', checkError);
+            } else if (isValid === false) {
+              /* Questa NON è la sessione attiva - disconnettere immediatamente */
+              console.warn('[Auth] Restored session is not the active one - disconnecting');
+              const { showDisconnectedOverlay } = await import('./supabase-client.js');
+              showDisconnectedOverlay();
+              clearAuthSession();
+              return null;
+            }
+          } catch (err) {
+            console.warn('[Auth] Error verifying restored session:', err);
+          }
+        }
         
         /* Marca la sessione come nuova per evitare che checkSessionInvalid la disconnetta */
         const { markSessionAsNew } = await import('./supabase-client.js');
