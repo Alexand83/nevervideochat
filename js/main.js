@@ -84,9 +84,20 @@ async function init() {
   }
 
   /* 4. Check existing guest identity */
+  /* CRITICO: Non permettere a utenti registrati di entrare senza sessione valida */
   try {
     const stored = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
     if (stored?.id && stored?.name) {
+      /* Se è un utente registrato (non guest), richiedi login se non c'è sessione */
+      if (stored.isGuest === false) {
+        console.log('[Main] Cached identity is registered user but no session found - requiring login');
+        /* Rimuovi l'identity cache per forzare il login */
+        localStorage.removeItem('nvc_identity');
+        /* Mostra modal di login */
+        dom.authModal.hidden = false;
+        return;
+      }
+      /* Se è un guest, permettere l'accesso */
       state.currentUser = stored;
       state.settings    = loadDeviceSettings();
       await finishInit();
