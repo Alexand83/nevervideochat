@@ -458,6 +458,29 @@ export async function connectSupabase() {
           await checkActiveGame();
         }
       })
+      .on('broadcast', { event: 'session-invalidated' }, async ({ payload }) => {
+        /* CRITICO: Quando una nuova sessione viene registrata per questo utente, verifica immediatamente */
+        /* Se questa è la vecchia sessione, disconnetti */
+        if (!state.currentUser || !state.currentUser.id) return;
+        
+        const targetUserId = payload.user_id || payload.userId;
+        if (String(targetUserId) !== String(state.currentUser.id)) return; /* Non è per noi */
+        
+        console.log('[Session] ⚠️ Received session-invalidated broadcast - checking if this session is still valid...');
+        
+        /* Verifica immediatamente se questa sessione è ancora valida */
+        const { verifySessionImmediately } = await import('./auth.js');
+        const session = await state.supa.auth.getSession();
+        if (session?.data?.session?.access_token) {
+          const isValid = await verifySessionImmediately(state.currentUser.id, session.data.session.access_token);
+          if (!isValid) {
+            console.log('[Session] 🚨 This session is NOT valid - showing disconnect overlay');
+            showDisconnectedOverlay();
+          } else {
+            console.log('[Session] ✅ This session is still valid - ignoring broadcast');
+          }
+        }
+      })
       .subscribe();
 
     showToast('🟢 Connected to NeverVideoChat');

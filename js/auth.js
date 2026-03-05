@@ -216,6 +216,16 @@ export async function loginUser(nick, password) {
           console.log('[Auth] ✅ SUCCESS! Registered new active session via SQL function');
           console.log('[Auth] ✅ RPC result:', rpcData);
           console.log('[Auth] Old sessions are now invalid');
+          
+          /* CRITICO: Notifica tutte le altre sessioni di questo utente che sono state invalidate */
+          /* Questo permette al browser 1 di disconnettersi immediatamente */
+          try {
+            const { broadcastAll } = await import('./broadcast.js');
+            broadcastAll('session-invalidated', { user_id: data.user.id, userId: data.user.id });
+            console.log('[Auth] 📢 Broadcasted session-invalidated to all other sessions');
+          } catch (broadcastErr) {
+            console.error('[Auth] Error broadcasting session-invalidated:', broadcastErr);
+          }
         }
       } catch (dbErr) {
         console.error('[Auth] ❌ Database exception:', dbErr);
