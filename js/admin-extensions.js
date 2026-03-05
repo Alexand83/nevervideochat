@@ -106,38 +106,52 @@ export function openRoleEditModal(role = null) {
   dom.roleEditModal.hidden = false;
 }
 
+/* Flag per prevenire doppi salvataggi */
+let isSavingRole = false;
+
 export async function saveRole() {
   if (!state.supa) return;
-  const idInput = document.getElementById('roleEditId');
-  const id = idInput ? idInput.value.trim() : null;
-  const name = document.getElementById('roleEditName').value.trim();
-  const color = document.getElementById('roleEditColor').value;
   
-  if (!name) {
-    showToast('⚠️ Role Name is required.');
+  /* Prevenire doppi salvataggi */
+  if (isSavingRole) {
+    console.log('[Admin] Save role already in progress, ignoring...');
     return;
   }
   
-  const permissions = {
-    can_post_messages: document.getElementById('permCanPostMessages').checked,
-    can_delete_messages: document.getElementById('permCanDeleteMessages').checked,
-    can_edit_messages: document.getElementById('permCanEditMessages').checked,
-    can_mute: document.getElementById('permCanMute').checked,
-    can_kick: document.getElementById('permCanKick').checked,
-    can_ban: document.getElementById('permCanBan').checked,
-    can_manage_rooms: document.getElementById('permCanManageRooms').checked,
-    can_manage_users: document.getElementById('permCanManageUsers').checked,
-    can_manage_roles: document.getElementById('permCanManageRoles').checked,
-    can_view_logs: document.getElementById('permCanViewLogs').checked,
-    can_manage_announcements: document.getElementById('permCanManageAnnouncements').checked,
-    can_view_statistics: document.getElementById('permCanViewStatistics').checked,
-  };
+  isSavingRole = true;
   
   try {
+    const idInput = document.getElementById('roleEditId');
+    const id = idInput ? idInput.value.trim() : null;
+    const name = document.getElementById('roleEditName').value.trim();
+    const color = document.getElementById('roleEditColor').value;
+    
+    if (!name) {
+      showToast('⚠️ Role Name is required.');
+      isSavingRole = false;
+      return;
+    }
+    
+    const permissions = {
+      can_post_messages: document.getElementById('permCanPostMessages').checked,
+      can_delete_messages: document.getElementById('permCanDeleteMessages').checked,
+      can_edit_messages: document.getElementById('permCanEditMessages').checked,
+      can_mute: document.getElementById('permCanMute').checked,
+      can_kick: document.getElementById('permCanKick').checked,
+      can_ban: document.getElementById('permCanBan').checked,
+      can_manage_rooms: document.getElementById('permCanManageRooms').checked,
+      can_manage_users: document.getElementById('permCanManageUsers').checked,
+      can_manage_roles: document.getElementById('permCanManageRoles').checked,
+      can_view_logs: document.getElementById('permCanViewLogs').checked,
+      can_manage_announcements: document.getElementById('permCanManageAnnouncements').checked,
+      can_view_statistics: document.getElementById('permCanViewStatistics').checked,
+    };
+    
     const { checkAdminAccess } = await import('./admin.js');
     const hasAccess = await checkAdminAccess();
     if (!hasAccess) {
       showToast('🚫 Admin access required.');
+      isSavingRole = false;
       return;
     }
     
@@ -150,6 +164,7 @@ export async function saveRole() {
     
     if (id && ['owner', 'admin', 'moderator', 'user'].includes(id)) {
       showToast('⚠️ Cannot modify system roles.');
+      isSavingRole = false;
       return;
     }
     
@@ -173,10 +188,18 @@ export async function saveRole() {
     
     showToast('✅ Role saved!');
     dom.roleEditModal.hidden = true;
-    loadCustomRoles();
+    /* Reset form */
+    dom.roleEditForm?.reset();
+    /* Ricarica i ruoli */
+    await loadCustomRoles();
   } catch (err) {
     console.error('[Admin] Save role error:', err);
-    showToast('⚠️ Failed to save role.');
+    showToast('⚠️ Failed to save role: ' + (err.message || 'Unknown error'));
+  } finally {
+    /* Reset flag dopo un breve delay per permettere al form di resettarsi */
+    setTimeout(() => {
+      isSavingRole = false;
+    }, 500);
   }
 }
 
@@ -224,12 +247,6 @@ export async function assignRoleToUser(userId, roleId) {
     const hasAccess = await checkAdminAccess();
     if (!hasAccess && !hasPermission('can_manage_users')) {
       showToast('🚫 You do not have permission to assign roles.');
-      return false;
-    }
-    
-    /* Check if user is a guest (guests can't have roles) */
-    if (String(userId).startsWith('guest_')) {
-      showToast('⚠️ Guest users cannot be assigned roles.');
       return false;
     }
     

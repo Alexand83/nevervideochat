@@ -426,11 +426,15 @@ async function loadUsers() {
       item.querySelector('[data-action="mute"]')?.addEventListener('click', () => muteUser(user.id, user.name));
       item.querySelector('[data-action="ban"]')?.addEventListener('click', () => banUser(user.id, user.name));
       
-      /* Populate role select - only for registered users */
+      /* Populate role select */
       const roleSelect = item.querySelector('.admin-role-select');
-      if (roleSelect && !user.id.startsWith('guest_')) {
+      if (roleSelect) {
         await populateRoleSelect(roleSelect, profile?.custom_role_id);
-        roleSelect.addEventListener('change', async (e) => {
+        /* Remove existing listeners to prevent duplicates */
+        const newSelect = roleSelect.cloneNode(true);
+        roleSelect.parentNode.replaceChild(newSelect, roleSelect);
+        /* Add new listener */
+        newSelect.addEventListener('change', async (e) => {
           const { assignRoleToUser } = await import('./admin-extensions.js');
           const success = await assignRoleToUser(user.id, e.target.value || null);
           if (success) {
@@ -440,13 +444,10 @@ async function loadUsers() {
             }, 500);
           } else {
             /* Reset to current role if assignment failed */
-            await populateRoleSelect(roleSelect, profile?.custom_role_id);
+            const currentProfile = profileMap[user.id];
+            await populateRoleSelect(newSelect, currentProfile?.custom_role_id);
           }
         });
-      } else if (roleSelect) {
-        /* Disable for guest users */
-        roleSelect.disabled = true;
-        roleSelect.innerHTML = '<option value="">Guest users cannot have roles</option>';
       }
       
       dom.adminUsersList.appendChild(item);
