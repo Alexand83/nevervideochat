@@ -398,7 +398,8 @@ async function loadUsers() {
     for (const user of users) {
       const item = document.createElement('div');
       item.className = 'admin-list-item';
-      const customRole = user.custom_roles;
+      const profile = profileMap[user.id];
+      const customRole = profile?.custom_roles;
       const roleBadge = customRole 
         ? `<span class="admin-badge" style="background: ${customRole.color || '#8b949e'}; margin-left: 8px;">${escHtml(customRole.name)}</span>`
         : '';
@@ -428,8 +429,9 @@ async function loadUsers() {
       /* Populate role select */
       const roleSelect = item.querySelector('.admin-role-select');
       if (roleSelect) {
-        await populateRoleSelect(roleSelect, user.custom_role_id);
+        await populateRoleSelect(roleSelect, profile?.custom_role_id);
         roleSelect.addEventListener('change', async (e) => {
+          const { assignRoleToUser } = await import('./admin-extensions.js');
           await assignRoleToUser(user.id, e.target.value || null);
           loadUsers(); /* Reload to show updated role */
         });
