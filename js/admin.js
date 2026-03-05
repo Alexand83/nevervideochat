@@ -809,17 +809,22 @@ async function populateRoleSelect(select, currentRoleId = null) {
     select.appendChild(noRoleOption);
     
     /* Add roles */
-    data.forEach(role => {
-      const option = document.createElement('option');
-      option.value = role.id;
-      option.textContent = role.name;
-      if (role.id === currentRoleId) option.selected = true;
-      select.appendChild(option);
-    });
+    if (data) {
+      data.forEach(role => {
+        const option = document.createElement('option');
+        option.value = role.id;
+        option.textContent = role.name;
+        if (role.id === currentRoleId) option.selected = true;
+        select.appendChild(option);
+      });
+    }
   } catch (err) {
     console.error('[Admin] Error populating role select:', err);
   }
 }
+
+/* ── Export per uso in admin-extensions ───────────────────────── */
+export { populateRoleSelect };
 
 /* ── Log azione admin (wrapper) ───────────────────────────────── */
 async function logAdminActionLocal(action, targetType, targetId, targetName, details = {}) {
