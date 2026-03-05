@@ -17,6 +17,23 @@ function nickToEmail(nick) {
   return `${nick.toLowerCase().replace(/[^a-z0-9._-]/g, '_')}@${AUTH_EMAIL_DOMAIN}`;
 }
 
+/* ── Crea un ID univoco per la sessione (hash del token) ── */
+function createSessionId(accessToken) {
+  /* Usa una parte del token come ID univoco (primi 40 caratteri) */
+  /* NON includere Date.now() perché deve essere lo stesso per tutta la durata della sessione */
+  return accessToken.substring(0, 40);
+}
+
+/* ── Salva l'ID della sessione nel localStorage ── */
+function saveSessionId(sessionId) {
+  localStorage.setItem('nvc_session_id', sessionId);
+}
+
+/* ── Ottieni l'ID della sessione salvato ── */
+function getSavedSessionId() {
+  return localStorage.getItem('nvc_session_id');
+}
+
 export async function registerUser(nick, password) {
   const { data, error } = await state.supa.auth.signUp({ email: nickToEmail(nick), password });
   if (error) throw error;
