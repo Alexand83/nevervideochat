@@ -884,6 +884,15 @@ async function loadThemes() {
   const list = document.getElementById('adminThemesList');
   if (!list || !state.supa) return;
   
+  /* Check permissions - solo owner/admin possono gestire temi */
+  await loadUserPermissions();
+  const { checkAdminAccess } = await import('./admin.js');
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) {
+    list.innerHTML = '<p class="admin-empty">🚫 You do not have permission to manage themes.</p>';
+    return;
+  }
+  
   try {
     const { getAllThemes } = await import('./themes.js');
     const themes = await getAllThemes();
