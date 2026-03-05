@@ -227,21 +227,49 @@ export async function assignRoleToUser(userId, roleId) {
       return false;
     }
     
+    /* Check if user is a guest (guests can't have roles) */
+    if (String(userId).startsWith('guest_')) {
+      showToast('⚠️ Guest users cannot be assigned roles.');
+      return false;
+    }
+    
     /* If roleId is empty string or null, set to null */
     const finalRoleId = roleId && roleId.trim() !== '' ? roleId.trim() : null;
     
     console.log('[Admin] Assigning role:', { userId, roleId, finalRoleId });
     
+    /* First verify the role exists if not null */
+    if (finalRoleId) {
+      const { data: roleCheck, error: roleError } = await state.supa
+        .from('custom_roles')
+        .select('id')
+        .eq('id', finalRoleId)
+        .single();
+      
+      if (roleError || !roleCheck) {
+        console.error('[Admin] Role not found:', finalRoleId);
+        showToast('⚠️ Role not found.');
+        return false;
+      }
+    }
+    
+    /* Update the profile */
     const { error, data } = await state.supa
       .from('profiles')
       .update({ custom_role_id: finalRoleId })
       .eq('id', String(userId))
-      .select()
-      .single();
+      .select('id, custom_role_id')
+      .maybeSingle();
     
     if (error) {
       console.error('[Admin] Assign role DB error:', error);
       throw error;
+    }
+    
+    if (!data) {
+      console.error('[Admin] User not found:', userId);
+      showToast('⚠️ User not found.');
+      return false;
     }
     
     console.log('[Admin] Role assigned successfully:', data);
