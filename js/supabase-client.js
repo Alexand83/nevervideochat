@@ -263,8 +263,13 @@ export async function connectSupabase() {
     if (state.pendingSessionInvalidation) {
       try {
         const { broadcastAll } = await import('./broadcast.js');
-        broadcastAll('session-invalidated', state.pendingSessionInvalidation);
-        console.log('[Supabase] 📢 Sent pending session-invalidated broadcast');
+        const pending = Array.isArray(state.pendingSessionInvalidation) 
+          ? state.pendingSessionInvalidation 
+          : [state.pendingSessionInvalidation];
+        for (const invalidation of pending) {
+          broadcastAll('session-invalidated', invalidation);
+        }
+        console.log('[Supabase] 📢 Sent pending session-invalidated broadcast(s)');
         delete state.pendingSessionInvalidation;
       } catch (err) {
         console.error('[Supabase] Error sending pending session-invalidated broadcast:', err);
