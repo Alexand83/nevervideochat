@@ -576,10 +576,6 @@ async function filterAndRenderUsers() {
       
       dom.adminUsersList.appendChild(item);
     }
-  } catch (err) {
-    console.error('[Admin] Load users error:', err);
-    showToast('⚠️ Failed to load users.');
-  }
 }
 
 async function kickUser(userId, userName) {
