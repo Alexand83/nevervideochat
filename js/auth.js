@@ -263,11 +263,25 @@ async function saveProfile(displayName, avatarUrl) {
   state.currentUser.name = displayName;
   if (avatarUrl) state.currentUser.avatarUrl = avatarUrl;
   localStorage.setItem('nvc_identity', JSON.stringify(state.currentUser));
-  if (!state.currentUser.isGuest && state.supa) {
-    await state.supa.from('profiles').upsert({
-      id: state.currentUser.id, username: state.currentUser.username || state.currentUser.name,
-      display_name: displayName, avatar_url: avatarUrl || null, is_guest: false,
-    }, { onConflict: 'id' });
+  if (state.supa) {
+    const profileData = {
+      id: state.currentUser.id,
+      username: state.currentUser.username || state.currentUser.name,
+      display_name: displayName,
+      avatar_url: avatarUrl || null,
+      is_guest: state.currentUser.isGuest || false,
+    };
+    
+    /* Assegna ruoli di default */
+    if (state.currentUser.isGuest) {
+      profileData.custom_role_id = 'guest';
+    } else {
+      /* Per utenti registrati, assicura che abbiano ruolo 'user' di default */
+      profileData.role = 'user';
+      profileData.custom_role_id = 'user';
+    }
+    
+    await state.supa.from('profiles').upsert(profileData, { onConflict: 'id' });
   }
   updateHeaderUser(); await updateOwnPresence(); renderUsers();
 }

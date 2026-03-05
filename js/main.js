@@ -106,6 +106,9 @@ export async function finishInit() {
 
   /* Load mute/kick/ban status for current user */
   if (state.supa && state.currentUser) {
+    /* Crea/aggiorna profilo nel database con ruoli di default */
+    await ensureUserProfile(state.currentUser);
+    
     await loadUserRestrictions(state.currentUser.id);
     
     /* Check if user is banned - if so, show ban overlay and stop initialization */
@@ -135,6 +138,60 @@ export async function finishInit() {
   document.documentElement.style.setProperty('--users-panel-width', '0px');
   
   dom.msgInput?.focus();
+}
+
+/* ── Assicura che l'utente abbia un profilo nel database con ruoli di default ── */
+async function ensureUserProfile(user) {
+  if (!state.supa || !user) return;
+  
+  try {
+    const profileData = {
+      id: String(user.id),
+      username: user.username || user.name,
+      display_name: user.name,
+      avatar_url: user.avatarUrl || null,
+      is_guest: user.isGuest || false,
+    };
+    
+    /* Assegna ruoli di default */
+    if (user.isGuest) {
+      profileData.custom_role_id = 'guest';
+    } else {
+      /* Per utenti registrati, assicura che abbiano ruolo 'user' di default */
+      profileData.role = 'user';
+      profileData.custom_role_id = 'user';
+    }
+    
+    /* Usa upsert per creare o aggiornare, ma non sovrascrivere ruoli esistenti */
+    const { data: existing } = await state.supa
+      .from('profiles')
+      .select('role, custom_role_id')
+      .eq('id', String(user.id))
+      .maybeSingle();
+    
+    if (existing) {
+      /* Se esiste già, NON sovrascrivere ruoli esistenti */
+      if (existing.role) {
+        /* L'utente ha già un ruolo (owner, admin, moderator, user) - non sovrascriverlo */
+        delete profileData.role;
+      } else if (!user.isGuest) {
+        /* Solo se non ha ruolo e non è guest, assegna 'user' di default */
+        profileData.role = 'user';
+      }
+      
+      if (existing.custom_role_id) {
+        /* L'utente ha già un custom_role_id - non sovrascriverlo */
+        delete profileData.custom_role_id;
+      } else {
+        /* Solo se non ha custom_role_id, assegna quello di default */
+        profileData.custom_role_id = user.isGuest ? 'guest' : 'user';
+      }
+    }
+    
+    await state.supa.from('profiles').upsert(profileData, { onConflict: 'id' });
+  } catch (err) {
+    console.error('[Main] Error ensuring user profile:', err);
+  }
 }
 
 /* ── Load mute/kick/ban status for current user ── */

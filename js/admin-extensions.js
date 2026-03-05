@@ -98,9 +98,15 @@ export function openRoleEditModal(role = null) {
     document.getElementById('permCanManageAnnouncements').checked = perms.can_manage_announcements === true;
     document.getElementById('permCanViewStatistics').checked = perms.can_view_statistics === true;
   } else {
+    /* Reset form per nuovo ruolo */
     dom.roleEditForm.reset();
-    document.getElementById('roleEditId').value = '';
+    const idField = document.getElementById('roleEditId');
+    if (idField) {
+      idField.value = '';
+      idField.removeAttribute('value'); /* Forza il reset */
+    }
     document.getElementById('permCanPostMessages').checked = true;
+    console.log('[Admin] Form reset for new role. ID field value:', idField?.value);
   }
   
   dom.roleEditModal.hidden = false;
@@ -133,6 +139,8 @@ export async function saveRole() {
     const name = document.getElementById('roleEditName').value.trim();
     const color = document.getElementById('roleEditColor').value;
     
+    console.log('[Admin] Form values - ID:', id, 'Name:', name, 'Color:', color);
+    
     if (!name) {
       showToast('⚠️ Role Name is required.');
       if (saveBtn) {
@@ -142,6 +150,10 @@ export async function saveRole() {
       isSavingRole = false;
       return;
     }
+    
+    /* Se l'ID è vuoto o contiene solo spazi, è un nuovo ruolo */
+    const isNewRole = !id || id === '';
+    console.log('[Admin] Is new role?', isNewRole);
     
     const permissions = {
       can_post_messages: document.getElementById('permCanPostMessages').checked,
@@ -239,21 +251,43 @@ export async function saveRole() {
       updated_at: new Date().toISOString(),
     };
     
-    if (id && ['owner', 'admin', 'moderator', 'user'].includes(id)) {
-      console.log('[Admin] Attempted to modify system role:', id);
-      showToast('⚠️ Cannot modify system roles.');
-      if (saveBtn) {
-        saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Save Role';
+    /* Controlla se si sta cercando di modificare un ruolo di sistema - solo owner può farlo */
+    if (!isNewRole && id && ['owner', 'admin', 'moderator', 'user'].includes(id)) {
+      /* Solo owner può modificare ruoli di sistema */
+      if (profile?.role !== 'owner') {
+        console.log('[Admin] Attempted to modify system role:', id, 'but user is not owner');
+        showToast('⚠️ Only owner can modify system roles.');
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '💾 Save Role';
+        }
+        isSavingRole = false;
+        return;
       }
-      isSavingRole = false;
-      return;
+      console.log('[Admin] Owner modifying system role:', id);
     }
     
-    console.log('[Admin] Preparing to save role. ID:', id, 'Name:', name);
+    /* Se è un nuovo ruolo, genera l'ID dal nome e verifica che non sia un ruolo di sistema */
+    if (isNewRole) {
+      const generatedId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      console.log('[Admin] Generated role ID:', generatedId);
+      
+      if (['owner', 'admin', 'moderator', 'user'].includes(generatedId)) {
+        console.log('[Admin] Generated ID matches system role:', generatedId);
+        showToast('⚠️ This role name conflicts with a system role. Please choose a different name.');
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '💾 Save Role';
+        }
+        isSavingRole = false;
+        return;
+      }
+    }
+    
+    console.log('[Admin] Preparing to save role. ID:', id, 'Name:', name, 'IsNewRole:', isNewRole);
     console.log('[Admin] Role data to save:', JSON.stringify(roleData, null, 2));
     
-    if (id) {
+    if (!isNewRole && id) {
       roleData.id = id;
       console.log('[Admin] Updating role:', JSON.stringify({ id, roleData }, null, 2));
       console.log('[Admin] About to execute UPDATE query...');
