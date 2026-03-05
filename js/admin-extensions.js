@@ -120,6 +120,13 @@ export async function saveRole() {
   
   isSavingRole = true;
   
+  /* Get save button from form */
+  const saveBtn = dom.roleEditForm?.querySelector('button[type="submit"]');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
   try {
     const idInput = document.getElementById('roleEditId');
     const id = idInput ? idInput.value.trim() : null;
@@ -128,6 +135,10 @@ export async function saveRole() {
     
     if (!name) {
       showToast('⚠️ Role Name is required.');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Role';
+      }
       isSavingRole = false;
       return;
     }
@@ -151,6 +162,10 @@ export async function saveRole() {
     const hasAccess = await checkAdminAccess();
     if (!hasAccess) {
       showToast('🚫 Admin access required.');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Role';
+      }
       isSavingRole = false;
       return;
     }
@@ -164,6 +179,10 @@ export async function saveRole() {
     
     if (id && ['owner', 'admin', 'moderator', 'user'].includes(id)) {
       showToast('⚠️ Cannot modify system roles.');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '💾 Save Role';
+      }
       isSavingRole = false;
       return;
     }
@@ -197,9 +216,10 @@ export async function saveRole() {
     showToast('⚠️ Failed to save role: ' + (err.message || 'Unknown error'));
   } finally {
     /* Re-enable save button */
-    if (saveBtn) {
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save';
+    const btn = dom.roleEditForm?.querySelector('button[type="submit"]');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '💾 Save Role';
     }
     /* Reset flag dopo un breve delay per permettere al form di resettarsi */
     setTimeout(() => {
@@ -297,22 +317,37 @@ export async function assignRoleToUser(userId, roleId) {
       }
     }
     
-    /* Try to update existing profile first */
-    const { error: updateError, count } = await state.supa
+    /* First, check if profile exists */
+    const { data: existingProfile, error: checkError } = await state.supa
       .from('profiles')
-      .update({ custom_role_id: roleToAssign })
-      .eq('id', String(userId));
+      .select('id, role')
+      .eq('id', String(userId))
+      .maybeSingle();
     
-    if (updateError) {
-      console.error('[Admin] Update profile error:', updateError);
-      throw updateError;
+    if (checkError && checkError.code !== 'PGRST116') { /* PGRST116 = not found, which is OK */
+      console.error('[Admin] Error checking profile:', checkError);
+      showToast('⚠️ Failed to check user profile: ' + (checkError.message || 'Unknown error'));
+      return false;
     }
     
-    /* If no rows were updated, create new profile */
-    if (!count || count === 0) {
+    if (existingProfile) {
+      /* Profile exists, update it */
+      console.log('[Admin] Updating existing profile:', userId);
+      const { error: updateError } = await state.supa
+        .from('profiles')
+        .update({ custom_role_id: roleToAssign })
+        .eq('id', String(userId));
+      
+      if (updateError) {
+        console.error('[Admin] Failed to update profile:', updateError);
+        showToast('⚠️ Failed to assign role: ' + (updateError.message || 'Unknown error'));
+        return false;
+      }
+      console.log('[Admin] Role assigned successfully');
+    } else {
+      /* Profile doesn't exist, create it */
       console.log('[Admin] User not found in profiles table, creating profile:', userId);
       
-      /* Try to create profile if it doesn't exist */
       const profileData = {
         id: String(userId),
         username: userName || (isGuest ? `Guest_${userId.slice(6, 12)}` : 'Unknown'),
@@ -321,8 +356,8 @@ export async function assignRoleToUser(userId, roleId) {
         custom_role_id: roleToAssign || (isGuest ? 'guest' : null)
       };
       
-      /* Only add role field for registered users */
-      if (!isGuest) {
+      /* Only add role field for registered users (don't override if they're owner/admin) */
+      if (!isGuest && !existingProfile?.role) {
         profileData.role = 'user';
       }
       
@@ -331,14 +366,28 @@ export async function assignRoleToUser(userId, roleId) {
         .insert(profileData);
       
       if (insertError) {
-        console.error('[Admin] Failed to create profile:', insertError);
-        showToast('⚠️ User profile not found and could not be created: ' + (insertError.message || 'Unknown error'));
-        return false;
+        /* If profile was created between check and insert (race condition), try update */
+        if (insertError.code === '23505' || insertError.message?.includes('duplicate') || insertError.message?.includes('409')) {
+          console.log('[Admin] Profile created by another process, updating instead:', userId);
+          const { error: retryUpdateError } = await state.supa
+            .from('profiles')
+            .update({ custom_role_id: roleToAssign })
+            .eq('id', String(userId));
+          
+          if (retryUpdateError) {
+            console.error('[Admin] Failed to update existing profile:', retryUpdateError);
+            showToast('⚠️ Failed to assign role: ' + (retryUpdateError.message || 'Unknown error'));
+            return false;
+          }
+          console.log('[Admin] Profile updated and role assigned');
+        } else {
+          console.error('[Admin] Failed to create profile:', insertError);
+          showToast('⚠️ Failed to create profile: ' + (insertError.message || 'Unknown error'));
+          return false;
+        }
+      } else {
+        console.log('[Admin] Profile created and role assigned');
       }
-      
-      console.log('[Admin] Profile created and role assigned');
-    } else {
-      console.log('[Admin] Role assigned successfully');
     }
     
     await logAdminAction('assign_role', 'user', userId, userName, { role_id: finalRoleId });
