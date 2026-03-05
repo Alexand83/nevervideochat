@@ -77,7 +77,7 @@ function renderAnnouncements() {
 }
 
 /* ── Inizializza listener per annunci ────────────────────────── */
-export function initAnnouncementsListener() {
+export async function initAnnouncementsListener() {
   if (!state.supa) return;
   
   /* Cleanup existing listener */
@@ -98,13 +98,12 @@ export function initAnnouncementsListener() {
     })
     .subscribe();
   
-  /* Also listen to broadcast events */
-  const { onBroadcast } = await import('./broadcast.js');
-  if (onBroadcast) {
-    onBroadcast('announcement-updated', () => {
-      loadAndDisplayAnnouncements();
-    });
-  }
+  /* Also listen to broadcast events via Supabase Realtime */
+  const channel = state.supa.channel('announcements_broadcast');
+  channel.on('broadcast', { event: 'announcement-updated' }, () => {
+    loadAndDisplayAnnouncements();
+  });
+  channel.subscribe();
 }
 
 /* ── Cleanup ─────────────────────────────────────────────────── */
