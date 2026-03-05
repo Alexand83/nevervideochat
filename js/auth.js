@@ -35,7 +35,7 @@ function getSavedSessionId() {
 }
 
 /* ── Verifica immediatamente se la sessione è valida ── */
-async function verifySessionImmediately(userId, accessToken) {
+export async function verifySessionImmediately(userId, accessToken) {
   if (!state.supa || !userId || !accessToken) return;
   
   try {
