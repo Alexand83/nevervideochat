@@ -34,6 +34,62 @@ function getSavedSessionId() {
   return localStorage.getItem('nvc_session_id');
 }
 
+/* ── Verifica immediatamente se la sessione è valida ── */
+async function verifySessionImmediately(userId, accessToken) {
+  if (!state.supa || !userId || !accessToken) return;
+  
+  try {
+    const sessionId = createSessionId(accessToken);
+    const savedSessionId = getSavedSessionId();
+    
+    console.log('[Auth] Immediate session verification:', { 
+      userId, 
+      sessionId: sessionId.substring(0, 20) + '...',
+      savedSessionId: savedSessionId ? savedSessionId.substring(0, 20) + '...' : 'none'
+    });
+    
+    /* Controllo rapido: se l'ID salvato non corrisponde, questa è una vecchia sessione */
+    if (savedSessionId && savedSessionId !== sessionId) {
+      console.warn('[Auth] IMMEDIATE CHECK: Session ID mismatch - this is an old session - disconnecting NOW');
+      const { showDisconnectedOverlay } = await import('./supabase-client.js');
+      showDisconnectedOverlay();
+      clearAuthSession();
+      return false;
+    }
+    
+    /* Verifica nel database */
+    const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
+      p_user_id: userId,
+      p_session_id: sessionId
+    });
+    
+    if (checkError) {
+      console.warn('[Auth] IMMEDIATE CHECK: Error checking session:', checkError);
+      if (checkError.message?.includes('function') || checkError.code === '42883') {
+        console.error('[Auth] CRITICAL: is_session_valid function not found! Execute supabase_active_sessions.sql!');
+      }
+      /* In caso di errore, continua comunque (non bloccare se il sistema non è configurato) */
+      return true;
+    }
+    
+    if (isValid === false) {
+      /* Questa NON è la sessione attiva - disconnettere IMMEDIATAMENTE */
+      console.warn('[Auth] IMMEDIATE CHECK: Session is NOT valid - disconnecting NOW');
+      const { showDisconnectedOverlay } = await import('./supabase-client.js');
+      showDisconnectedOverlay();
+      clearAuthSession();
+      return false;
+    }
+    
+    console.log('[Auth] IMMEDIATE CHECK: ✅ Session is valid');
+    return true;
+  } catch (err) {
+    console.error('[Auth] IMMEDIATE CHECK: Error:', err);
+    /* In caso di errore, continua comunque */
+    return true;
+  }
+}
+
 export async function registerUser(nick, password) {
   const { data, error } = await state.supa.auth.signUp({ email: nickToEmail(nick), password });
   if (error) throw error;
@@ -96,6 +152,11 @@ export async function loginUser(nick, password) {
         showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
       }
     }
+  }
+  
+  /* CONTROLLO IMMEDIATO: Verifica che questa sia la sessione attiva subito dopo il login */
+  if (data.session?.access_token && state.supa) {
+    await verifySessionImmediately(data.user.id, data.session.access_token);
   }
   
   /* IMPORTANTE: Disconnettere tutte le altre sessioni per permettere solo 1 sessione attiva */
@@ -219,6 +280,11 @@ export async function tryRestoreSession() {
           } catch (err) {
             console.warn('[Auth] Error verifying restored session:', err);
           }
+        }
+        
+        /* CONTROLLO IMMEDIATO: Verifica che questa sia la sessione attiva subito dopo il restore */
+        if (data.session?.access_token) {
+          await verifySessionImmediately(data.user.id, data.session.access_token);
         }
         
         /* Marca la sessione come nuova per evitare che checkSessionInvalid la disconnetta */

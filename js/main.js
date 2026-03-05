@@ -100,6 +100,23 @@ async function init() {
 
 /** Called after a user identity has been established */
 export async function finishInit() {
+  /* CONTROLLO IMMEDIATO: Verifica la sessione all'entrata iniziale (solo per utenti registrati) */
+  if (state.currentUser && !state.currentUser.isGuest && state.supa) {
+    try {
+      const session = await state.supa.auth.getSession();
+      if (session?.data?.session?.access_token) {
+        const { verifySessionImmediately } = await import('./auth.js');
+        const isValid = await verifySessionImmediately(state.currentUser.id, session.data.session.access_token);
+        if (!isValid) {
+          /* Sessione non valida - disconnesso, non continuare l'inizializzazione */
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('[Main] Error checking session on init:', err);
+    }
+  }
+  
   /* Load user permissions */
   const { loadUserPermissions } = await import('./permissions.js');
   await loadUserPermissions();
