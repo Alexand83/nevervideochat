@@ -177,7 +177,7 @@ export function initAdminPanel() {
   });
 }
 
-function switchAdminTab(tabName) {
+async function switchAdminTab(tabName) {
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
   document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
@@ -191,7 +191,6 @@ function switchAdminTab(tabName) {
     populateUsersRoleFilter();
   }
   else if (tabName === 'roles') loadCustomRoles();
-  else if (tabName === 'wordfilter') loadWordFilter();
   else if (tabName === 'messages') loadMessages();
   else if (tabName === 'banned') loadBannedUsers();
   else if (tabName === 'ips') loadBannedIPs();
@@ -201,7 +200,7 @@ function switchAdminTab(tabName) {
   else if (tabName === 'themes') loadThemes();
   else if (tabName === 'wordfilter') {
     const { loadWordFilter } = await import('./admin-extensions.js');
-    loadWordFilter();
+    await loadWordFilter();
   }
 }
 
