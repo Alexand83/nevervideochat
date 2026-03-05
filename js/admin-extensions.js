@@ -196,6 +196,11 @@ export async function saveRole() {
     console.error('[Admin] Save role error:', err);
     showToast('⚠️ Failed to save role: ' + (err.message || 'Unknown error'));
   } finally {
+    /* Re-enable save button */
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
     /* Reset flag dopo un breve delay per permettere al form di resettarsi */
     setTimeout(() => {
       isSavingRole = false;
@@ -274,37 +279,56 @@ export async function assignRoleToUser(userId, roleId) {
     const user = state.users?.[userId] || Object.values(state.users || {}).find(u => u.id === userId);
     const userName = user?.name || userId;
     
-    /* Update the profile */
-    const { error, data } = await state.supa
-      .from('profiles')
-      .update({ custom_role_id: finalRoleId })
-      .eq('id', String(userId))
-      .select('id')
-      .maybeSingle();
+    /* Determine if user is guest */
+    const isGuest = String(userId).startsWith('guest_');
     
-    if (error) {
-      console.error('[Admin] Assign role DB error:', error);
-      throw error;
+    /* For guests, assign default "guest" role if no role specified */
+    let roleToAssign = finalRoleId;
+    if (isGuest && !finalRoleId) {
+      /* Check if "guest" role exists */
+      const { data: guestRole } = await state.supa
+        .from('custom_roles')
+        .select('id')
+        .eq('id', 'guest')
+        .maybeSingle();
+      
+      if (guestRole) {
+        roleToAssign = 'guest';
+      }
     }
     
-    /* Check if update affected any rows */
-    if (!data) {
-      console.log('[Admin] User not found in profiles table, attempting to create:', userId);
-      
-      /* Determine if user is guest */
-      const isGuest = String(userId).startsWith('guest_');
+    /* Try to update existing profile first */
+    const { error: updateError, count } = await state.supa
+      .from('profiles')
+      .update({ custom_role_id: roleToAssign })
+      .eq('id', String(userId));
+    
+    if (updateError) {
+      console.error('[Admin] Update profile error:', updateError);
+      throw updateError;
+    }
+    
+    /* If no rows were updated, create new profile */
+    if (!count || count === 0) {
+      console.log('[Admin] User not found in profiles table, creating profile:', userId);
       
       /* Try to create profile if it doesn't exist */
+      const profileData = {
+        id: String(userId),
+        username: userName || (isGuest ? `Guest_${userId.slice(6, 12)}` : 'Unknown'),
+        display_name: userName || (isGuest ? `Guest_${userId.slice(6, 12)}` : 'Unknown'),
+        is_guest: isGuest,
+        custom_role_id: roleToAssign || (isGuest ? 'guest' : null)
+      };
+      
+      /* Only add role field for registered users */
+      if (!isGuest) {
+        profileData.role = 'user';
+      }
+      
       const { error: insertError } = await state.supa
         .from('profiles')
-        .insert({
-          id: String(userId),
-          username: userName,
-          display_name: userName,
-          is_guest: isGuest,
-          role: isGuest ? null : 'user',
-          custom_role_id: finalRoleId
-        });
+        .insert(profileData);
       
       if (insertError) {
         console.error('[Admin] Failed to create profile:', insertError);

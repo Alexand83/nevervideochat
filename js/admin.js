@@ -379,29 +379,51 @@ async function deleteRoom(roomId) {
 async function loadUsers() {
   if (!dom.adminUsersList || !state.supa) return;
   try {
-    const users = Object.values(state.rooms[state.activeRoom]?.users || {});
-    if (users.length === 0) {
-      dom.adminUsersList.innerHTML = '<p class="admin-empty">No users online.</p>';
+    /* Get all registered users from database */
+    const { data: allProfiles, error: profilesError } = await state.supa
+      .from('profiles')
+      .select('id, username, display_name, is_guest, custom_role_id, custom_roles(name, color)')
+      .eq('is_guest', false)
+      .order('display_name');
+    
+    if (profilesError) {
+      console.error('[Admin] Error loading profiles:', profilesError);
+      showToast('⚠️ Failed to load users.');
       return;
     }
     
-    /* Load user roles from database */
-    const userIds = users.map(u => u.id);
-    const { data: profiles, error: profileError } = await state.supa
-      .from('profiles')
-      .select('id, custom_role_id, custom_roles(name, color)')
-      .in('id', userIds);
+    /* Also get online users from current room */
+    const onlineUsers = Object.values(state.rooms[state.activeRoom]?.users || {});
+    const onlineUserIds = new Set(onlineUsers.map(u => u.id));
+    
+    /* Combine: show all registered users, mark which are online */
+    const allUsers = (allProfiles || []).map(profile => {
+      const isOnline = onlineUserIds.has(profile.id);
+      const onlineUser = onlineUsers.find(u => u.id === profile.id);
+      return {
+        id: profile.id,
+        name: profile.display_name || profile.username || profile.id,
+        username: profile.username,
+        is_guest: profile.is_guest,
+        is_online: isOnline,
+        custom_role_id: profile.custom_role_id,
+        custom_roles: profile.custom_roles
+      };
+    });
+    
+    if (allUsers.length === 0) {
+      dom.adminUsersList.innerHTML = '<p class="admin-empty">No registered users found.</p>';
+      return;
+    }
     
     const profileMap = {};
-    if (profiles && !profileError) {
-      profiles.forEach(p => {
-        profileMap[p.id] = p;
-      });
-    }
+    allProfiles?.forEach(p => {
+      profileMap[p.id] = p;
+    });
     
     dom.adminUsersList.innerHTML = '';
     
-    for (const user of users) {
+    for (const user of allUsers) {
       const item = document.createElement('div');
       item.className = 'admin-list-item';
       const profile = profileMap[user.id];
@@ -410,12 +432,15 @@ async function loadUsers() {
         ? `<span class="admin-badge" style="background: ${customRole.color || '#8b949e'}; margin-left: 8px;">${escHtml(customRole.name)}</span>`
         : '';
       
+      const onlineBadge = user.is_online ? '<span class="admin-badge" style="background: #4caf50; margin-left: 8px;">Online</span>' : '<span class="admin-badge" style="background: #9e9e9e; margin-left: 8px;">Offline</span>';
+      
       item.innerHTML = `
         <div class="admin-item-info">
           <span class="admin-item-avatar">${user.name.charAt(0).toUpperCase()}</span>
           <div>
             <strong>${escHtml(user.name)}</strong>
             <span class="admin-item-id">ID: ${escHtml(user.id)}</span>
+            ${onlineBadge}
             ${roleBadge}
           </div>
         </div>
