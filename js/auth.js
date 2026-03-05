@@ -146,7 +146,8 @@ export async function loginUser(nick, password) {
       /* APPROCCIO SEMPLICE: Salva direttamente nella tabella active_sessions (senza funzioni SQL) */
       /* Questo funziona sempre, anche se le funzioni SQL non esistono */
       try {
-        const { error: sessionError } = await state.supa
+        console.log('[Auth] Attempting to upsert active session to database...');
+        const { data: upsertData, error: sessionError } = await state.supa
           .from('active_sessions')
           .upsert({
             user_id: data.user.id,
@@ -154,23 +155,35 @@ export async function loginUser(nick, password) {
             updated_at: new Date().toISOString()
           }, {
             onConflict: 'user_id'
-          });
+          })
+          .select(); /* Aggiungi select per vedere il risultato */
         
         if (sessionError) {
-          console.error('[Auth] Error saving active session:', sessionError);
-          /* Se la tabella non esiste, salva solo in localStorage come fallback */
+          console.error('[Auth] ❌ Error saving active session to database:', sessionError);
+          console.error('[Auth] Error details:', JSON.stringify(sessionError, null, 2));
+          
+          /* Se è un errore RLS (403 o PGRST301), le policies potrebbero bloccare */
+          if (sessionError.code === 'PGRST301' || sessionError.status === 403 || sessionError.message?.includes('permission') || sessionError.message?.includes('policy')) {
+            console.error('[Auth] CRITICAL: RLS policy blocking insert! Check active_sessions RLS policies in Supabase!');
+            showToast('⚠️ Session management blocked by RLS. Check database policies.');
+          }
+          
+          /* Salva comunque in localStorage come fallback */
           const sessionData = {
             userId: data.user.id,
             sessionId: sessionId,
             timestamp: Date.now()
           };
           localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
-          console.log('[Auth] Saved to localStorage fallback (table might not exist)');
+          console.log('[Auth] Saved to localStorage fallback');
         } else {
-          console.log('[Auth] ✅ Successfully registered new active session in database - old sessions are now invalid');
+          console.log('[Auth] ✅ Successfully registered new active session in database:', upsertData);
+          console.log('[Auth] Old sessions are now invalid');
         }
       } catch (dbErr) {
-        console.warn('[Auth] Database error - using localStorage fallback:', dbErr);
+        console.error('[Auth] ❌ Database exception:', dbErr);
+        console.error('[Auth] Exception details:', JSON.stringify(dbErr, null, 2));
+        /* Salva comunque in localStorage come fallback */
         const sessionData = {
           userId: data.user.id,
           sessionId: sessionId,
