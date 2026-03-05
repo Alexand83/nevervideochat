@@ -17,11 +17,27 @@ function nickToEmail(nick) {
   return `${nick.toLowerCase().replace(/[^a-z0-9._-]/g, '_')}@${AUTH_EMAIL_DOMAIN}`;
 }
 
-/* ── Crea un ID univoco per la sessione (hash del token) ── */
+/* ── Crea un ID univoco per la sessione (UUID per browser) ── */
 function createSessionId(accessToken) {
-  /* Usa una parte del token come ID univoco (primi 40 caratteri) */
-  /* NON includere Date.now() perché deve essere lo stesso per tutta la durata della sessione */
-  return accessToken.substring(0, 40);
+  /* CRITICO: Genera un sessionId univoco per ogni browser/sessione */
+  /* Non usare il token JWT perché può essere lo stesso per più browser */
+  /* Usa un UUID generato lato client salvato nel localStorage */
+  let sessionId = localStorage.getItem('nvc_browser_session_id');
+  if (!sessionId) {
+    /* Genera un UUID v4 semplice */
+    sessionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+    /* Aggiungi timestamp per garantire unicità */
+    sessionId += '-' + Date.now();
+    localStorage.setItem('nvc_browser_session_id', sessionId);
+    console.log('[Auth] Generated new browser session ID:', sessionId.substring(0, 30) + '...');
+  } else {
+    console.log('[Auth] Using existing browser session ID:', sessionId.substring(0, 30) + '...');
+  }
+  return sessionId;
 }
 
 /* ── Salva l'ID della sessione nel localStorage ── */
