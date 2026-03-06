@@ -373,19 +373,37 @@ export async function connectSupabase() {
         const fromId   = String(payload.from);
         const camRoom  = payload.room_id || null;   /* room where cam was activated */
 
-        /* Update room.users for EVERY joined room — icon true only in camRoom */
+        console.log('[Supabase] cam-opened received:', { from: fromId, roomId: camRoom });
+
+        /* CRITICO: Update room.users for EVERY joined room — icon true only in camRoom */
+        /* Questo assicura che l'icona della camera appaia immediatamente per tutti */
         for (const [rId, room] of Object.entries(state.rooms)) {
           if (room.users[fromId]) {
             /* Aggiorna hasCamera solo se la cam è in questa stanza */
             room.users[fromId].hasCamera = (rId === camRoom);
+          } else if (rId === camRoom) {
+            /* Se l'utente non è ancora nella stanza ma la cam è qui, aggiungilo */
+            const { ensureUser } = await import('./users.js');
+            const user = ensureUser(fromId, payload.fromName || 'User', { 
+              hasCamera: true, 
+              online: true 
+            });
+            room.users[fromId] = {
+              ...user,
+              hasCamera: true
+            };
           }
         }
         /* Keep global state.users in sync (used as fallback) */
         const inMyRoom = !camRoom || camRoom === state.activeRoom;
         const u = state.users.find(u => String(u.id) === fromId);
         if (u) u.hasCamera = inMyRoom;
-        else if (inMyRoom) ensureUser(fromId, payload.fromName, { hasCamera: true, online: true });
+        else if (inMyRoom) {
+          const { ensureUser } = await import('./users.js');
+          ensureUser(fromId, payload.fromName || 'User', { hasCamera: true, online: true });
+        }
         /* Forza re-render immediato */
+        const { renderUsers } = await import('./users.js');
         renderUsers();
         
         /* Events room: update grid when cam-opened received */
