@@ -398,17 +398,23 @@ export async function connectSupabase() {
         
         /* CRITICO: Aggiorna anche state.users per assicurarsi che hasCamera sia disponibile per la preservazione */
         /* Questo è importante perché syncPresence controlla anche state.users per preservare hasCamera */
-        /* IMPORTANTE: Aggiorna hasCamera in state.users per TUTTE le stanze, non solo quella attiva */
+        /* IMPORTANTE: hasCamera deve essere true se la cam è in QUALSIASI stanza in cui l'utente è presente */
         /* Questo assicura che quando arriva il sync della presenza, hasCamera sia già impostato */
         const u = state.users.find(u => String(u.id) === fromId);
-        const inMyRoom = camRoom && String(camRoom) === String(state.activeRoom);
+        const inActiveRoom = camRoom && String(camRoom) === String(state.activeRoom);
         
         if (u) {
-          /* Se la cam è nella stanza attiva, imposta hasCamera=true, altrimenti false */
-          u.hasCamera = inMyRoom;
+          /* Se la cam è nella stanza attiva, imposta hasCamera=true, altrimenti preserva il valore esistente se è true */
+          /* Questo è importante perché l'utente potrebbe avere la cam aperta in una stanza diversa */
+          if (inActiveRoom) {
+            u.hasCamera = true;
+          } else if (u.hasCamera !== true) {
+            /* Se non è nella stanza attiva, preserva il valore esistente (potrebbe essere true da un'altra stanza) */
+            /* Non impostare a false qui, perché potrebbe essere true in un'altra stanza */
+          }
         } else {
-          /* Se l'utente non esiste, crealo con hasCamera corretto */
-          ensureUser(fromId, payload.fromName || 'User', { hasCamera: inMyRoom, online: true });
+          /* Se l'utente non esiste, crealo con hasCamera=true solo se è nella stanza attiva */
+          ensureUser(fromId, payload.fromName || 'User', { hasCamera: inActiveRoom, online: true });
         }
         
         /* CRITICO: Marca questa camera come aperta via broadcast per prevenire che il sync la sovrascriva */
