@@ -69,15 +69,45 @@ export function markDisconnectingOthers() {
 
 /* ── Mostra overlay di disconnessione ── */
 export function showDisconnectedOverlay() {
+  console.log('[Supabase] Session invalidated - redirecting to login');
+  
+  /* Nascondi l'overlay di disconnessione se presente */
   const overlay = document.getElementById('disconnectedOverlay');
   if (overlay) {
-    overlay.hidden = false;
-    /* Nascondi tutto il resto */
-    const appMain = document.querySelector('.app-main');
-    const appHeader = document.querySelector('.app-header');
-    if (appMain) appMain.style.display = 'none';
-    if (appHeader) appHeader.style.display = 'none';
+    overlay.hidden = true;
   }
+  
+  /* Mostra di nuovo app-main e app-header */
+  const appMain = document.querySelector('.app-main');
+  const appHeader = document.querySelector('.app-header');
+  if (appMain) appMain.style.display = '';
+  if (appHeader) appHeader.style.display = '';
+  
+  /* Pulisci lo stato dell'utente */
+  state.currentUser = null;
+  localStorage.removeItem('nvc_identity');
+  localStorage.removeItem('nvc_auth_session');
+  localStorage.removeItem('nvc_browser_session_id');
+  localStorage.removeItem('nvc_session_id');
+  
+  /* Disconnetti da Supabase */
+  if (state.supa) {
+    state.supa.auth.signOut().catch(err => {
+      console.warn('[Supabase] Error signing out:', err);
+    });
+  }
+  
+  /* Mostra il modal di login/registrazione */
+  const authModal = document.getElementById('authModal');
+  if (authModal) {
+    authModal.hidden = false;
+    /* Assicurati che sia visibile sopra tutto */
+    authModal.style.zIndex = '9999';
+  }
+  
+  /* Nascondi altri elementi UI se necessario */
+  const adminPanel = document.getElementById('adminPanel');
+  if (adminPanel) adminPanel.hidden = true;
 }
 
 /* ── Load and subscribe to a specific room ── */
