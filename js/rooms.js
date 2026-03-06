@@ -5,7 +5,7 @@ import { DEFAULT_ROOM_ID } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast }       from './utils.js';
-import { syncPresence, updateOwnPresence, renderUsers } from './users.js';
+import { syncPresence, updateOwnPresence, renderUsers, findUser } from './users.js';
 
 /* Forward refs set by main.js */
 let _loadRoomMessages = null;  // (roomId) => Promise<void>
@@ -95,7 +95,6 @@ export async function joinRoom(roomId) {
       /* CRITICO: Logica di preservazione hasCamera migliorata */
       /* Se hasCamera è già true nell'utente esistente, preservalo SEMPRE a meno che la presenza non dica esplicitamente false */
       const existingUser = state.rooms[roomIdStr].users[uid];
-      const { findUser } = await import('./users.js');
       const globalUser = findUser(uid);
       
       let hasCamera;
