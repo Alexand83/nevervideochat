@@ -240,9 +240,10 @@ export function syncPresence(presenceState, roomId) {
     const info = presences[0];
     /* info.name è il display_name dalla presenza */
     const existingUser = room.users[String(uid)];
+    const globalUser = state.users.find(u => String(u.id) === String(uid));
     
     /* CRITICO: Logica di preservazione hasCamera migliorata */
-    /* Se hasCamera è già true nell'utente esistente, preservalo SEMPRE a meno che la presenza non dica esplicitamente false */
+    /* Se hasCamera è già true nell'utente esistente O in state.users, preservalo SEMPRE a meno che la presenza non dica esplicitamente false */
     /* Questo evita che il sync sovrascriva hasCamera quando la presenza non è ancora aggiornata */
     let hasCamera;
     if (info.hasCamera === true) {
@@ -254,9 +255,10 @@ export function syncPresence(presenceState, roomId) {
     } else {
       /* hasCamera è undefined o null nella presenza - preserva quello esistente */
       /* Controlla sia in room.users che in state.users per maggiore robustezza */
-      const globalUser = state.users.find(u => String(u.id) === String(uid));
+      /* IMPORTANTE: Se hasCamera è true in QUALSIASI fonte (room.users o state.users), preservalo */
       if (existingUser?.hasCamera === true || globalUser?.hasCamera === true) {
         hasCamera = true;
+        console.log('[Users] Preserving hasCamera=true for', uid, 'during sync (presence has undefined)');
       } else {
         hasCamera = false;
       }
