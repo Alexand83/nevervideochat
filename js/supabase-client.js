@@ -431,7 +431,7 @@ export async function connectSupabase() {
         /* NOTE: We do NOT call requestPublicCamera here because the camera owner
            already auto-shares with everyone in startOwnCamera (push model).
            Requesting here would create DUPLICATE WebRTC connections. */
-        if (camRoom === state.activeRoom && inMyRoom) {
+        if (camRoom === state.activeRoom && inActiveRoom) {
           const { updateEventsCamGrid } = await import('./rooms.js');
           updateEventsCamGrid();
         }
