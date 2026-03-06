@@ -246,6 +246,13 @@ export function syncPresence(presenceState, roomId) {
     /* Se hasCamera è già true nell'utente esistente O in state.users, preservalo SEMPRE a meno che la presenza non dica esplicitamente false */
     /* Questo evita che il sync sovrascriva hasCamera quando la presenza non è ancora aggiornata */
     let hasCamera;
+    
+    /* CRITICO: Se questa camera è stata aperta via broadcast di recente, preserva hasCamera=true */
+    /* Questo previene che il sync sovrascriva hasCamera quando la presenza non è ancora aggiornata */
+    const wasOpenedViaBroadcast = state.camerasOpenedViaBroadcast[String(uid)];
+    const broadcastTime = wasOpenedViaBroadcast ? Date.now() - wasOpenedViaBroadcast : Infinity;
+    const isRecentBroadcast = broadcastTime < 10000; /* 10 secondi */
+    
     if (info.hasCamera === true) {
       /* La presenza dice esplicitamente true - usa quello */
       hasCamera = true;
@@ -255,10 +262,14 @@ export function syncPresence(presenceState, roomId) {
     } else {
       /* hasCamera è undefined o null nella presenza - preserva quello esistente */
       /* Controlla sia in room.users che in state.users per maggiore robustezza */
-      /* IMPORTANTE: Se hasCamera è true in QUALSIASI fonte (room.users o state.users), preservalo */
-      if (existingUser?.hasCamera === true || globalUser?.hasCamera === true) {
+      /* IMPORTANTE: Se hasCamera è true in QUALSIASI fonte (room.users o state.users) O se è stata aperta via broadcast, preservalo */
+      if (existingUser?.hasCamera === true || globalUser?.hasCamera === true || isRecentBroadcast) {
         hasCamera = true;
-        console.log('[Users] Preserving hasCamera=true for', uid, 'during sync (presence has undefined)');
+        if (isRecentBroadcast) {
+          console.log('[Users] Preserving hasCamera=true for', uid, 'during sync (opened via broadcast', Math.round(broadcastTime/1000), 's ago)');
+        } else {
+          console.log('[Users] Preserving hasCamera=true for', uid, 'during sync (presence has undefined)');
+        }
       } else {
         hasCamera = false;
       }

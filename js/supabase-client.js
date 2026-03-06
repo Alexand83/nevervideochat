@@ -401,14 +401,22 @@ export async function connectSupabase() {
         /* IMPORTANTE: Aggiorna hasCamera in state.users per TUTTE le stanze, non solo quella attiva */
         /* Questo assicura che quando arriva il sync della presenza, hasCamera sia già impostato */
         const u = state.users.find(u => String(u.id) === fromId);
+        const inMyRoom = camRoom && String(camRoom) === String(state.activeRoom);
+        
         if (u) {
           /* Se la cam è nella stanza attiva, imposta hasCamera=true, altrimenti false */
-          u.hasCamera = (camRoom && String(camRoom) === String(state.activeRoom));
+          u.hasCamera = inMyRoom;
         } else {
           /* Se l'utente non esiste, crealo con hasCamera corretto */
-          const inMyRoom = camRoom && String(camRoom) === String(state.activeRoom);
           ensureUser(fromId, payload.fromName || 'User', { hasCamera: inMyRoom, online: true });
         }
+        
+        /* CRITICO: Marca questa camera come aperta via broadcast per prevenire che il sync la sovrascriva */
+        /* Il flag scade dopo 10 secondi per permettere al sync di aggiornare correttamente se la camera viene chiusa */
+        state.camerasOpenedViaBroadcast[fromId] = Date.now();
+        setTimeout(() => {
+          delete state.camerasOpenedViaBroadcast[fromId];
+        }, 10000);
         
         /* Forza re-render immediato */
         renderUsers();
