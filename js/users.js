@@ -253,8 +253,9 @@ export function syncPresence(presenceState, roomId) {
       hasCamera = false;
     } else {
       /* hasCamera è undefined o null nella presenza - preserva quello esistente */
-      /* Se l'utente esiste già e ha hasCamera=true, mantienilo */
-      if (existingUser?.hasCamera === true) {
+      /* Controlla sia in room.users che in state.users per maggiore robustezza */
+      const globalUser = state.users.find(u => String(u.id) === String(uid));
+      if (existingUser?.hasCamera === true || globalUser?.hasCamera === true) {
         hasCamera = true;
       } else {
         hasCamera = false;
