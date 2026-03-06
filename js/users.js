@@ -241,7 +241,8 @@ export function syncPresence(presenceState, roomId) {
     /* info.name è il display_name dalla presenza */
     const existingUser = room.users[String(uid)];
     
-    /* IMPORTANTE: Se hasCamera è già true nell'utente esistente, preservalo a meno che la presenza non dica esplicitamente false */
+    /* CRITICO: Logica di preservazione hasCamera migliorata */
+    /* Se hasCamera è già true nell'utente esistente, preservalo SEMPRE a meno che la presenza non dica esplicitamente false */
     /* Questo evita che il sync sovrascriva hasCamera quando la presenza non è ancora aggiornata */
     let hasCamera;
     if (info.hasCamera === true) {
@@ -251,8 +252,13 @@ export function syncPresence(presenceState, roomId) {
       /* La presenza dice esplicitamente false - usa quello */
       hasCamera = false;
     } else {
-      /* hasCamera è undefined nella presenza - preserva quello esistente */
-      hasCamera = existingUser?.hasCamera || false;
+      /* hasCamera è undefined o null nella presenza - preserva quello esistente */
+      /* Se l'utente esiste già e ha hasCamera=true, mantienilo */
+      if (existingUser?.hasCamera === true) {
+        hasCamera = true;
+      } else {
+        hasCamera = false;
+      }
     }
     
     const user = {

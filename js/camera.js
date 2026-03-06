@@ -359,23 +359,45 @@ export async function startOwnCamera() {
       return;
     }
     
-    /* Aggiorna prima la presenza locale per assicurarsi che sia corretta */
+    /* CRITICO: Aggiorna prima la presenza locale per assicurarsi che sia corretta */
+    /* Questo deve essere fatto PRIMA di aggiornare la presenza in Supabase */
     for (const [rId, room] of Object.entries(state.rooms)) {
       if (room.users[state.currentUser.id]) {
         room.users[state.currentUser.id].hasCamera = (rId === state.cameraRoom);
+      } else {
+        /* Se l'utente non è ancora nella stanza, aggiungilo */
+        room.users[state.currentUser.id] = {
+          ...state.currentUser,
+          hasCamera: (rId === state.cameraRoom)
+        };
       }
     }
     
+    /* Aggiorna anche state.currentUser.hasCamera per coerenza */
+    state.currentUser.hasCamera = true;
+    
+    /* Broadcast e aggiorna presenza in Supabase */
     broadcastAll('cam-opened', { room_id: state.cameraRoom });
-    await updateAllRoomPresences(); 
-    /* Forza re-render immediato */
+    
+    /* Aggiorna la presenza in tutte le stanze - chiama più volte per assicurarsi che sia propagata */
+    await updateAllRoomPresences();
     renderUsers();
     
-    /* Aggiorna di nuovo dopo un breve delay per assicurarsi che la presenza sia sincronizzata */
+    /* Aggiorna di nuovo dopo brevi delay per assicurarsi che la presenza sia sincronizzata */
     setTimeout(async () => {
       await updateAllRoomPresences();
       renderUsers();
-    }, 500);
+    }, 300);
+    
+    setTimeout(async () => {
+      await updateAllRoomPresences();
+      renderUsers();
+    }, 800);
+    
+    setTimeout(async () => {
+      await updateAllRoomPresences();
+      renderUsers();
+    }, 1500);
     
     if (isEventsRoom) {
       /* Automatically share with all users in Events room */

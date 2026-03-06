@@ -92,7 +92,8 @@ export async function joinRoom(roomId) {
       const info = newPresences[0];
       if (!state.rooms[roomIdStr]) return;
       
-      /* IMPORTANTE: Se hasCamera è già true nell'utente esistente, preservalo a meno che la presenza non dica esplicitamente false */
+      /* CRITICO: Logica di preservazione hasCamera migliorata */
+      /* Se hasCamera è già true nell'utente esistente, preservalo SEMPRE a meno che la presenza non dica esplicitamente false */
       const existingUser = state.rooms[roomIdStr].users[uid];
       let hasCamera;
       if (info.hasCamera === true) {
@@ -102,8 +103,13 @@ export async function joinRoom(roomId) {
         /* La presenza dice esplicitamente false - usa quello */
         hasCamera = false;
       } else {
-        /* hasCamera è undefined nella presenza - preserva quello esistente */
-        hasCamera = existingUser?.hasCamera || false;
+        /* hasCamera è undefined o null nella presenza - preserva quello esistente */
+        /* Se l'utente esiste già e ha hasCamera=true, mantienilo */
+        if (existingUser?.hasCamera === true) {
+          hasCamera = true;
+        } else {
+          hasCamera = false;
+        }
       }
       
       state.rooms[roomIdStr].users[uid] = {
