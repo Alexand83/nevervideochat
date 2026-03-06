@@ -398,12 +398,16 @@ export async function connectSupabase() {
         
         /* CRITICO: Aggiorna anche state.users per assicurarsi che hasCamera sia disponibile per la preservazione */
         /* Questo è importante perché syncPresence controlla anche state.users per preservare hasCamera */
-        const inMyRoom = !camRoom || camRoom === state.activeRoom;
+        /* IMPORTANTE: Aggiorna hasCamera in state.users per TUTTE le stanze, non solo quella attiva */
+        /* Questo assicura che quando arriva il sync della presenza, hasCamera sia già impostato */
         const u = state.users.find(u => String(u.id) === fromId);
         if (u) {
-          u.hasCamera = inMyRoom;
-        } else if (inMyRoom) {
-          ensureUser(fromId, payload.fromName || 'User', { hasCamera: true, online: true });
+          /* Se la cam è nella stanza attiva, imposta hasCamera=true, altrimenti false */
+          u.hasCamera = (camRoom && String(camRoom) === String(state.activeRoom));
+        } else {
+          /* Se l'utente non esiste, crealo con hasCamera corretto */
+          const inMyRoom = camRoom && String(camRoom) === String(state.activeRoom);
+          ensureUser(fromId, payload.fromName || 'User', { hasCamera: inMyRoom, online: true });
         }
         
         /* Forza re-render immediato */
