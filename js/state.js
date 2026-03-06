@@ -35,6 +35,9 @@ export const state = {
 
   /* Cam viewers tracking */
   camViewers: {},
+  
+  /* Track manually closed cameras - prevent auto-reopening */
+  manuallyClosedCameras: {},  /* { [userId]: true } - cameras closed by user, don't auto-reopen */
 
   /* Block / ignore lists (loaded from localStorage in finishInit) */
   pendingCamRequests: {},

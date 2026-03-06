@@ -238,7 +238,15 @@ export async function closeCameraWindow(uid) {
     broadcastAll('cam-closed', { room_id: closedRoom });
     await updateAllRoomPresences(); renderUsers(); showToast('📹 Camera disabled.');
   } else {
-    if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
+    /* CRITICO: Marca questa camera come chiusa manualmente dall'utente */
+    /* Questo impedisce che venga riaperta automaticamente */
+    state.manuallyClosedCameras[uid] = true;
+    console.log('[Camera] Camera manually closed by user:', uid, '- will not auto-reopen');
+    
+    if (state.incomingPCs[uid]) { 
+      state.incomingPCs[uid].close(); 
+      delete state.incomingPCs[uid]; 
+    }
   }
 }
 
@@ -276,6 +284,13 @@ export async function handleCamClosed(payload) {
   }
   const u = state.users.find(u => u.id === uid);
   if (u) u.hasCamera = false;
+  
+  /* CRITICO: Rimuovi il flag di chiusura manuale quando la camera viene effettivamente chiusa dall'altro utente */
+  /* Questo permette all'utente di richiedere di nuovo la camera in futuro se vuole */
+  if (state.manuallyClosedCameras[uid]) {
+    delete state.manuallyClosedCameras[uid];
+    console.log('[Camera] Removed manual close flag for', uid, '- camera was closed by owner');
+  }
 
   renderUsers();
   if (inMyRoom) showToast(`📹 ${payload.fromName} turned off their camera`);
@@ -649,10 +664,16 @@ export async function handleWebRTCSignal(payload) {
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
 
   if (isPublic) {
-    if (sigType === 'offer') {
-      /* Prevent duplicate PC creation — if we're already connected with live video, ignore the new offer.
+      if (sigType === 'offer') {
+        /* CRITICO: Non accettare offerte se l'utente ha chiuso manualmente questa camera */
+        if (state.manuallyClosedCameras[from]) {
+          console.log('[WebRTC] Rejecting offer from', from, '— camera was manually closed by user');
+          return;
+        }
+        
+        /* Prevent duplicate PC creation — if we're already connected with live video, ignore the new offer.
          New offers while connected are usually ICE restart attempts that we don't need to re-negotiate. */
-      if (state.incomingPCs[from]) {
+        if (state.incomingPCs[from]) {
         const existingPc = state.incomingPCs[from];
         const existingCw = state.cameraWindows[from];
         const existingVideo = existingCw?.el?.querySelector('video');
@@ -791,6 +812,14 @@ export async function handleWebRTCSignal(payload) {
           }
         }
         
+        /* CRITICO: Non aprire la finestra se l'utente ha chiuso manualmente questa camera */
+        if (state.manuallyClosedCameras[from]) {
+          console.log('[WebRTC] Rejecting stream from', from, '— camera was manually closed by user');
+          try { pc.close(); } catch {}
+          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+          return;
+        }
+        
         /* Open window immediately — insertCameraIntoEventsGrid handles stream readiness */
         openRemoteCamWindow(from, stream, payload.fromName);
       };
@@ -830,6 +859,12 @@ export async function handleWebRTCSignal(payload) {
               const currentCw = state.cameraWindows[from];
               const streamAlive = currentCw?.stream?.active &&
                 currentCw.stream.getTracks().some(t => t.readyState === 'live');
+              /* CRITICO: Non riconnettere se l'utente ha chiuso manualmente questa camera */
+              if (state.manuallyClosedCameras[from]) {
+                console.log('[WebRTC] Skipping reconnect for', from, '— camera was manually closed by user');
+                return;
+              }
+              
               /* Only reconnect if: user still online with cam, stream is dead, no PC already active */
               if (user?.hasCamera && user?.online && !streamAlive && !state.incomingPCs[from]) {
                 console.log('[WebRTC] Re-requesting camera from', from);
