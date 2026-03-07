@@ -249,9 +249,10 @@ export function syncPresence(presenceState, roomId) {
     
     /* CRITICO: Se questa camera è stata aperta via broadcast di recente, preserva hasCamera=true */
     /* Questo previene che il sync sovrascriva hasCamera quando la presenza non è ancora aggiornata */
+    /* CRITICO: Ridotto a 5 secondi per evitare di preservare cam che non esistono più */
     const wasOpenedViaBroadcast = state.camerasOpenedViaBroadcast[String(uid)];
     const broadcastTime = wasOpenedViaBroadcast ? Date.now() - wasOpenedViaBroadcast : Infinity;
-    const isRecentBroadcast = broadcastTime < 10000; /* 10 secondi */
+    const isRecentBroadcast = broadcastTime < 5000; /* 5 secondi invece di 10 */
     
     if (info.hasCamera === true) {
       /* La presenza dice esplicitamente true - usa quello */

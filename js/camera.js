@@ -294,7 +294,14 @@ export async function closeCameraWindow(uid) {
   
   /* Normal floating window close */
   const cw = state.cameraWindows[uid]; if (!cw) return;
-  stopMicMeter(uid); cw.el.remove(); delete state.cameraWindows[uid];
+  stopMicMeter(uid); 
+  /* CRITICO: Rimuovi il stream prima di rimuovere la cam per evitare che streamAlive risulti true */
+  if (cw.stream) {
+    cw.stream.getTracks().forEach(t => t.stop());
+    cw.stream = null;
+  }
+  cw.el.remove(); 
+  delete state.cameraWindows[uid];
   const isOwn = uid === state.currentUser?.id || uid === 'me';
   if (isOwn) {
     const closedRoom = state.cameraRoom;
@@ -919,13 +926,13 @@ export async function handleWebRTCSignal(payload) {
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
         
-        /* CRITICO: Chiudi immediatamente la cam se la connessione si disconnette o fallisce */
-        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        /* CRITICO: Per disconnected, NON chiudere immediatamente - potrebbe riconnettersi */
+        /* Chiudi solo se rimane disconnected per più di 5 secondi */
+        if (pc.connectionState === 'disconnected') {
           const cw = state.cameraWindows[from];
-          if (cw) {
-            console.log('[WebRTC] Connection', pc.connectionState, 'for', from, '- closing camera window');
-            /* Chiudi la cam dopo un breve delay per permettere il reconnect se necessario */
-            setTimeout(() => {
+          if (cw && !cw.disconnectTimer) {
+            console.log('[WebRTC] Connection disconnected for', from, '- will close if not reconnected in 5s');
+            cw.disconnectTimer = setTimeout(() => {
               /* Verifica se la connessione è ancora disconnessa dopo il delay */
               if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
                 const tracks = cw.stream?.getTracks() || [];
@@ -935,7 +942,18 @@ export async function handleWebRTCSignal(payload) {
                   closeCameraWindow(from).catch(() => {});
                 }
               }
-            }, 2000); /* 2 secondi di delay per permettere il reconnect */
+              if (cw) delete cw.disconnectTimer;
+            }, 5000); /* 5 secondi di delay per permettere il reconnect */
+          }
+        }
+        
+        /* CRITICO: Se si riconnette, cancella il timer di chiusura */
+        if (pc.connectionState === 'connected' || pc.connectionState === 'connecting') {
+          const cw = state.cameraWindows[from];
+          if (cw?.disconnectTimer) {
+            clearTimeout(cw.disconnectTimer);
+            delete cw.disconnectTimer;
+            console.log('[WebRTC] Connection reconnected for', from, '- cancelled close timer');
           }
         }
         
@@ -965,6 +983,8 @@ export async function handleWebRTCSignal(payload) {
               }
               const user = findUser(from);
               const currentCw = state.cameraWindows[from];
+              /* CRITICO: Se la cam è stata chiusa, streamAlive potrebbe essere true anche se la cam non esiste più */
+              /* Verifica se la cam esiste ancora prima di controllare streamAlive */
               const streamAlive = currentCw?.stream?.active &&
                 currentCw.stream.getTracks().some(t => t.readyState === 'live');
               /* CRITICO: Non riconnettere se l'utente ha chiuso manualmente questa camera */
@@ -973,8 +993,12 @@ export async function handleWebRTCSignal(payload) {
                 return;
               }
               
-              /* Only reconnect if: user still online with cam, stream is dead, no PC already active */
-              if (user?.hasCamera && user?.online && !streamAlive && !state.incomingPCs[from]) {
+              /* CRITICO: Se la cam non esiste più, streamAlive potrebbe essere true ma la cam è chiusa */
+              /* Verifica che la cam esista ancora prima di controllare streamAlive */
+              const camExists = !!currentCw && !!currentCw.el && currentCw.el.parentNode;
+              
+              /* Only reconnect if: user still online with cam, (stream is dead OR cam doesn't exist), no PC already active */
+              if (user?.hasCamera && user?.online && (!streamAlive || !camExists) && !state.incomingPCs[from]) {
                 console.log('[WebRTC] Re-requesting camera from', from);
                 /* Remove dead slot so it gets created fresh */
                 if (currentCw?.isEventsGrid && currentCw.el?.parentNode) {
