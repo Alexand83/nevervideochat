@@ -68,7 +68,7 @@ export function markDisconnectingOthers() {
 }
 
 /* ── Mostra overlay di disconnessione ── */
-export function showDisconnectedOverlay() {
+export async function showDisconnectedOverlay() {
   /* Evita doppie esecuzioni (es. signOut che scatena onAuthStateChange dopo ritorno online) */
   if (!state.currentUser) return;
 
@@ -79,6 +79,14 @@ export function showDisconnectedOverlay() {
   if (state.signalCh) {
     try { state.signalCh.unsubscribe(); } catch (_) {}
     state.signalCh = null;
+  }
+
+  /* Resetta stato camera così al re-ingresso (guest/login) la cam non risulta attiva in Eventi */
+  try {
+    const { resetCameraStateOnDisconnect } = await import('./camera.js?v=20260452');
+    resetCameraStateOnDisconnect();
+  } catch (e) {
+    console.warn('[Supabase] resetCameraStateOnDisconnect failed:', e);
   }
 
   /* Nascondi l'overlay di disconnessione se presente */

@@ -331,6 +331,46 @@ export async function closeCameraWindow(uid) {
 }
 
 /**
+ * Resetta tutto lo stato camera alla disconnessione (WiFi/sessione).
+ * Così al re-ingresso (guest o login) la cam non risulta più attiva in Eventi.
+ */
+export function resetCameraStateOnDisconnect() {
+  const selfId = state.currentUser?.id;
+  if (state.localStream) {
+    state.localStream.getTracks().forEach(t => t.stop());
+    state.localStream = null;
+  }
+  state.cameraRoom = null;
+  state.cameraClosedAt = 0;
+  for (const uid of Object.keys(state.outgoingPCs)) {
+    try { state.outgoingPCs[uid].close(); } catch (_) {}
+    delete state.outgoingPCs[uid];
+  }
+  for (const uid of Object.keys(state.incomingPCs)) {
+    try { state.incomingPCs[uid].close(); } catch (_) {}
+    delete state.incomingPCs[uid];
+  }
+  for (const uid of Object.keys(state.cameraWindows)) {
+    const cw = state.cameraWindows[uid];
+    if (cw.streamCheckInterval) { clearInterval(cw.streamCheckInterval); cw.streamCheckInterval = null; }
+    if (cw.stream) { cw.stream.getTracks().forEach(t => t.stop()); cw.stream = null; }
+    if (cw.isEventsGrid && cw.el?.parentNode) cw.el.remove();
+    else if (cw.el?.parentNode) { stopMicMeter(uid); cw.el.remove(); }
+    delete state.cameraWindows[uid];
+  }
+  if (selfId) {
+    for (const room of Object.values(state.rooms)) {
+      if (room.users[selfId]) room.users[selfId].hasCamera = false;
+    }
+    const u = state.users.find(x => x.id === selfId);
+    if (u) u.hasCamera = false;
+  }
+  if (dom.cameraBtnLabel) dom.cameraBtnLabel.textContent = 'Camera Off';
+  if (dom.cameraBtnHeader) dom.cameraBtnHeader.classList.remove('camera-on');
+  import('./rooms.js').then(({ updateEventsCamGrid }) => updateEventsCamGrid()).catch(() => {});
+}
+
+/**
  * Rimuove una camera remota dalla grid/UI (stessa procedura di handleCamClosed lato viewer).
  * Usata quando: timeout flusso, disconnect 15s, connection failed dopo retry, refresh pagina altrui.
  * NON imposta manuallyClosedCameras così la cam può essere richiesta di nuovo quando tornano.
