@@ -10,7 +10,7 @@ import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
 import { broadcast, broadcastAll } from './broadcast.js';
 import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences } from './users.js';
-import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints } from './storage.js';
+import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints, saveDeviceSettings } from './storage.js';
 import { getAvailableRooms } from './rooms.js';
 
 const CAM_STEP = 30;
@@ -60,9 +60,14 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         </svg>
         <span id="cam-mic-lbl-${uid}">Mic On</span>
       </button>
-      <div class="mic-meter-section">
+      <div class="mic-meter-section mic-meter-vertical" title="Volume microfono">
         <div class="mic-meter-bar-wrap"><div class="mic-meter-bar"><div class="mic-meter-fill" id="mic-fill-${uid}"></div></div></div>
-        <span class="mic-meter-lbl">Mic Level</span>
+      </div>
+      <div class="cam-device-wrap">
+        <button class="cam-ctrl-btn cam-device-btn" id="cam-device-btn-${uid}" aria-label="Cambia camera" title="Cambia dispositivo camera">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </button>
+        <div class="cam-device-dropdown" id="cam-device-dropdown-${uid}" hidden></div>
       </div>
     </div>` : `
     <div class="cam-win-footer cam-win-footer-remote">
@@ -170,6 +175,16 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     const mb = $(`cam-mic-btn-${uid}`);
     if (mb) mb.addEventListener('click', () => toggleCamMic(uid));
     startMicMeter(stream, uid);
+    const devBtn = $(`cam-device-btn-${uid}`);
+    const devDrop = $(`cam-device-dropdown-${uid}`);
+    if (devBtn && devDrop) {
+      devBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        devDrop.hidden = !devDrop.hidden;
+        if (!devDrop.hidden) await openCameraDeviceDropdown(uid, devDrop);
+      });
+      document.addEventListener('click', () => { if (devDrop) devDrop.hidden = true; });
+    }
     const vBtn   = $(`cam-viewers-btn-${uid}`);
     const vPanel = $(`cam-viewers-panel-${uid}`);
     if (vBtn && vPanel) {
@@ -621,15 +636,20 @@ function startMicMeter(stream, uid) {
     const an  = ctx.createAnalyser(); an.fftSize = 256; an.smoothingTimeConstant = 0.75;
     src.connect(an);
     const data = new Uint8Array(an.frequencyBinCount);
+    const SPEAKING_THRESHOLD = 18;
     function tick() {
       an.getByteFrequencyData(data);
       const avg = data.reduce((a, b) => a + b, 0) / data.length;
       const pct  = Math.min(100, Math.round((avg / 70) * 100));
       const fill = $(`mic-fill-${uid}`);
       if (fill) {
-        fill.style.width = ((state.cameraWindows[uid]?.micEnabled !== false) ? pct : 0) + '%';
-        fill.style.backgroundPosition = Math.max(0, (pct - 50) * 2) + '% 0';
+        const level = (state.cameraWindows[uid]?.micEnabled !== false) ? pct : 0;
+        fill.style.height = level + '%';
+        fill.style.background = level < 40 ? 'var(--clr-success)' : level < 75 ? '#f9c513' : 'var(--clr-danger)';
       }
+      const win = state.cameraWindows[uid]?.el;
+      const wrap = win?.querySelector('.cam-win-video-wrap');
+      if (wrap) wrap.classList.toggle('cam-speaking', (state.cameraWindows[uid]?.micEnabled !== false) && pct > SPEAKING_THRESHOLD);
       if (state.micAnalysers[uid]) state.micAnalysers[uid].raf = requestAnimationFrame(tick);
     }
     state.micAnalysers[uid] = { ctx, raf: requestAnimationFrame(tick) };
@@ -641,7 +661,72 @@ function stopMicMeter(uid) {
   if (a.raf) cancelAnimationFrame(a.raf);
   if (a.ctx) a.ctx.close().catch(() => {});
   delete state.micAnalysers[uid];
-  const fill = $(`mic-fill-${uid}`); if (fill) fill.style.width = '0%';
+  const fill = $(`mic-fill-${uid}`); if (fill) fill.style.height = '0%';
+  const win = state.cameraWindows[uid]?.el;
+  const wrap = win?.querySelector('.cam-win-video-wrap');
+  if (wrap) wrap.classList.remove('cam-speaking');
+}
+
+/* ── Cambio camera on the fly (dropdown in footer) ── */
+async function openCameraDeviceDropdown(uid, dropdownEl) {
+  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+  const videoDevices = devices.filter(d => d.kind === 'videoinput');
+  const currentId = state.settings?.cameraId || '';
+  dropdownEl.innerHTML = '';
+  if (videoDevices.length === 0) {
+    dropdownEl.innerHTML = '<div class="cam-device-item cam-device-empty">Nessuna camera</div>';
+    return;
+  }
+  videoDevices.forEach(dev => {
+    const label = dev.label || `Camera ${dev.deviceId.slice(0, 8)}`;
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'cam-device-item' + (dev.deviceId === currentId ? ' active' : '');
+    item.textContent = label;
+    item.dataset.deviceId = dev.deviceId;
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      dropdownEl.hidden = true;
+      if (dev.deviceId !== currentId) await switchCameraDevice(uid, dev.deviceId);
+    });
+    dropdownEl.appendChild(item);
+  });
+}
+
+async function switchCameraDevice(ownUid, deviceId) {
+  if (!state.localStream || !state.cameraWindows[ownUid]) return;
+  const oldVideoTrack = state.localStream.getVideoTracks()[0];
+  if (!oldVideoTrack) return;
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: deviceId } },
+      audio: state.settings?.micId ? { deviceId: { exact: state.settings.micId } } : true,
+    });
+    const newVideoTrack = newStream.getVideoTracks()[0];
+    if (!newVideoTrack) { newStream.getTracks().forEach(t => t.stop()); return; }
+    state.localStream.removeTrack(oldVideoTrack);
+    oldVideoTrack.stop();
+    state.localStream.addTrack(newVideoTrack);
+    newStream.getAudioTracks().forEach(t => t.stop());
+    state.settings = state.settings || {};
+    state.settings.cameraId = deviceId;
+    saveDeviceSettings(state.settings);
+
+    const videoEl = $(`cam-vid-${ownUid}`);
+    if (videoEl && videoEl.srcObject === state.localStream) {
+      videoEl.srcObject = null;
+      videoEl.srcObject = state.localStream;
+    }
+    Object.keys(state.outgoingPCs).forEach(peerId => {
+      const pc = state.outgoingPCs[peerId];
+      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+      if (sender) sender.replaceTrack(newVideoTrack).catch(console.warn);
+    });
+    showToast('📹 Camera cambiata.');
+  } catch (err) {
+    console.warn('[Camera] switchCameraDevice failed:', err);
+    showToast('⚠️ Impossibile cambiare camera.');
+  }
 }
 
 export function initCameraSystem() {
