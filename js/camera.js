@@ -127,8 +127,9 @@ export function createCameraWindow(uid, stream, name, isOwn) {
           lastActiveTime = Date.now();
         } else {
           const timeSinceLastActive = Date.now() - lastActiveTime;
-          /* Per cam nella grid degli eventi, chiudi dopo 5 secondi invece di 30 */
-          const timeout = isInEventsGrid ? 5000 : 30000;
+          /* CRITICO: Per cam nella grid degli eventi, chiudi dopo 3 secondi invece di 30 */
+          /* Ridotto a 3 secondi per evitare cam freezate/nera */
+          const timeout = isInEventsGrid ? 3000 : 30000;
           
           if (timeSinceLastActive > timeout) {
             /* Flusso morto - chiudi la cam */
@@ -137,7 +138,22 @@ export function createCameraWindow(uid, stream, name, isOwn) {
               clearInterval(streamCheckInterval);
               streamCheckInterval = null;
             }
-            closeCameraWindow(uid).catch(() => {});
+            /* CRITICO: Per cam nella grid, rimuovi immediatamente il slot invece di chiudere normalmente */
+            if (isInEventsGrid) {
+              const cw = state.cameraWindows[uid];
+              if (cw?.el?.parentNode) {
+                cw.el.remove();
+              }
+              if (state.incomingPCs[uid]) {
+                try { state.incomingPCs[uid].close(); } catch {}
+                delete state.incomingPCs[uid];
+              }
+              delete state.cameraWindows[uid];
+              const { updateEventsCamGrid } = await import('./rooms.js');
+              updateEventsCamGrid();
+            } else {
+              closeCameraWindow(uid).catch(() => {});
+            }
           }
         }
       };
