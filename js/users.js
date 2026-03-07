@@ -28,6 +28,8 @@ export function ensureUser(id, name, extra = {}) {
   if ('online'    in extra) u.online    = extra.online;
   if ('hasCamera' in extra) u.hasCamera = extra.hasCamera;
   if ('avatarUrl' in extra) u.avatarUrl = extra.avatarUrl;
+  if ('roleName'  in extra) u.roleName  = extra.roleName  ?? 'User';
+  if ('roleColor' in extra) u.roleColor = extra.roleColor ?? '#8b949e';
   return u;
 }
 
@@ -93,13 +95,18 @@ export function renderUsers() {
     dot.className = `status-dot${user.online ? '' : ' offline'}`;
     av.appendChild(dot);
 
+    const roleName  = user.roleName || 'User';
+    const roleColor = user.roleColor || '#8b949e';
+
     const info   = document.createElement('div'); info.className = 'user-item-info';
     const nameEl = document.createElement('div');
     nameEl.className = `user-item-name${user.online ? '' : ' offline'}`;
     nameEl.textContent = displayName;
+    nameEl.style.color = roleColor;
     const sub = document.createElement('div');
     sub.className  = 'user-item-sub';
-    sub.textContent = user.online ? 'Online' : 'Offline';
+    sub.textContent = roleName;
+    sub.style.color = roleColor;
     info.append(nameEl, sub);
     li.append(av, info);
 
@@ -216,6 +223,8 @@ export async function updateOwnPresence(presenceCh) {
     hasCamera: state.cameraRoom === roomId,   /* true only in the room where cam is active */
     online:    true,
     avatarUrl: state.currentUser.avatarUrl || null,
+    roleName:  state.currentUser.roleName || 'User',
+    roleColor: state.currentUser.roleColor || '#8b949e',
   });
 }
 
@@ -294,10 +303,12 @@ export function syncPresence(presenceState, roomId) {
       online:    true,
       hasCamera: hasCamera,  /* Preserva hasCamera se già presente, altrimenti usa quello dalla presenza */
       avatarUrl: info.avatarUrl || null,
+      roleName:  info.roleName || 'User',
+      roleColor: info.roleColor || '#8b949e',
     };
     room.users[String(uid)] = user;
     /* Also keep the global state.users in sync */
-    ensureUser(String(uid), info.name || info.username || 'User', { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: hasCamera, avatarUrl: info.avatarUrl || null });
+    ensureUser(String(uid), info.name || info.username || 'User', { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: hasCamera, avatarUrl: info.avatarUrl || null, roleName: user.roleName, roleColor: user.roleColor });
   });
   
   /* Rimuovi utenti che non sono più nella presenza */

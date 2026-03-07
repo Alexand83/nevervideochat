@@ -222,7 +222,9 @@ export async function finishInit() {
   if (state.supa && state.currentUser) {
     /* Crea/aggiorna profilo nel database con ruoli di default */
     await ensureUserProfile(state.currentUser);
-    
+    /* Carica nome e colore del ruolo (custom_roles) per presenza e lista utenti */
+    await loadCurrentUserRole();
+
     await loadUserRestrictions(state.currentUser.id);
     
     /* Check if user is banned - if so, show ban overlay and stop initialization */
@@ -271,6 +273,34 @@ export async function finishInit() {
   }, 1000); /* Aspetta 1 secondo per permettere alla presenza di sincronizzarsi */
   
   dom.msgInput?.focus();
+}
+
+/* ── Carica nome e colore del ruolo (custom_roles) per l'utente corrente ── */
+async function loadCurrentUserRole() {
+  if (!state.supa || !state.currentUser) return;
+  if (state.currentUser.isGuest) {
+    state.currentUser.roleName = 'Guest';
+    state.currentUser.roleColor = '#8b949e';
+    return;
+  }
+  try {
+    const { data, error } = await state.supa
+      .from('profiles')
+      .select('custom_role_id, custom_roles(name, color)')
+      .eq('id', String(state.currentUser.id))
+      .maybeSingle();
+    if (error || !data) {
+      state.currentUser.roleName = 'User';
+      state.currentUser.roleColor = '#8b949e';
+      return;
+    }
+    const role = data.custom_roles;
+    state.currentUser.roleName = role?.name || 'User';
+    state.currentUser.roleColor = role?.color || '#8b949e';
+  } catch (_) {
+    state.currentUser.roleName = 'User';
+    state.currentUser.roleColor = '#8b949e';
+  }
 }
 
 /* ── Assicura che l'utente abbia un profilo nel database con ruoli di default ── */
