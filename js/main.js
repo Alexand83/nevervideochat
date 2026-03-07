@@ -62,6 +62,29 @@ function filterCookieWarnings() {
 async function init() {
   /* Filtra warning cookie prima di inizializzare */
   filterCookieWarnings();
+  
+  /* CRITICO: Chiudi tutte le cam quando si aggiorna la pagina */
+  window.addEventListener('beforeunload', async () => {
+    try {
+      const { closeAllCamerasForUser } = await import('./camera.js');
+      /* Chiudi tutte le cam remote */
+      if (state.cameraWindows) {
+        for (const uid of Object.keys(state.cameraWindows)) {
+          if (String(uid) !== String(state.currentUser?.id)) {
+            const { closeCameraWindow } = await import('./camera.js');
+            await closeCameraWindow(uid).catch(() => {});
+          }
+        }
+      }
+      /* Chiudi anche la propria cam se attiva */
+      if (state.localStream) {
+        state.localStream.getTracks().forEach(t => t.stop());
+      }
+    } catch (err) {
+      console.warn('[Main] Error closing cameras on unload:', err);
+    }
+  });
+  
   /* 1. Init UI subsystems */
   initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording();
   initContextMenu(); initCameraSystem(); initCallControls();

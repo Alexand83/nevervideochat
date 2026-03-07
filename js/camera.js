@@ -97,6 +97,64 @@ export function createCameraWindow(uid, stream, name, isOwn) {
   if (videoEl) {
     videoEl.srcObject = null; videoEl.srcObject = stream;
     videoEl.play().catch(() => {});
+    
+    /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
+    /* Chiudi la cam dopo 30 secondi di assenza di flusso */
+    if (!isOwn && stream) {
+      let lastActiveTime = Date.now();
+      let streamCheckInterval = null;
+      
+      const checkStreamHealth = () => {
+        if (!state.cameraWindows[uid]) {
+          /* Camera già chiusa - pulisci l'interval */
+          if (streamCheckInterval) {
+            clearInterval(streamCheckInterval);
+            streamCheckInterval = null;
+          }
+          return;
+        }
+        
+        const tracks = stream?.getTracks() || [];
+        const hasActiveTracks = tracks.some(t => t.readyState === 'live');
+        const videoTrack = tracks.find(t => t.kind === 'video');
+        const isVideoLive = videoTrack?.readyState === 'live';
+        
+        if (hasActiveTracks && isVideoLive) {
+          lastActiveTime = Date.now();
+        } else {
+          const timeSinceLastActive = Date.now() - lastActiveTime;
+          if (timeSinceLastActive > 30000) {
+            /* Flusso morto per più di 30 secondi - chiudi la cam */
+            console.log('[Camera] Stream dead for', Math.round(timeSinceLastActive/1000), 's - closing camera for', uid);
+            if (streamCheckInterval) {
+              clearInterval(streamCheckInterval);
+              streamCheckInterval = null;
+            }
+            closeCameraWindow(uid).catch(() => {});
+          }
+        }
+      };
+      
+      /* Controlla ogni 5 secondi */
+      streamCheckInterval = setInterval(checkStreamHealth, 5000);
+      
+      /* Salva l'interval per poterlo pulire */
+      if (state.cameraWindows[uid]) {
+        state.cameraWindows[uid].streamCheckInterval = streamCheckInterval;
+      }
+      
+      /* Monitora anche gli eventi dei track */
+      const tracks = stream.getTracks();
+      tracks.forEach(track => {
+        track.addEventListener('ended', () => {
+          console.log('[Camera] Track ended for', uid, '- kind:', track.kind);
+          checkStreamHealth();
+        });
+      });
+      
+      /* Controlla immediatamente */
+      checkStreamHealth();
+    }
   }
   win.querySelector('.cam-win-close-btn').addEventListener('click', () => closeCameraWindow(uid));
 
@@ -192,6 +250,13 @@ export async function closeAllCamerasForUser(userId) {
 export async function closeCameraWindow(uid) {
   /* Check if this camera is in events grid */
   const camWin = state.cameraWindows[uid];
+  
+  /* CRITICO: Pulisci l'interval di monitoraggio del flusso se presente */
+  if (camWin?.streamCheckInterval) {
+    clearInterval(camWin.streamCheckInterval);
+    camWin.streamCheckInterval = null;
+  }
+  
   if (camWin?.isEventsGrid) {
     /* Remove slot from events grid entirely */
     const slot = camWin.el;

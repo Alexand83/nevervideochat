@@ -378,6 +378,31 @@ export async function connectSupabase() {
         /* CRITICO: Update room.users for EVERY joined room — icon true only in camRoom */
         /* Questo assicura che l'icona della camera appaia immediatamente per tutti */
         const { ensureUser, renderUsers } = await import('./users.js');
+        const { getAvailableRooms } = await import('./rooms.js');
+        
+        /* CRITICO: Controlla se la cam è in una stanza eventi */
+        const availableRooms = getAvailableRooms();
+        const camRoomData = availableRooms.find(r => String(r.id) === String(camRoom));
+        const isCamInEventsRoom = !!(camRoomData?.max_cams && camRoomData.max_cams >= 1 && camRoomData.max_cams <= 8);
+        const isInCamRoom = camRoom && String(camRoom) === String(state.activeRoom);
+        
+        /* CRITICO: Se la cam è in una stanza eventi e NON siamo in quella stanza, NON creare la cam */
+        /* Questo previene che le cam della stanza eventi appaiano nella stanza general dopo un refresh */
+        if (isCamInEventsRoom && !isInCamRoom) {
+          console.log('[Supabase] cam-opened: Camera is in Events room', camRoom, 'but we are in room', state.activeRoom, '- NOT creating camera window');
+          /* Aggiorna solo hasCamera per mostrare l'icona nella stanza corretta */
+          for (const [rId, room] of Object.entries(state.rooms)) {
+            if (room.users[fromId]) {
+              room.users[fromId].hasCamera = (rId === camRoom);
+            }
+          }
+          const u = state.users.find(u => String(u.id) === fromId);
+          if (u) {
+            u.hasCamera = false; /* Non mostrare icona nella stanza general se la cam è in eventi */
+          }
+          renderUsers();
+          return; /* NON procedere con la creazione della cam */
+        }
         
         for (const [rId, room] of Object.entries(state.rooms)) {
           if (room.users[fromId]) {
