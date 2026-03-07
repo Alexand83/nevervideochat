@@ -10,7 +10,7 @@ import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
 import { broadcast, broadcastAll } from './broadcast.js';
 import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences } from './users.js';
-import { addRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints } from './storage.js';
+import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints } from './storage.js';
 import { getAvailableRooms } from './rooms.js';
 
 const CAM_STEP = 30;
@@ -654,6 +654,25 @@ export function handleCamRequest(payload) {
   const fromId   = String(payload.from);
   const fromName = payload.fromName || 'User';
 
+  /* room_id e confronti in stringa per evitare problemi PC (number vs string dopo 15s / tab switch) */
+  const requestRoom = payload.room_id != null ? String(payload.room_id) : null;
+  const availableRooms = getAvailableRooms();
+  const roomData = requestRoom ? availableRooms.find(r => String(r.id) === requestRoom) : null;
+  const isEventsRoom = !!(roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8);
+
+  const activeRoomStr = state.activeRoom != null ? String(state.activeRoom) : '';
+  const cameraRoomStr = state.cameraRoom != null ? String(state.cameraRoom) : '';
+  const weAreInRequestRoom = requestRoom && requestRoom === activeRoomStr;
+  /* Su PC dopo 15s/tab switch cameraRoom può essere vuoto anche con stream attivo: usa anche activeRoom se abbiamo localStream */
+  const ourCamIsInRequestRoom = requestRoom && (requestRoom === cameraRoomStr || (state.localStream && requestRoom === activeRoomStr));
+  const wouldAutoAcceptEvents = payload.reqType === 'public' && isEventsRoom && (weAreInRequestRoom || ourCamIsInRequestRoom);
+
+  /* Per Eventi: rimuovi eventuale blocco residuo in rejectedCamUsers (es. da sessione precedente / PC dopo 15s) */
+  if (wouldAutoAcceptEvents && state.rejectedCamUsers[fromId]) {
+    removeRejectedCam(fromId);
+    console.log('[Events Room] Cleared stale rejected for', fromName || fromId, '- auto-accepting Events request');
+  }
+
   /* Auto-reject if blocked or ignored */
   if (state.rejectedCamUsers[fromId] || state.ignoredUsers[fromId]) {
     broadcast('cam-rejected', fromId, { reqType: payload.reqType || 'public' });
@@ -661,26 +680,16 @@ export function handleCamRequest(payload) {
   }
 
   /* Auto-reject only if the request is for a room we're not in AND not the room where our cam is */
-  if (payload.room_id && payload.room_id !== state.activeRoom && payload.room_id !== state.cameraRoom) {
+  if (requestRoom && requestRoom !== activeRoomStr && requestRoom !== cameraRoomStr) {
     broadcast('cam-rejected', fromId, { reqType: payload.reqType || 'public', reason: 'wrong-room' });
     return;
   }
 
-  /* Auto-accept SOLO ed esclusivamente per la stanza Eventi (max_cams 1-8). Per tutte le altre stanze → modale Accetta/Rifiuta */
-  const requestRoom = payload.room_id ? String(payload.room_id) : null;
-  const availableRooms = getAvailableRooms();
-  const roomData = requestRoom ? availableRooms.find(r => String(r.id) === requestRoom) : null;
-  const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
-
-  if (payload.reqType === 'public' && isEventsRoom) {
-    /* Richiesta per la stanza Eventi: siamo in Eventi o la nostra cam è in Eventi → auto-accept */
-    const weAreInRequestRoom = requestRoom === String(state.activeRoom);
-    const ourCamIsInRequestRoom = requestRoom === String(state.cameraRoom);
-    if (weAreInRequestRoom || ourCamIsInRequestRoom) {
-      console.log('[Events Room] Auto-accepting camera request from', fromName || fromId, '(only for Events room)');
-      sharePublicCameraTo(fromId);
-      return;
-    }
+  /* Auto-accept SOLO ed esclusivamente per la stanza Eventi (max_cams 1-8) */
+  if (wouldAutoAcceptEvents) {
+    console.log('[Events Room] Auto-accepting camera request from', fromName || fromId, '(only for Events room)');
+    sharePublicCameraTo(fromId);
+    return;
   }
 
   if (payload.reqType === 'public') {
