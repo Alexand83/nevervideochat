@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260438 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260452 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -795,6 +795,14 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPublic) {
       if (sigType === 'offer') {
+        /* CRITICO: Accetta offerte cam pubbliche SOLO se siamo in una stanza Eventi. Altrimenti (es. refresh → General) non aprire le cam. */
+        const activeRoomData = getAvailableRooms().find(r => String(r.id) === String(state.activeRoom));
+        const isWeInEventsRoom = !!(activeRoomData?.max_cams && activeRoomData.max_cams >= 1 && activeRoomData.max_cams <= 8);
+        if (!isWeInEventsRoom) {
+          console.log('[WebRTC] Rejecting offer from', from, '— we are in room', state.activeRoom, '(not Events); public cams only in Eventi');
+          return;
+        }
+
         /* CRITICO: Non accettare offerte se l'utente ha chiuso manualmente questa camera */
         if (state.manuallyClosedCameras[from]) {
           console.log('[WebRTC] Rejecting offer from', from, '— camera was manually closed by user');
@@ -973,28 +981,37 @@ export async function handleWebRTCSignal(payload) {
       /* Monitor incoming connection — auto-reconnect if it fails */
       let reconnectAttempts = 0;
       const MAX_RECONNECT = 3;
+      /* Se resta "connecting" (es. nessuna connessione) per 25s, togli dalla grid come su refresh */
+      let connectingTimeout = setTimeout(() => {
+        if (state.incomingPCs[from] !== pc) return;
+        if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
+          console.log('[WebRTC] Connection stuck in', pc.connectionState, 'for 25s for', from, '- removing from grid (no connection)');
+          try { pc.close(); } catch {}
+          delete state.incomingPCs[from];
+          removeRemoteCameraFromGrid(from).catch(() => {});
+        }
+      }, 25000);
 
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
+        if (pc.connectionState === 'connected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+          clearTimeout(connectingTimeout);
+        }
         
         /* CRITICO: Per disconnected, NON chiudere immediatamente - potrebbe riconnettersi */
         /* Chiudi solo se rimane disconnected per più di 15 secondi */
         if (pc.connectionState === 'disconnected') {
           const cw = state.cameraWindows[from];
           if (cw && !cw.disconnectTimer) {
-            console.log('[WebRTC] Connection disconnected for', from, '- will close if not reconnected in 15s');
+            console.log('[WebRTC] Connection disconnected for', from, '- will remove from grid if not reconnected in 15s');
             cw.disconnectTimer = setTimeout(() => {
-              /* Verifica se la connessione è ancora disconnessa dopo il delay */
+              /* Dopo 15s ancora disconnected/failed: togli dalla grid (come refresh). Non dipendere da hasActiveTracks: può restare "live" anche con connessione morta. */
               if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-                const tracks = cw.stream?.getTracks() || [];
-                const hasActiveTracks = tracks.some(t => t.readyState === 'live');
-                if (!hasActiveTracks) {
-                  console.log('[WebRTC] Stream is dead after disconnect - removing camera from grid for', from);
-                  removeRemoteCameraFromGrid(from).catch(() => {});
-                }
+                console.log('[WebRTC] Still disconnected/failed after 15s for', from, '- removing camera from grid');
+                removeRemoteCameraFromGrid(from).catch(() => {});
               }
               if (cw) delete cw.disconnectTimer;
-            }, 15000); /* 15 secondi di delay per permettere il reconnect */
+            }, 15000);
           }
         }
         
@@ -1009,66 +1026,43 @@ export async function handleWebRTCSignal(payload) {
         }
         
         if (pc.connectionState === 'failed') {
-          /* Only act if this PC is still the current one */
           if (state.incomingPCs[from] !== pc) return;
           delete state.incomingPCs[from];
 
-          /* Blank out the dead video so user sees a spinner instead of frozen frame */
+          /* Rimuovi slot SUBITO in modo sincrono (così non resta mai schermo nero), poi cleanup completo e eventuale reconnect */
           const cw = state.cameraWindows[from];
-          if (cw?.isEventsGrid && cw.el) {
-            const deadVideo = cw.el.querySelector('video');
-            if (deadVideo) { deadVideo.pause(); deadVideo.srcObject = null; }
+          if (cw) {
+            if (cw.streamCheckInterval) { clearInterval(cw.streamCheckInterval); cw.streamCheckInterval = null; }
+            if (cw.stream) { cw.stream.getTracks().forEach(t => t.stop()); cw.stream = null; }
+            if (cw.isEventsGrid && cw.el?.parentNode) cw.el.remove();
+            else if (cw.el?.parentNode) { stopMicMeter(from); cw.el.remove(); }
+            delete state.cameraWindows[from];
+            import('./rooms.js').then(({ updateEventsCamGrid }) => updateEventsCamGrid()).catch(() => {});
+            for (const room of Object.values(state.rooms)) { if (room.users[from]) room.users[from].hasCamera = false; }
+            const u = state.users.find(usr => usr.id === from);
+            if (u) u.hasCamera = false;
+            renderUsers();
           }
 
-          if (reconnectAttempts < MAX_RECONNECT) {
+          removeRemoteCameraFromGrid(from).then(() => {
+            if (reconnectAttempts >= MAX_RECONNECT) return;
             reconnectAttempts++;
-            const delay = reconnectAttempts * 2000; /* 2s, 4s, 6s */
-            console.log('[WebRTC] Incoming failed for', from,
-              '— reconnect attempt', reconnectAttempts, 'of', MAX_RECONNECT, 'in', delay, 'ms');
-
+            const delay = reconnectAttempts * 2000;
+            console.log('[WebRTC] Incoming failed for', from, '— reconnect attempt', reconnectAttempts, 'of', MAX_RECONNECT, 'in', delay, 'ms');
             setTimeout(() => {
-              /* Don't reconnect if user has left the Events room where this PC was created */
-              if (pc._createdInRoom && String(state.activeRoom) !== String(pc._createdInRoom)) {
-                console.log('[WebRTC] Skipping reconnect for', from, '— user left Events room (was:', pc._createdInRoom, 'now:', state.activeRoom, ')');
-                return;
-              }
+              if (pc._createdInRoom && String(state.activeRoom) !== String(pc._createdInRoom)) return;
+              if (state.manuallyClosedCameras[from]) return;
               const user = findUser(from);
-              const currentCw = state.cameraWindows[from];
-              /* CRITICO: Se la cam è stata chiusa, streamAlive potrebbe essere true anche se la cam non esiste più */
-              /* Verifica se la cam esiste ancora prima di controllare streamAlive */
-              const streamAlive = currentCw?.stream?.active &&
-                currentCw.stream.getTracks().some(t => t.readyState === 'live');
-              /* CRITICO: Non riconnettere se l'utente ha chiuso manualmente questa camera */
-              if (state.manuallyClosedCameras[from]) {
-                console.log('[WebRTC] Skipping reconnect for', from, '— camera was manually closed by user');
-                return;
-              }
-              
-              /* CRITICO: Se la cam non esiste più, streamAlive potrebbe essere true ma la cam è chiusa */
-              /* Verifica che la cam esista ancora prima di controllare streamAlive */
-              const camExists = !!currentCw && !!currentCw.el && currentCw.el.parentNode;
-              
-              /* Only reconnect if: user still online with cam, (stream is dead OR cam doesn't exist), no PC already active */
-              if (user?.hasCamera && user?.online && (!streamAlive || !camExists) && !state.incomingPCs[from]) {
+              if (user?.hasCamera && user?.online && !state.cameraWindows[from] && !state.incomingPCs[from]) {
                 console.log('[WebRTC] Re-requesting camera from', from);
-                /* Remove dead slot so it gets created fresh */
-                if (currentCw?.isEventsGrid && currentCw.el?.parentNode) {
-                  currentCw.el.remove();
-                }
-                delete state.cameraWindows[from];
-                /* Clear stale pending flag so request goes through */
                 delete state.pendingCamRequests[from];
                 requestPublicCamera(from);
-              } else {
-                console.log('[WebRTC] Skipping reconnect for', from,
-                  '— user online:', user?.online, 'hasCamera:', user?.hasCamera,
-                  'streamAlive:', streamAlive, 'pcExists:', !!state.incomingPCs[from]);
               }
             }, delay);
-          } else {
-            console.error('[WebRTC] Max reconnect attempts reached for', from, '- removing from grid (same as 1-min away / cam closed)');
-            /* Stessa procedura di quando l'utente chiude la cam o esce da Eventi > 1 min: togli dalla grid */
-            removeRemoteCameraFromGrid(from).catch(() => {});
+          }).catch(() => {});
+
+          if (reconnectAttempts >= MAX_RECONNECT) {
+            console.error('[WebRTC] Max reconnect attempts reached for', from);
           }
         }
       });
@@ -1419,7 +1413,7 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.appendChild(video);
   targetSlot.appendChild(label);
 
-  console.log('[Events Grid v20260438] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
+  console.log('[Events Grid v20260452] Slot created for', uid, 'isOwn:', isOwn, 'hasStream:', !!stream);
 
   /* ── Assign stream and play ── */
   if (stream) {

@@ -81,7 +81,7 @@ async function init() {
       if (state.cameraWindows) {
         for (const uid of Object.keys(state.cameraWindows)) {
           if (String(uid) !== String(state.currentUser?.id)) {
-            const { closeCameraWindow } = await import('./camera.js');
+            const { closeCameraWindow } = await import('./camera.js?v=20260452');
             await closeCameraWindow(uid).catch(() => {});
           }
         }
