@@ -634,7 +634,13 @@ export async function connectSupabase() {
           }
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        /* Canale chiuso/timeout per mancanza di connessione → porta a login */
+        if ((status === 'CLOSED' || status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') && !navigator.onLine && state.currentUser) {
+          console.log('[Supabase] Realtime disconnected (offline) — redirecting to login');
+          showDisconnectedOverlay();
+        }
+      });
 
     showToast('🟢 Connected to NeverVideoChat');
     console.log('[NVC] Supabase connected.');

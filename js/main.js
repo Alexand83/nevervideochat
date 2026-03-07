@@ -90,7 +90,27 @@ async function init() {
       console.warn('[Main] Error closing cameras on unload:', err);
     }
   });
-  
+
+  /* Quando perde la connessione di rete: dopo qualche secondo porta alla pagina di login */
+  let offlineRedirectTimer = null;
+  window.addEventListener('offline', () => {
+    if (offlineRedirectTimer) return;
+    offlineRedirectTimer = setTimeout(async () => {
+      offlineRedirectTimer = null;
+      if (!navigator.onLine && state.currentUser) {
+        console.log('[Main] Connection lost — redirecting to login');
+        const { showDisconnectedOverlay } = await import('./supabase-client.js');
+        showDisconnectedOverlay();
+      }
+    }, 4000);
+  });
+  window.addEventListener('online', () => {
+    if (offlineRedirectTimer) {
+      clearTimeout(offlineRedirectTimer);
+      offlineRedirectTimer = null;
+    }
+  });
+
   /* 1. Init UI subsystems */
   initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording();
   initContextMenu(); initCameraSystem(); initCallControls();
