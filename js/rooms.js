@@ -305,9 +305,28 @@ export function switchRoom(roomId) {
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {
-      import('./camera.js?v=20260452').then(({ createCameraWindow }) => {
-        if (state.activeRoom === roomIdStr && !state.cameraWindows[state.currentUser.id]?.el?.parentNode) {
-          createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
+      import('./camera.js?v=20260452').then(({ insertCameraIntoEventsGrid }) => {
+        if (state.activeRoom === roomIdStr) {
+          const ownCamWin = state.cameraWindows[state.currentUser.id];
+          /* CRITICO: Se la cam esiste già, ri-inserirla nella grid invece di ricrearla */
+          if (ownCamWin && ownCamWin.isEventsGrid) {
+            /* La cam esiste già - ri-inserirla nella grid se non è già presente */
+            const existingSlot = dom.eventsCamGrid?.querySelector(`[data-user-id="${state.currentUser.id}"]`);
+            if (!existingSlot) {
+              console.log('[Events Room] Re-inserting own camera into grid');
+              insertCameraIntoEventsGrid(state.currentUser.id, state.localStream, 'You', true);
+            } else {
+              /* Slot già presente - assicurati che il video stia riproducendo */
+              const video = existingSlot.querySelector('video');
+              if (video && video.paused) {
+                video.play().catch(() => {});
+              }
+            }
+          } else if (!ownCamWin) {
+            /* La cam non esiste - crearla */
+            const { createCameraWindow } = await import('./camera.js?v=20260452');
+            createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
+          }
         }
       });
     }

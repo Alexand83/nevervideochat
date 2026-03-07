@@ -63,11 +63,21 @@ async function init() {
   /* Filtra warning cookie prima di inizializzare */
   filterCookieWarnings();
   
-  /* CRITICO: Chiudi tutte le cam quando si aggiorna la pagina */
+  /* CRITICO: Chiudi la propria cam quando si aggiorna la pagina (per gli altri utenti) */
   window.addEventListener('beforeunload', async () => {
     try {
-      const { closeAllCamerasForUser } = await import('./camera.js');
-      /* Chiudi tutte le cam remote */
+      /* Chiudi la propria cam se attiva - questo invierà il broadcast cam-closed agli altri */
+      if (state.localStream && state.cameraRoom) {
+        const { broadcastAll } = await import('./broadcast.js');
+        const { updateAllRoomPresences } = await import('./users.js');
+        /* Invia broadcast che la cam è chiusa */
+        broadcastAll('cam-closed', { room_id: state.cameraRoom });
+        /* Aggiorna presenza per rimuovere hasCamera */
+        await updateAllRoomPresences();
+        /* Ferma il stream */
+        state.localStream.getTracks().forEach(t => t.stop());
+      }
+      /* Chiudi tutte le cam remote che stiamo guardando */
       if (state.cameraWindows) {
         for (const uid of Object.keys(state.cameraWindows)) {
           if (String(uid) !== String(state.currentUser?.id)) {
@@ -75,10 +85,6 @@ async function init() {
             await closeCameraWindow(uid).catch(() => {});
           }
         }
-      }
-      /* Chiudi anche la propria cam se attiva */
-      if (state.localStream) {
-        state.localStream.getTracks().forEach(t => t.stop());
       }
     } catch (err) {
       console.warn('[Main] Error closing cameras on unload:', err);

@@ -1274,7 +1274,7 @@ export function endCall(notify = true) {
 }
 
 /* Insert camera into Events room grid */
-function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
+export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   if (!dom.eventsCamGrid) return;
 
   dom.eventsCamGrid.hidden = false;
