@@ -69,43 +69,53 @@ export function markDisconnectingOthers() {
 
 /* ── Mostra overlay di disconnessione ── */
 export function showDisconnectedOverlay() {
+  /* Evita doppie esecuzioni (es. signOut che scatena onAuthStateChange dopo ritorno online) */
+  if (!state.currentUser) return;
+
   console.log('[Supabase] Session invalidated - redirecting to login');
-  
+
+  /* Ferma subito il controllo periodico sessione e canale Realtime per evitare blocchi al ritorno online */
+  stopSessionCheckInterval();
+  if (state.signalCh) {
+    try { state.signalCh.unsubscribe(); } catch (_) {}
+    state.signalCh = null;
+  }
+
   /* Nascondi l'overlay di disconnessione se presente */
   const overlay = document.getElementById('disconnectedOverlay');
   if (overlay) {
     overlay.hidden = true;
   }
-  
+
   /* Mostra di nuovo app-main e app-header */
   const appMain = document.querySelector('.app-main');
   const appHeader = document.querySelector('.app-header');
   if (appMain) appMain.style.display = '';
   if (appHeader) appHeader.style.display = '';
-  
+
   /* Pulisci lo stato dell'utente */
   state.currentUser = null;
   localStorage.removeItem('nvc_identity');
   localStorage.removeItem('nvc_auth_session');
   localStorage.removeItem('nvc_browser_session_id');
   localStorage.removeItem('nvc_session_id');
-  
-  /* Disconnetti da Supabase */
+
+  /* Disconnetti da Supabase (solo locale se offline, per non bloccare al ritorno online) */
   if (state.supa) {
     state.supa.auth.signOut().catch(err => {
       console.warn('[Supabase] Error signing out:', err);
     });
   }
-  
+
   /* Mostra il modal di login/registrazione */
   const authModal = document.getElementById('authModal');
   if (authModal) {
     authModal.hidden = false;
-    /* Assicurati che sia visibile sopra tutto */
     authModal.style.zIndex = '9999';
+    authModal.style.pointerEvents = 'auto';
   }
-  
-  /* Nascondi altri elementi UI se necessario */
+
+  /* Nascondi altri modali/overlay che potrebbero bloccare i clic */
   const adminPanel = document.getElementById('adminPanel');
   if (adminPanel) adminPanel.hidden = true;
 }
