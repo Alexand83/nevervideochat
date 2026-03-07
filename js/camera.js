@@ -119,13 +119,20 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         const videoTrack = tracks.find(t => t.kind === 'video');
         const isVideoLive = videoTrack?.readyState === 'live';
         
+        /* CRITICO: Per cam nella grid degli eventi, chiudi immediatamente se il flusso è morto */
+        const cw = state.cameraWindows[uid];
+        const isInEventsGrid = cw?.isEventsGrid;
+        
         if (hasActiveTracks && isVideoLive) {
           lastActiveTime = Date.now();
         } else {
           const timeSinceLastActive = Date.now() - lastActiveTime;
-          if (timeSinceLastActive > 30000) {
-            /* Flusso morto per più di 30 secondi - chiudi la cam */
-            console.log('[Camera] Stream dead for', Math.round(timeSinceLastActive/1000), 's - closing camera for', uid);
+          /* Per cam nella grid degli eventi, chiudi dopo 5 secondi invece di 30 */
+          const timeout = isInEventsGrid ? 5000 : 30000;
+          
+          if (timeSinceLastActive > timeout) {
+            /* Flusso morto - chiudi la cam */
+            console.log('[Camera] Stream dead for', Math.round(timeSinceLastActive/1000), 's - closing camera for', uid, isInEventsGrid ? '(Events grid)' : '');
             if (streamCheckInterval) {
               clearInterval(streamCheckInterval);
               streamCheckInterval = null;
@@ -885,6 +892,22 @@ export async function handleWebRTCSignal(payload) {
           return;
         }
         
+        /* CRITICO: Controlla se la cam è in una stanza eventi e NON siamo in quella stanza */
+        /* Questo previene che le cam della stanza eventi vengano create nella stanza general */
+        const camRoom = payload.room_id || null;
+        if (camRoom) {
+          const camRoomData = availableRooms.find(r => String(r.id) === String(camRoom));
+          const isCamInEventsRoom = !!(camRoomData?.max_cams && camRoomData.max_cams >= 1 && camRoomData.max_cams <= 8);
+          const isInCamRoom = String(camRoom) === String(state.activeRoom);
+          
+          if (isCamInEventsRoom && !isInCamRoom) {
+            console.log('[WebRTC] Rejecting stream from', from, '— camera is in Events room', camRoom, 'but we are in room', state.activeRoom);
+            try { pc.close(); } catch {}
+            if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+            return;
+          }
+        }
+        
         /* Open window immediately — insertCameraIntoEventsGrid handles stream readiness */
         openRemoteCamWindow(from, stream, payload.fromName);
       };
@@ -895,6 +918,26 @@ export async function handleWebRTCSignal(payload) {
 
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
+        
+        /* CRITICO: Chiudi immediatamente la cam se la connessione si disconnette o fallisce */
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          const cw = state.cameraWindows[from];
+          if (cw) {
+            console.log('[WebRTC] Connection', pc.connectionState, 'for', from, '- closing camera window');
+            /* Chiudi la cam dopo un breve delay per permettere il reconnect se necessario */
+            setTimeout(() => {
+              /* Verifica se la connessione è ancora disconnessa dopo il delay */
+              if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                const tracks = cw.stream?.getTracks() || [];
+                const hasActiveTracks = tracks.some(t => t.readyState === 'live');
+                if (!hasActiveTracks) {
+                  console.log('[WebRTC] Stream is dead after disconnect - closing camera for', from);
+                  closeCameraWindow(from).catch(() => {});
+                }
+              }
+            }, 2000); /* 2 secondi di delay per permettere il reconnect */
+          }
+        }
         
         if (pc.connectionState === 'failed') {
           /* Only act if this PC is still the current one */
