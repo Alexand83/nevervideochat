@@ -1008,13 +1008,7 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPublic) {
       if (sigType === 'offer') {
-        /* CRITICO: Accetta offerte cam pubbliche SOLO se siamo in una stanza Eventi. Altrimenti (es. refresh → General) non aprire le cam. */
-        const activeRoomData = getAvailableRooms().find(r => String(r.id) === String(state.activeRoom));
-        const isWeInEventsRoom = !!(activeRoomData?.max_cams && activeRoomData.max_cams >= 1 && activeRoomData.max_cams <= 8);
-        if (!isWeInEventsRoom) {
-          console.log('[WebRTC] Rejecting offer from', from, '— we are in room', state.activeRoom, '(not Events); public cams only in Eventi');
-          return;
-        }
+        /* Accetta offerte in Eventi e in stanze normali. Il controllo sotto (guestHasCamInEventsOnly) rifiuta solo se siamo in General e la cam dell'altro è solo in Eventi. */
 
         /* CRITICO: Non accettare offerte se l'utente ha chiuso manualmente questa camera */
         if (state.manuallyClosedCameras[from]) {
