@@ -127,9 +127,9 @@ export function createCameraWindow(uid, stream, name, isOwn) {
           lastActiveTime = Date.now();
         } else {
           const timeSinceLastActive = Date.now() - lastActiveTime;
-          /* CRITICO: Per cam nella grid degli eventi, chiudi dopo 3 secondi invece di 30 */
-          /* Ridotto a 3 secondi per evitare cam freezate/nera */
-          const timeout = isInEventsGrid ? 3000 : 30000;
+          /* CRITICO: Per cam nella grid degli eventi, chiudi dopo 15 secondi invece di 30 */
+          /* 15 secondi per gestire problemi di connessione o refresh pagina */
+          const timeout = isInEventsGrid ? 15000 : 30000;
           
           if (timeSinceLastActive > timeout) {
             /* Flusso morto - chiudi la cam */
@@ -943,11 +943,11 @@ export async function handleWebRTCSignal(payload) {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
         
         /* CRITICO: Per disconnected, NON chiudere immediatamente - potrebbe riconnettersi */
-        /* Chiudi solo se rimane disconnected per più di 5 secondi */
+        /* Chiudi solo se rimane disconnected per più di 15 secondi */
         if (pc.connectionState === 'disconnected') {
           const cw = state.cameraWindows[from];
           if (cw && !cw.disconnectTimer) {
-            console.log('[WebRTC] Connection disconnected for', from, '- will close if not reconnected in 5s');
+            console.log('[WebRTC] Connection disconnected for', from, '- will close if not reconnected in 15s');
             cw.disconnectTimer = setTimeout(() => {
               /* Verifica se la connessione è ancora disconnessa dopo il delay */
               if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
@@ -959,7 +959,7 @@ export async function handleWebRTCSignal(payload) {
                 }
               }
               if (cw) delete cw.disconnectTimer;
-            }, 5000); /* 5 secondi di delay per permettere il reconnect */
+            }, 15000); /* 15 secondi di delay per permettere il reconnect */
           }
         }
         

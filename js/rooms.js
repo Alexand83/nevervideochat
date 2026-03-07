@@ -398,6 +398,13 @@ export function switchRoom(roomId) {
         console.log('[Events Room] Requesting cameras from', usersWithCam.length, 'users:', usersWithCam.map(u => u.name || u.id));
 
         usersWithCam.forEach((user, index) => {
+          /* CRITICO: Rimuovi manuallyClosedCameras per questo utente se ha ancora la cam attiva */
+          /* Questo permette di richiedere di nuovo la cam quando si ritorna in Events room */
+          if (state.manuallyClosedCameras[user.id] && user.hasCamera) {
+            console.log('[Events Room] Clearing manuallyClosedCameras for', user.name || user.id, '- camera is active again');
+            delete state.manuallyClosedCameras[user.id];
+          }
+          
           const alreadyViewing  = !!state.cameraWindows[user.id];
           const pcActive        = !!state.incomingPCs?.[user.id];
           const reqPending      = !!state.pendingCamRequests?.[user.id];
