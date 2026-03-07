@@ -305,7 +305,7 @@ export function switchRoom(roomId) {
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {
-      import('./camera.js?v=20260452').then(({ insertCameraIntoEventsGrid }) => {
+      import('./camera.js?v=20260452').then(async ({ insertCameraIntoEventsGrid }) => {
         if (state.activeRoom === roomIdStr) {
           const ownCamWin = state.cameraWindows[state.currentUser.id];
           /* CRITICO: Se la cam esiste già, ri-inserirla nella grid invece di ricrearla */
