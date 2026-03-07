@@ -365,6 +365,11 @@ export async function removeRemoteCameraFromGrid(uid) {
   }
   const u = state.users.find(u => u.id === uid);
   if (u) u.hasCamera = false;
+  /* Togli dalla lista online della stanza attiva così grid e lista si aggiornano insieme */
+  const ar = state.activeRoom;
+  if (ar && state.rooms[ar]?.users[uid]) {
+    delete state.rooms[ar].users[uid];
+  }
   renderUsers();
 }
 
@@ -402,7 +407,12 @@ export async function handleCamClosed(payload) {
   }
   const u = state.users.find(u => u.id === uid);
   if (u) u.hasCamera = false;
-  
+  /* Togli dalla lista online così grid e lista si aggiornano insieme */
+  const ar = state.activeRoom;
+  if (ar && state.rooms[ar]?.users[uid]) {
+    delete state.rooms[ar].users[uid];
+  }
+
   /* CRITICO: Rimuovi il flag di chiusura manuale quando la camera viene effettivamente chiusa dall'altro utente */
   /* Questo permette all'utente di richiedere di nuovo la camera in futuro se vuole */
   if (state.manuallyClosedCameras[uid]) {
@@ -1041,6 +1051,10 @@ export async function handleWebRTCSignal(payload) {
             for (const room of Object.values(state.rooms)) { if (room.users[from]) room.users[from].hasCamera = false; }
             const u = state.users.find(usr => usr.id === from);
             if (u) u.hasCamera = false;
+            /* Togli dalla lista online così grid e lista si aggiornano insieme */
+            if (state.activeRoom && state.rooms[state.activeRoom]?.users[from]) {
+              delete state.rooms[state.activeRoom].users[from];
+            }
             renderUsers();
           }
 
