@@ -1349,8 +1349,8 @@
   </div>
 </div>
 
-<!-- Supabase JS SDK: stesso dominio evita "Tracking Prevention blocked storage". Se usi CDN e vedi quel warning, copia dist/umd/supabase.min.js da @supabase/supabase-js in js/vendor/supabase.min.js e usa quello. -->
-<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Supabase JS SDK: locale per evitare "Tracking Prevention blocked storage" con CDN -->
+<script src="js/vendor/supabase.min.js"></script>
 <script type="module" src="js/main.js?v=20260452"></script>
 </body>
 </html>
