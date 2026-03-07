@@ -132,28 +132,13 @@ export function createCameraWindow(uid, stream, name, isOwn) {
           const timeout = isInEventsGrid ? 15000 : 30000;
           
           if (timeSinceLastActive > timeout) {
-            /* Flusso morto - chiudi la cam */
-            console.log('[Camera] Stream dead for', Math.round(timeSinceLastActive/1000), 's - closing camera for', uid, isInEventsGrid ? '(Events grid)' : '');
+            /* Flusso morto - stessa procedura di cam-closed: togli dalla grid e aggiorna hasCamera */
+            console.log('[Camera] Stream dead for', Math.round(timeSinceLastActive/1000), 's - removing camera from grid for', uid, isInEventsGrid ? '(Events grid)' : '');
             if (streamCheckInterval) {
               clearInterval(streamCheckInterval);
               streamCheckInterval = null;
             }
-            /* CRITICO: Per cam nella grid, rimuovi immediatamente il slot invece di chiudere normalmente */
-            if (isInEventsGrid) {
-              const cw = state.cameraWindows[uid];
-              if (cw?.el?.parentNode) {
-                cw.el.remove();
-              }
-              if (state.incomingPCs[uid]) {
-                try { state.incomingPCs[uid].close(); } catch {}
-                delete state.incomingPCs[uid];
-              }
-              delete state.cameraWindows[uid];
-              const { updateEventsCamGrid } = await import('./rooms.js');
-              updateEventsCamGrid();
-            } else {
-              closeCameraWindow(uid).catch(() => {});
-            }
+            removeRemoteCameraFromGrid(uid).catch(() => {});
           }
         }
       };
@@ -343,6 +328,44 @@ export async function closeCameraWindow(uid) {
       delete state.incomingPCs[uid]; 
     }
   }
+}
+
+/**
+ * Rimuove una camera remota dalla grid/UI (stessa procedura di handleCamClosed lato viewer).
+ * Usata quando: timeout flusso, disconnect 15s, connection failed dopo retry, refresh pagina altrui.
+ * NON imposta manuallyClosedCameras così la cam può essere richiesta di nuovo quando tornano.
+ */
+export async function removeRemoteCameraFromGrid(uid) {
+  const cw = state.cameraWindows[uid];
+  if (!cw) return;
+  if (cw.streamCheckInterval) {
+    clearInterval(cw.streamCheckInterval);
+    cw.streamCheckInterval = null;
+  }
+  if (cw.stream) {
+    cw.stream.getTracks().forEach(t => t.stop());
+    cw.stream = null;
+  }
+  if (cw.isEventsGrid) {
+    const slot = cw.el;
+    if (slot && slot.parentNode) slot.remove();
+    const { updateEventsCamGrid } = await import('./rooms.js');
+    updateEventsCamGrid();
+  } else {
+    stopMicMeter(uid);
+    cw.el.remove();
+  }
+  delete state.cameraWindows[uid];
+  if (state.incomingPCs[uid]) {
+    try { state.incomingPCs[uid].close(); } catch {}
+    delete state.incomingPCs[uid];
+  }
+  for (const room of Object.values(state.rooms)) {
+    if (room.users[uid]) room.users[uid].hasCamera = false;
+  }
+  const u = state.users.find(u => u.id === uid);
+  if (u) u.hasCamera = false;
+  renderUsers();
 }
 
 export async function handleCamClosed(payload) {
@@ -637,21 +660,24 @@ export function handleCamRequest(payload) {
     return;
   }
 
-  /* Auto-reject if the request is for a different room than the active one */
-  if (payload.room_id && payload.room_id !== state.activeRoom) {
+  /* Auto-reject only if the request is for a room we're not in AND not the room where our cam is */
+  if (payload.room_id && payload.room_id !== state.activeRoom && payload.room_id !== state.cameraRoom) {
     broadcast('cam-rejected', fromId, { reqType: payload.reqType || 'public', reason: 'wrong-room' });
     return;
   }
 
-  /* Events room: auto-accept public camera requests (cameras are public) */
-  if (payload.reqType === 'public' && payload.room_id === state.activeRoom) {
-    const availableRooms = getAvailableRooms();
-    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-    const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
-    
-    if (isEventsRoom) {
-      /* Auto-accept in Events room - cameras are public */
-      console.log('[Events Room] Auto-accepting camera request from', fromName || fromId, 'in Events room');
+  /* Auto-accept SOLO ed esclusivamente per la stanza Eventi (max_cams 1-8). Per tutte le altre stanze → modale Accetta/Rifiuta */
+  const requestRoom = payload.room_id ? String(payload.room_id) : null;
+  const availableRooms = getAvailableRooms();
+  const roomData = requestRoom ? availableRooms.find(r => String(r.id) === requestRoom) : null;
+  const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
+
+  if (payload.reqType === 'public' && isEventsRoom) {
+    /* Richiesta per la stanza Eventi: siamo in Eventi o la nostra cam è in Eventi → auto-accept */
+    const weAreInRequestRoom = requestRoom === String(state.activeRoom);
+    const ourCamIsInRequestRoom = requestRoom === String(state.cameraRoom);
+    if (weAreInRequestRoom || ourCamIsInRequestRoom) {
+      console.log('[Events Room] Auto-accepting camera request from', fromName || fromId, '(only for Events room)');
       sharePublicCameraTo(fromId);
       return;
     }
@@ -954,8 +980,8 @@ export async function handleWebRTCSignal(payload) {
                 const tracks = cw.stream?.getTracks() || [];
                 const hasActiveTracks = tracks.some(t => t.readyState === 'live');
                 if (!hasActiveTracks) {
-                  console.log('[WebRTC] Stream is dead after disconnect - closing camera for', from);
-                  closeCameraWindow(from).catch(() => {});
+                  console.log('[WebRTC] Stream is dead after disconnect - removing camera from grid for', from);
+                  removeRemoteCameraFromGrid(from).catch(() => {});
                 }
               }
               if (cw) delete cw.disconnectTimer;
@@ -1031,17 +1057,9 @@ export async function handleWebRTCSignal(payload) {
               }
             }, delay);
           } else {
-            console.error('[WebRTC] Max reconnect attempts reached for', from);
-            /* Show error indicator on slot */
-            const currentCw = state.cameraWindows[from];
-            if (currentCw?.isEventsGrid && currentCw.el) {
-              const err = document.createElement('div');
-              err.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;' +
-                'justify-content:center;background:rgba(0,0,0,0.75);color:#fff;font-size:11px;text-align:center;padding:4px;';
-              err.textContent = '❌ Connection failed\nTry refreshing';
-              currentCw.el.style.position = 'relative';
-              currentCw.el.appendChild(err);
-            }
+            console.error('[WebRTC] Max reconnect attempts reached for', from, '- removing from grid (same as 1-min away / cam closed)');
+            /* Stessa procedura di quando l'utente chiude la cam o esce da Eventi > 1 min: togli dalla grid */
+            removeRemoteCameraFromGrid(from).catch(() => {});
           }
         }
       });
