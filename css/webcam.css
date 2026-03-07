@@ -148,55 +148,40 @@
   color: var(--clr-danger);
 }
 
-/* ── Mic level meter (vertical: si alza e si abbassa con il volume) ── */
-.mic-meter-section {
-  flex: 0 0 auto;
+/* ── Controllo volume microfono: barra orizzontale (trascina per alzare/abbassare) ── */
+.mic-volume-section {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  justify-content: center;
   min-width: 0;
 }
-.mic-meter-section.mic-meter-vertical .mic-meter-bar-wrap {
-  width: 12px;
-  height: 32px;
-  display: flex;
-  align-items: flex-end;
+.mic-volume-section.mic-volume-vertical {
+  cursor: ew-resize;
+  -webkit-user-select: none;
+  user-select: none;
 }
-.mic-meter-section.mic-meter-vertical .mic-meter-bar {
+.mic-volume-section.mic-volume-vertical .mic-volume-track {
   width: 100%;
-  height: 100%;
-  flex-direction: column-reverse;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  height: 10px;
+  min-width: 60px;
   background: var(--bg3);
   border-radius: var(--r-pill);
-  overflow: hidden;
   border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
 }
-.mic-meter-section.mic-meter-vertical .mic-meter-fill {
+.mic-volume-section.mic-volume-vertical .mic-volume-fill {
   width: 100%;
-  height: 0%;
-  min-height: 2px;
-  border-radius: 0 0 var(--r-pill) var(--r-pill);
-  transition: height .06s ease-out;
-}
-.mic-meter-bar-wrap { width: 100%; }
-.mic-meter-bar {
-  height: 6px;
-  background: var(--bg3);
-  border-radius: var(--r-pill);
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-.mic-meter-fill {
   height: 100%;
-  width: 0%;
-  background: var(--clr-success);
-  border-radius: var(--r-pill);
-  transition: width .07s linear;
+  min-width: 4px;
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+  background: linear-gradient(to right, var(--clr-success), var(--accent));
+  transition: width .1s ease-out;
+  pointer-events: none;
 }
-.mic-meter-lbl { font-size: 10px; color: var(--tx2); }
 
 /* ── Camera device selector (dropdown) ── */
 .cam-device-wrap {

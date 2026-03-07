@@ -60,8 +60,8 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         </svg>
         <span id="cam-mic-lbl-${uid}">Mic On</span>
       </button>
-      <div class="mic-meter-section mic-meter-vertical" title="Volume microfono">
-        <div class="mic-meter-bar-wrap"><div class="mic-meter-bar"><div class="mic-meter-fill" id="mic-fill-${uid}"></div></div></div>
+      <div class="mic-volume-section mic-volume-vertical" id="mic-volume-wrap-${uid}" title="Volume microfono: trascina per alzare/abbassare">
+        <div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${uid}"></div></div>
       </div>
       <div class="cam-device-wrap">
         <button class="cam-ctrl-btn cam-device-btn" id="cam-device-btn-${uid}" aria-label="Cambia camera" title="Cambia dispositivo camera">
@@ -175,6 +175,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     const mb = $(`cam-mic-btn-${uid}`);
     if (mb) mb.addEventListener('click', () => toggleCamMic(uid));
     startMicMeter(stream, uid);
+    initMicVolumeSlider(uid);
     const devBtn = $(`cam-device-btn-${uid}`);
     const devDrop = $(`cam-device-dropdown-${uid}`);
     if (devBtn && devDrop) {
@@ -292,7 +293,12 @@ export async function closeCameraWindow(uid) {
     /* If this is own camera, also stop stream */
     const isOwn = uid === state.currentUser?.id || uid === 'me';
     if (isOwn) {
+      stopMicMeter(uid);
       const closedRoom = state.cameraRoom;
+      if (state.micPipeline) {
+        state.micPipeline.ctx.close().catch(() => {});
+        state.micPipeline = null;
+      }
       state.localStream?.getTracks().forEach(t => t.stop());
       state.localStream = null;
       state.cameraClosedAt = Date.now();
@@ -320,7 +326,12 @@ export async function closeCameraWindow(uid) {
   delete state.cameraWindows[uid];
   const isOwn = uid === state.currentUser?.id || uid === 'me';
   if (isOwn) {
+    stopMicMeter(uid);
     const closedRoom = state.cameraRoom;
+    if (state.micPipeline) {
+      state.micPipeline.ctx.close().catch(() => {});
+      state.micPipeline = null;
+    }
     state.localStream?.getTracks().forEach(t => t.stop());
     state.localStream = null;
     state.cameraClosedAt = Date.now();
@@ -351,6 +362,10 @@ export async function closeCameraWindow(uid) {
  */
 export function resetCameraStateOnDisconnect() {
   const selfId = state.currentUser?.id;
+  if (state.micPipeline) {
+    state.micPipeline.ctx.close().catch(() => {});
+    state.micPipeline = null;
+  }
   if (state.localStream) {
     state.localStream.getTracks().forEach(t => t.stop());
     state.localStream = null;
@@ -523,12 +538,40 @@ export async function toggleOwnCamera() {
   }
 }
 
+/* ── Pipeline audio: GainNode per controllare volume mic (barra verticale alza/abbassa) ── */
+function createMicVolumePipeline(stream) {
+  const audioTrack = stream.getAudioTracks()[0];
+  if (!audioTrack) return null;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const src = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = 1;
+    const dest = ctx.createMediaStreamDestination();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.75;
+    src.connect(gainNode);
+    gainNode.connect(dest);
+    src.connect(analyser);
+    const newAudioTrack = dest.stream.getAudioTracks()[0];
+    stream.removeTrack(audioTrack);
+    stream.addTrack(newAudioTrack);
+    return { gainNode, analyser, ctx };
+  } catch (err) {
+    console.warn('[Camera] createMicVolumePipeline failed:', err);
+    return null;
+  }
+}
+
 export async function startOwnCamera() {
   if (!navigator.mediaDevices?.getUserMedia) { showToast('⚠️ Camera not supported.'); return; }
   try {
     const msSince = Date.now() - state.cameraClosedAt;
     if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
     state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
+    state.micPipeline = createMicVolumePipeline(state.localStream) || null;
     state.currentUser.hasCamera = true;
     state.cameraRoom = state.activeRoom;    /* camera is active in THIS room */
     dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
@@ -627,44 +670,78 @@ export async function startOwnCamera() {
 
 function startMicMeter(stream, uid) {
   stopMicMeter(uid);
-  const audioTrack = stream.getAudioTracks()[0]; if (!audioTrack) return;
+  const pipeline = state.micPipeline;
+  if (!pipeline?.analyser) return;
   try {
-    const analysisStream = new MediaStream([audioTrack]);
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-    const src = ctx.createMediaStreamSource(analysisStream);
-    const an  = ctx.createAnalyser(); an.fftSize = 256; an.smoothingTimeConstant = 0.75;
-    src.connect(an);
+    const an = pipeline.analyser;
     const data = new Uint8Array(an.frequencyBinCount);
     const SPEAKING_THRESHOLD = 18;
     function tick() {
       an.getByteFrequencyData(data);
       const avg = data.reduce((a, b) => a + b, 0) / data.length;
-      const pct  = Math.min(100, Math.round((avg / 70) * 100));
-      const fill = $(`mic-fill-${uid}`);
-      if (fill) {
-        const level = (state.cameraWindows[uid]?.micEnabled !== false) ? pct : 0;
-        fill.style.height = level + '%';
-        fill.style.background = level < 40 ? 'var(--clr-success)' : level < 75 ? '#f9c513' : 'var(--clr-danger)';
-      }
+      const pct = Math.min(100, Math.round((avg / 70) * 100));
       const win = state.cameraWindows[uid]?.el;
       const wrap = win?.querySelector('.cam-win-video-wrap');
       if (wrap) wrap.classList.toggle('cam-speaking', (state.cameraWindows[uid]?.micEnabled !== false) && pct > SPEAKING_THRESHOLD);
       if (state.micAnalysers[uid]) state.micAnalysers[uid].raf = requestAnimationFrame(tick);
     }
-    state.micAnalysers[uid] = { ctx, raf: requestAnimationFrame(tick) };
-  } catch (err) { console.warn('Mic meter:', err); }
+    state.micAnalysers[uid] = { ctx: pipeline.ctx, raf: requestAnimationFrame(tick) };
+  } catch (err) { console.warn('Mic speaking indicator:', err); }
 }
 
 function stopMicMeter(uid) {
   const a = state.micAnalysers[uid]; if (!a) return;
   if (a.raf) cancelAnimationFrame(a.raf);
-  if (a.ctx) a.ctx.close().catch(() => {});
+  if (a.ctx && a.ctx !== state.micPipeline?.ctx) a.ctx.close().catch(() => {});
   delete state.micAnalysers[uid];
-  const fill = $(`mic-fill-${uid}`); if (fill) fill.style.height = '0%';
   const win = state.cameraWindows[uid]?.el;
   const wrap = win?.querySelector('.cam-win-video-wrap');
   if (wrap) wrap.classList.remove('cam-speaking');
+}
+
+/* ── Controllo volume mic: barra verticale che alza/abbassa il gain ── */
+function initMicVolumeSlider(uid) {
+  const wrap = $(`mic-volume-wrap-${uid}`);
+  const fill = $(`mic-fill-${uid}`);
+  const pipeline = state.micPipeline;
+  if (!wrap || !fill || !pipeline?.gainNode) return;
+  const gainNode = pipeline.gainNode;
+  const setVolumeFromPct = (pct) => {
+    const clamped = Math.max(0, Math.min(100, pct));
+    const gain = clamped / 100;
+    gainNode.gain.value = gain;
+    fill.style.width = clamped + '%';
+  };
+  setVolumeFromPct(100);
+  const onInput = (e) => {
+    const rect = wrap.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const x = clientX - rect.left;
+    const pct = (x / rect.width) * 100;
+    setVolumeFromPct(pct);
+  };
+  wrap.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    onInput(e);
+    const move = (ev) => onInput(ev);
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  wrap.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    onInput(e);
+    const move = (ev) => { ev.preventDefault(); onInput(ev); };
+    const end = () => {
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend', end);
+    };
+    document.addEventListener('touchmove', move, { passive: false });
+    document.addEventListener('touchend', end);
+  });
 }
 
 /* ── Cambio camera on the fly (dropdown in footer) ── */
@@ -863,6 +940,7 @@ export async function sharePublicCameraTo(toUid) {
       const msSince = Date.now() - state.cameraClosedAt;
       if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
       state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
+      state.micPipeline = createMicVolumePipeline(state.localStream) || null;
       state.currentUser.hasCamera = true;
       state.cameraRoom = state.activeRoom;
       dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
