@@ -30,6 +30,7 @@
   justify-content: space-between;
   cursor: grab;
   flex-shrink: 0;
+  -webkit-user-select: none;
   user-select: none;
   gap: var(--s2);
   touch-action: none;
@@ -148,7 +149,7 @@
   color: var(--clr-danger);
 }
 
-/* ── Controllo volume microfono: barra orizzontale (trascina per alzare/abbassare) ── */
+/* ── Controllo volume microfono: barra con pallina (cursor grab) ── */
 .mic-volume-section {
   flex: 1;
   display: flex;
@@ -157,18 +158,22 @@
   min-width: 0;
 }
 .mic-volume-section.mic-volume-vertical {
-  cursor: ew-resize;
+  cursor: grab;
   -webkit-user-select: none;
   user-select: none;
 }
+.mic-volume-section.mic-volume-vertical:active {
+  cursor: grabbing;
+}
 .mic-volume-section.mic-volume-vertical .mic-volume-track {
+  position: relative;
   width: 100%;
   height: 10px;
   min-width: 60px;
   background: var(--bg3);
   border-radius: var(--r-pill);
   border: 1px solid var(--border);
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
@@ -181,6 +186,84 @@
   background: linear-gradient(to right, var(--clr-success), var(--accent));
   transition: width .1s ease-out;
   pointer-events: none;
+}
+.mic-volume-thumb {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg1);
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  pointer-events: none;
+  transition: left .1s ease-out;
+}
+
+/* ── Footer cam remota: volume e mute della sua voce ── */
+.cam-win-footer-remote {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+.cam-remote-mute-btn {
+  padding: 5px 8px !important;
+  flex-shrink: 0;
+}
+.cam-remote-volume-wrap {
+  flex: 1;
+  min-width: 60px;
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.cam-remote-volume-wrap:active {
+  cursor: grabbing;
+}
+.cam-remote-volume-wrap .mic-volume-track {
+  position: relative;
+  height: 8px;
+  overflow: visible;
+}
+.cam-remote-volume-wrap .mic-volume-fill {
+  background: var(--accent-dim);
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+}
+.cam-remote-volume-wrap .mic-volume-thumb {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Solo voce (nella propria cam): placeholder e bottone ── */
+.cam-solo-voce-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg2);
+  color: var(--tx2);
+  gap: var(--s2);
+}
+.cam-solo-voce-placeholder .cam-solo-voce-icon {
+  font-size: 48px;
+  opacity: 0.8;
+}
+.cam-solo-voce-placeholder .cam-solo-voce-txt {
+  font-size: var(--fz-sm);
+  font-weight: 600;
+}
+.cam-solo-voce-btn {
+  flex-shrink: 0;
+}
+.cam-solo-voce-btn.solo-voce-active {
+  background: var(--accent-dim);
+  color: var(--accent-h);
+  border-color: var(--accent);
 }
 
 /* ── Camera device selector (dropdown) ── */

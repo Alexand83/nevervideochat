@@ -60,9 +60,12 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         </svg>
         <span id="cam-mic-lbl-${uid}">Mic On</span>
       </button>
-      <div class="mic-volume-section mic-volume-vertical" id="mic-volume-wrap-${uid}" title="Volume microfono: trascina per alzare/abbassare">
-        <div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${uid}"></div></div>
+      <div class="mic-volume-section mic-volume-vertical" id="mic-volume-wrap-${uid}" title="Volume microfono: trascina la pallina">
+        <div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${uid}"></div><div class="mic-volume-thumb" id="mic-thumb-${uid}"></div></div>
       </div>
+      <button class="cam-ctrl-btn cam-solo-voce-btn" id="cam-solo-voce-btn-${uid}" aria-label="Solo voce" title="Solo voce (nascondi video)">
+        <span id="cam-solo-voce-icon-${uid}">🎤</span><span id="cam-solo-voce-lbl-${uid}">Solo voce</span>
+      </button>
       <div class="cam-device-wrap">
         <button class="cam-ctrl-btn cam-device-btn" id="cam-device-btn-${uid}" aria-label="Cambia camera" title="Cambia dispositivo camera">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -72,6 +75,10 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     </div>` : `
     <div class="cam-win-footer cam-win-footer-remote">
       <span class="cam-win-live-badge">🔴 Live</span>
+      <button class="cam-ctrl-btn cam-remote-mute-btn" id="cam-remote-mute-${uid}" title="Mute voce" aria-pressed="false">🔊</button>
+      <div class="cam-remote-volume-wrap" id="cam-remote-volume-wrap-${uid}" title="Volume sua voce">
+        <div class="mic-volume-track"><div class="mic-volume-fill" id="cam-remote-fill-${uid}"></div><div class="mic-volume-thumb" id="cam-remote-thumb-${uid}"></div></div>
+      </div>
     </div>`;
 
   win.innerHTML = `
@@ -91,18 +98,22 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     <div class="cam-win-video-wrap">
       <video id="cam-vid-${uid}" autoplay ${isOwn ? 'muted' : ''} playsinline
              style="${isOwn ? 'transform:scaleX(-1)' : ''}"></video>
+      ${isOwn ? `<div class="cam-solo-voce-placeholder" id="cam-solo-voce-${uid}" hidden><span class="cam-solo-voce-icon">🎤</span><span class="cam-solo-voce-txt">Solo voce</span></div>` : ''}
     </div>
     ${footer}
     <div class="cam-resize-handle" id="cam-rz-${uid}" aria-hidden="true"></div>`;
 
   document.body.appendChild(win);
-  state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true };
+  state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true, videoOff: false };
 
   const videoEl = $(`cam-vid-${uid}`);
   if (videoEl) {
     videoEl.srcObject = null; videoEl.srcObject = stream;
     videoEl.play().catch(() => {});
-    
+    if (!isOwn) {
+      videoEl.volume = 1;
+      initRemoteVolumeControl(uid);
+    }
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
     if (!isOwn && stream) {
@@ -176,6 +187,8 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     if (mb) mb.addEventListener('click', () => toggleCamMic(uid));
     startMicMeter(stream, uid);
     initMicVolumeSlider(uid);
+    const soloVoceBtn = $(`cam-solo-voce-btn-${uid}`);
+    if (soloVoceBtn) soloVoceBtn.addEventListener('click', () => toggleSoloVoce(uid));
     const devBtn = $(`cam-device-btn-${uid}`);
     const devDrop = $(`cam-device-dropdown-${uid}`);
     if (devBtn && devDrop) {
@@ -699,10 +712,11 @@ function stopMicMeter(uid) {
   if (wrap) wrap.classList.remove('cam-speaking');
 }
 
-/* ── Controllo volume mic: barra verticale che alza/abbassa il gain ── */
+/* ── Controllo volume mic: barra con pallina (cursor grab) ── */
 function initMicVolumeSlider(uid) {
   const wrap = $(`mic-volume-wrap-${uid}`);
   const fill = $(`mic-fill-${uid}`);
+  const thumb = $(`mic-thumb-${uid}`);
   const pipeline = state.micPipeline;
   if (!wrap || !fill || !pipeline?.gainNode) return;
   const gainNode = pipeline.gainNode;
@@ -711,6 +725,7 @@ function initMicVolumeSlider(uid) {
     const gain = clamped / 100;
     gainNode.gain.value = gain;
     fill.style.width = clamped + '%';
+    if (thumb) thumb.style.left = clamped + '%';
   };
   setVolumeFromPct(100);
   const onInput = (e) => {
@@ -742,6 +757,89 @@ function initMicVolumeSlider(uid) {
     document.addEventListener('touchmove', move, { passive: false });
     document.addEventListener('touchend', end);
   });
+}
+
+/* ── Volume e mute della voce della cam remota (quello che vedi) ── */
+function initRemoteVolumeControl(uid) {
+  const win = state.cameraWindows[uid]?.el;
+  const video = win?.querySelector('video');
+  const muteBtn = $(`cam-remote-mute-${uid}`);
+  const wrap = $(`cam-remote-volume-wrap-${uid}`);
+  const fill = $(`cam-remote-fill-${uid}`);
+  const thumb = $(`cam-remote-thumb-${uid}`);
+  if (!video || !wrap) return;
+  const setVolumeFromPct = (pct) => {
+    const clamped = Math.max(0, Math.min(100, pct));
+    video.volume = clamped / 100;
+    if (fill) fill.style.width = clamped + '%';
+    if (thumb) thumb.style.left = clamped + '%';
+  };
+  setVolumeFromPct(100);
+  if (muteBtn) {
+    muteBtn.addEventListener('click', () => {
+      video.muted = !video.muted;
+      muteBtn.setAttribute('aria-pressed', String(video.muted));
+      muteBtn.textContent = video.muted ? '🔇' : '🔊';
+    });
+  }
+  const onInput = (e) => {
+    const rect = wrap.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const x = clientX - rect.left;
+    const pct = (x / rect.width) * 100;
+    setVolumeFromPct(pct);
+    if (video.muted) { video.muted = false; if (muteBtn) { muteBtn.setAttribute('aria-pressed', 'false'); muteBtn.textContent = '🔊'; } }
+  };
+  wrap.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    onInput(e);
+    const move = (ev) => onInput(ev);
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+  wrap.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    onInput(e);
+    const move = (ev) => { ev.preventDefault(); onInput(ev); };
+    const end = () => {
+      document.removeEventListener('touchmove', move);
+      document.removeEventListener('touchend', end);
+    };
+    document.addEventListener('touchmove', move, { passive: false });
+    document.addEventListener('touchend', end);
+  });
+}
+
+/* ── Toggle solo voce nella propria cam (nascondi video, solo audio) ── */
+function toggleSoloVoce(uid) {
+  const cw = state.cameraWindows[uid];
+  if (!cw?.isOwn || !state.localStream) return;
+  const videoEl = $(`cam-vid-${uid}`);
+  const placeholder = $(`cam-solo-voce-${uid}`);
+  const btn = $(`cam-solo-voce-btn-${uid}`);
+  const lbl = $(`cam-solo-voce-lbl-${uid}`);
+  const icon = $(`cam-solo-voce-icon-${uid}`);
+  if (!videoEl) return;
+  const videoTrack = state.localStream.getVideoTracks()[0];
+  cw.videoOff = !cw.videoOff;
+  if (videoTrack) videoTrack.enabled = !cw.videoOff;
+  if (cw.videoOff) {
+    videoEl.style.display = 'none';
+    if (placeholder) placeholder.hidden = false;
+    if (btn) btn.classList.add('solo-voce-active');
+    if (lbl) lbl.textContent = 'Mostra video';
+    if (icon) icon.textContent = '📹';
+  } else {
+    videoEl.style.display = '';
+    if (placeholder) placeholder.hidden = true;
+    if (btn) btn.classList.remove('solo-voce-active');
+    if (lbl) lbl.textContent = 'Solo voce';
+    if (icon) icon.textContent = '🎤';
+  }
 }
 
 /* ── Cambio camera on the fly (dropdown in footer) ── */
