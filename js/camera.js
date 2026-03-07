@@ -104,7 +104,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       let lastActiveTime = Date.now();
       let streamCheckInterval = null;
       
-      const checkStreamHealth = () => {
+      const checkStreamHealth = async () => {
         if (!state.cameraWindows[uid]) {
           /* Camera già chiusa - pulisci l'interval */
           if (streamCheckInterval) {
