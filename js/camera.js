@@ -119,6 +119,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     if (!isOwn) {
       videoEl.volume = 1;
       initRemoteVolumeControl(uid);
+      startRemoteSpeakingIndicator(uid, stream);
     }
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
@@ -294,7 +295,8 @@ export async function closeAllCamerasForUser(userId) {
 export async function closeCameraWindow(uid) {
   /* Check if this camera is in events grid */
   const camWin = state.cameraWindows[uid];
-  
+  stopRemoteSpeakingIndicator(uid);
+
   /* CRITICO: Pulisci l'interval di monitoraggio del flusso se presente */
   if (camWin?.streamCheckInterval) {
     clearInterval(camWin.streamCheckInterval);
@@ -719,6 +721,46 @@ function stopMicMeter(uid) {
   if (wrap) wrap.classList.remove('cam-speaking');
 }
 
+/* ── Indicatore "sta parlando" per cam remota (analisi audio stream remoto) ── */
+function startRemoteSpeakingIndicator(uid, stream) {
+  stopRemoteSpeakingIndicator(uid);
+  const audioTrack = stream?.getAudioTracks()[0];
+  if (!audioTrack) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const src = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.75;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const SPEAKING_THRESHOLD = 18;
+    function tick() {
+      if (!state.cameraWindows[uid]) return;
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((a, b) => a + b, 0) / data.length;
+      const win = state.cameraWindows[uid]?.el;
+      const wrap = win?.querySelector('.cam-win-video-wrap');
+      if (wrap) wrap.classList.toggle('cam-speaking', avg > SPEAKING_THRESHOLD);
+      if (state.remoteMicAnalysers[uid]) state.remoteMicAnalysers[uid].raf = requestAnimationFrame(tick);
+    }
+    state.remoteMicAnalysers[uid] = { ctx, raf: requestAnimationFrame(tick) };
+  } catch (err) { console.warn('[Camera] Remote speaking indicator:', err); }
+}
+
+function stopRemoteSpeakingIndicator(uid) {
+  const a = state.remoteMicAnalysers[uid];
+  if (a) {
+    if (a.raf) cancelAnimationFrame(a.raf);
+    if (a.ctx) a.ctx.close().catch(() => {});
+    delete state.remoteMicAnalysers[uid];
+  }
+  const win = state.cameraWindows[uid]?.el;
+  const wrap = win?.querySelector('.cam-win-video-wrap');
+  if (wrap) wrap.classList.remove('cam-speaking');
+}
+
 /* ── Controllo volume mic: barra con pallina (cursor grab) ── */
 function initMicVolumeSlider(uid) {
   const wrap = $(`mic-volume-wrap-${uid}`);
@@ -770,34 +812,42 @@ function initMicVolumeSlider(uid) {
 
 /* ── Volume e mute della voce della cam remota (quello che vedi) ── */
 function initRemoteVolumeControl(uid) {
-  const win = state.cameraWindows[uid]?.el;
-  const video = win?.querySelector('video');
   const muteBtn = $(`cam-remote-mute-${uid}`);
   const wrap = $(`cam-remote-volume-wrap-${uid}`);
   const fill = $(`cam-remote-fill-${uid}`);
   const thumb = $(`cam-remote-thumb-${uid}`);
-  if (!video || !wrap) return;
+  if (!wrap) return;
+  const getVideo = () => $(`cam-vid-${uid}`);
   const setVolumeFromPct = (pct) => {
     const clamped = Math.max(0, Math.min(100, pct));
-    video.volume = clamped / 100;
+    const video = getVideo();
+    if (video) {
+      video.volume = clamped / 100;
+      if (clamped > 0) video.muted = false;
+    }
     if (fill) fill.style.width = clamped + '%';
     if (thumb) thumb.style.left = clamped + '%';
   };
   setVolumeFromPct(100);
   if (muteBtn) {
     muteBtn.addEventListener('click', () => {
-      video.muted = !video.muted;
-      muteBtn.setAttribute('aria-pressed', String(video.muted));
-      muteBtn.textContent = video.muted ? '🔇' : '🔊';
+      const video = getVideo();
+      if (video) {
+        video.muted = !video.muted;
+        muteBtn.setAttribute('aria-pressed', String(video.muted));
+        muteBtn.textContent = video.muted ? '🔇' : '🔊';
+      }
     });
   }
   const onInput = (e) => {
     const rect = wrap.getBoundingClientRect();
+    if (rect.width <= 0) return;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const x = clientX - rect.left;
     const pct = (x / rect.width) * 100;
     setVolumeFromPct(pct);
-    if (video.muted) { video.muted = false; if (muteBtn) { muteBtn.setAttribute('aria-pressed', 'false'); muteBtn.textContent = '🔊'; } }
+    const video = getVideo();
+    if (video && video.muted && pct > 0) { video.muted = false; if (muteBtn) { muteBtn.setAttribute('aria-pressed', 'false'); muteBtn.textContent = '🔊'; } }
   };
   wrap.addEventListener('mousedown', (e) => {
     e.preventDefault();

@@ -104,18 +104,20 @@
   display: block;
 }
 
-/* ── Controls footer: volume a sinistra, pulsanti, spazio per resize ── */
+/* ── Controls footer: si ridimensiona con la finestra, wrap se stretto ── */
 .cam-win-footer {
-  padding: 7px var(--s3);
-  padding-right: 38px;
+  padding: 6px var(--s2);
+  padding-right: 36px;
   background: var(--bg2);
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: var(--s3);
+  gap: var(--s2);
+  flex-wrap: wrap;
   flex-shrink: 0;
+  min-width: 0;
 }
-.cam-win-footer-remote { justify-content: center; padding-right: var(--s3); }
+.cam-win-footer-remote { justify-content: center; padding-right: var(--s2); }
 .cam-win-live-badge {
   font-size: var(--fz-xs);
   font-weight: 700;
@@ -125,16 +127,17 @@
   gap: var(--s1);
 }
 
-/* ── Mic toggle button (own camera) — aree click generose per precisione ── */
+/* ── Mic toggle button (own camera) — si ridimensiona con footer ── */
 .cam-ctrl-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--s2);
   touch-action: none;
-  min-width: 36px;
-  min-height: 36px;
-  padding: 6px var(--s3);
+  min-width: 32px;
+  min-height: 32px;
+  padding: 5px var(--s2);
+  flex-shrink: 0;
   border-radius: var(--r2);
   background: var(--bg3);
   border: 1px solid var(--border);

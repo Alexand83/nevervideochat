@@ -22,6 +22,7 @@ export const state = {
   /* Camera */
   cameraWindows:    {},
   micAnalysers:     {},
+  remoteMicAnalysers: {},
   localStream:      null,
   cameraClosedAt:   0,
   cameraRoom:       null,   /* room where the camera is currently active */
