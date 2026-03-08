@@ -379,7 +379,14 @@ export function switchRoom(roomId) {
       clearEventsCamGrid();
     }
   }
-  
+
+  /* Own camera: mostra la finestra floating solo nella stanza dove la cam è attiva (non in Eventi se aperta in General e viceversa) */
+  const ownWin = state.cameraWindows[state.currentUser?.id];
+  if (ownWin && !ownWin.isEventsGrid && ownWin.el) {
+    const camInThisRoom = String(state.cameraRoom) === String(state.activeRoom);
+    ownWin.el.style.display = camInThisRoom ? '' : 'none';
+  }
+
   renderRoomTabs();
   renderActiveRoomMessages();
   renderUsers();

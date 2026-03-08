@@ -1254,7 +1254,7 @@ export async function sharePublicCameraTo(toUid) {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     console.log('[WebRTC] Sending offer to', toUid, 'SDP length:', offer.sdp.length);
-    broadcast('webrtc', toUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'public' });
+    broadcast('webrtc', toUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'public', room_id: state.cameraRoom });
     broadcast('cam-accepted', toUid, {});
     
     const viewerUser = findUser(toUid);
@@ -1315,6 +1315,12 @@ export async function handleWebRTCSignal(payload) {
           return;
         }
 
+        /* Se il PC è ancora in connecting/new, non sostituirlo con una nuova offerta (evita "compare e sparisce" in Eventi) */
+        if (existingPc.connectionState === 'new' || existingPc.connectionState === 'connecting') {
+          console.log('[WebRTC] Ignoring new offer from', from, '— existing PC still connecting');
+          return;
+        }
+
         /* Otherwise: close stale/dead PC and accept the new offer */
         console.log('[WebRTC] Closing stale incoming PC for', from, 'to accept new offer. state:', existingPc.signalingState, existingPc.connectionState);
         existingPc.close();
@@ -1367,6 +1373,7 @@ export async function handleWebRTCSignal(payload) {
       console.log('[WebRTC] Creating new incoming peer connection for', from);
       const pc = new RTCPeerConnection(ICE_SERVERS);
       pc._createdInRoom = state.activeRoom; /* Track room at creation — used to discard stale streams */
+      pc._camRoom = payload.room_id != null ? String(payload.room_id) : null; /* room where cam was opened (from offer) */
       state.incomingPCs[from] = pc;
       pc.onicecandidate = ({ candidate: c }) => {
         if (c) {
@@ -1453,20 +1460,13 @@ export async function handleWebRTCSignal(payload) {
           return;
         }
         
-        /* CRITICO: Controlla se la cam è in una stanza eventi e NON siamo in quella stanza */
-        /* Questo previene che le cam della stanza eventi vengano create nella stanza general */
-        const camRoom = payload.room_id || null;
-        if (camRoom) {
-          const camRoomData = availableRooms.find(r => String(r.id) === String(camRoom));
-          const isCamInEventsRoom = !!(camRoomData?.max_cams && camRoomData.max_cams >= 1 && camRoomData.max_cams <= 8);
-          const isInCamRoom = String(camRoom) === String(state.activeRoom);
-          
-          if (isCamInEventsRoom && !isInCamRoom) {
-            console.log('[WebRTC] Rejecting stream from', from, '— camera is in Events room', camRoom, 'but we are in room', state.activeRoom);
-            try { pc.close(); } catch {}
-            if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
-            return;
-          }
+        /* CRITICO: La cam va mostrata SOLO nella stanza dove è stata aperta (stessa regola di cam-opened) */
+        const camRoom = pc._camRoom || payload.room_id || null;
+        if (camRoom && String(camRoom) !== String(state.activeRoom)) {
+          console.log('[WebRTC] Rejecting stream from', from, '— camera is in room', camRoom, 'but we are in room', state.activeRoom);
+          try { pc.close(); } catch {}
+          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+          return;
         }
         
         /* Open window immediately — insertCameraIntoEventsGrid handles stream readiness */

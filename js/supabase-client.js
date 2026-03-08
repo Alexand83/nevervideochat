@@ -379,27 +379,20 @@ export async function connectSupabase() {
         /* CRITICO: Controlla se la cam è in una stanza eventi */
         const availableRooms = getAvailableRooms();
         const camRoomData = availableRooms.find(r => String(r.id) === String(camRoom));
-        const isCamInEventsRoom = !!(camRoomData?.max_cams && camRoomData.max_cams >= 1 && camRoomData.max_cams <= 8);
         const isInCamRoom = camRoom && String(camRoom) === String(state.activeRoom);
-        
-        /* CRITICO: Se la cam è in una stanza eventi e NON siamo in quella stanza, NON creare la cam */
-        /* Questo previene che le cam della stanza eventi appaiano nella stanza general dopo un refresh */
-        if (isCamInEventsRoom && !isInCamRoom) {
-          console.log('[Supabase] cam-opened: Camera is in Events room', camRoom, 'but we are in room', state.activeRoom, '- NOT creating camera window');
-          /* Aggiorna solo hasCamera per mostrare l'icona nella stanza corretta */
+
+        /* CRITICO: La cam va mostrata SOLO nella stanza dove è stata aperta. Se siamo in un'altra stanza, non creare finestra/grid. */
+        if (camRoom && !isInCamRoom) {
+          console.log('[Supabase] cam-opened: Camera is in room', camRoom, 'but we are in room', state.activeRoom, '- NOT creating camera window');
           for (const [rId, room] of Object.entries(state.rooms)) {
-            if (room.users[fromId]) {
-              room.users[fromId].hasCamera = (rId === camRoom);
-            }
+            if (room.users[fromId]) room.users[fromId].hasCamera = (rId === camRoom);
           }
           const u = state.users.find(u => String(u.id) === fromId);
-          if (u) {
-            u.hasCamera = false; /* Non mostrare icona nella stanza general se la cam è in eventi */
-          }
+          if (u) u.hasCamera = (String(camRoom) === String(state.activeRoom));
           renderUsers();
-          return; /* NON procedere con la creazione della cam */
+          return;
         }
-        
+
         for (const [rId, room] of Object.entries(state.rooms)) {
           if (room.users[fromId]) {
             /* Aggiorna hasCamera solo se la cam è in questa stanza */
