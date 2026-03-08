@@ -154,8 +154,8 @@
 
 /* ── Controllo volume microfono: barra con pallina (tua cam) ── */
 .mic-volume-section {
-  flex: 0 0 80px;
-  width: 80px;
+  flex: 0 0 60px;
+  width: 60px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -210,7 +210,12 @@
   cursor: grabbing;
 }
 
-/* ── Footer cam remota: stessa barra volume della tua cam, tutto più a sinistra ── */
+/* ── Footer cam remota: nascondi video, mute, volume ── */
+.cam-remote-hide-video-btn[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
 .cam-remote-mute-btn {
   padding: 5px 8px !important;
   flex-shrink: 0;

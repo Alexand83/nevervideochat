@@ -78,6 +78,9 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       </div>
     </div>` : `
     <div class="cam-win-footer cam-win-footer-remote">
+      <button class="cam-ctrl-btn cam-remote-hide-video-btn" id="cam-remote-hide-video-${uid}" type="button" title="Nascondi video" aria-label="Nascondi video" aria-pressed="false">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      </button>
       <button class="cam-ctrl-btn cam-remote-mute-btn" id="cam-remote-mute-${uid}" title="Mute voce" aria-pressed="false">🔊</button>
       <div class="cam-remote-volume-wrap mic-volume-vertical" id="cam-remote-volume-wrap-${uid}" title="Volume sua voce">
         <div class="mic-volume-track"><div class="mic-volume-fill" id="cam-remote-fill-${uid}"></div><div class="mic-volume-thumb" id="cam-remote-thumb-${uid}"></div></div>
@@ -101,13 +104,13 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     <div class="cam-win-video-wrap">
       <video id="cam-vid-${uid}" autoplay ${isOwn ? 'muted' : ''} playsinline
              style="${isOwn ? 'transform:scaleX(-1)' : ''}"></video>
-      ${isOwn ? `<div class="cam-solo-voce-placeholder" id="cam-solo-voce-${uid}" hidden><span class="cam-solo-voce-icon">🎤</span><span class="cam-solo-voce-txt">Solo voce</span></div>` : ''}
+      <div class="cam-solo-voce-placeholder" id="cam-solo-voce-${uid}" hidden><span class="cam-solo-voce-icon">🎤</span><span class="cam-solo-voce-txt">Solo voce</span></div>
     </div>
     ${footer}
     <div class="cam-resize-handle" id="cam-rz-${uid}" aria-hidden="true"></div>`;
 
   document.body.appendChild(win);
-  state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true, videoOff: false };
+  state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true, videoOff: false, videoHiddenByMe: false };
 
   const videoEl = $(`cam-vid-${uid}`);
   if (videoEl) {
@@ -181,6 +184,19 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       
       /* Controlla immediatamente */
       checkStreamHealth();
+
+      /* Placeholder "Solo voce" quando il remoto disattiva il video + sync periodico */
+      function syncRemoteVideoPlaceholder() {
+        if (!state.cameraWindows[uid]) return;
+        const cw = state.cameraWindows[uid];
+        const stream = cw?.stream;
+        const videoTrack = stream?.getVideoTracks()[0];
+        cw.videoOff = !videoTrack || !videoTrack.enabled;
+        updateRemoteVideoVisibility(uid);
+      }
+      syncRemoteVideoPlaceholder();
+      const remoteVideoCheckInterval = setInterval(syncRemoteVideoPlaceholder, 1000);
+      if (state.cameraWindows[uid]) state.cameraWindows[uid].remoteVideoCheckInterval = remoteVideoCheckInterval;
     }
   }
   win.querySelector('.cam-win-close-btn').addEventListener('click', () => closeCameraWindow(uid));
@@ -211,6 +227,19 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         if (!vPanel.hidden) refreshViewersPanel(uid);
       });
       document.addEventListener('click', () => { if (vPanel) vPanel.hidden = true; });
+    }
+  } else {
+    /* Cam remota: pulsante "Nascondi video" (solo audio) */
+    const hideVideoBtn = $(`cam-remote-hide-video-${uid}`);
+    if (hideVideoBtn) {
+      hideVideoBtn.addEventListener('click', () => {
+        const cw = state.cameraWindows[uid];
+        if (!cw) return;
+        cw.videoHiddenByMe = !cw.videoHiddenByMe;
+        hideVideoBtn.setAttribute('aria-pressed', String(cw.videoHiddenByMe));
+        hideVideoBtn.title = cw.videoHiddenByMe ? 'Mostra video' : 'Nascondi video';
+        updateRemoteVideoVisibility(uid);
+      });
     }
   }
   makeDraggable(win, $(`cam-win-hdr-${uid}`));
@@ -298,6 +327,10 @@ export async function closeCameraWindow(uid) {
   if (camWin?.streamCheckInterval) {
     clearInterval(camWin.streamCheckInterval);
     camWin.streamCheckInterval = null;
+  }
+  if (camWin?.remoteVideoCheckInterval) {
+    clearInterval(camWin.remoteVideoCheckInterval);
+    camWin.remoteVideoCheckInterval = null;
   }
   
   if (camWin?.isEventsGrid) {
@@ -939,6 +972,22 @@ function updateVideoToggleButton(uid) {
   if (onIcon) onIcon.hidden = isOff;
   if (offIcon) offIcon.hidden = !isOff;
   btn.classList.toggle('cam-video-off', isOff);
+}
+
+/* ── Cam remota: mostra video o placeholder (Solo voce / Video nascosto) ── */
+function updateRemoteVideoVisibility(uid) {
+  const cw = state.cameraWindows[uid];
+  if (!cw || cw.isOwn) return;
+  const videoEl = $(`cam-vid-${uid}`);
+  const placeholder = $(`cam-solo-voce-${uid}`);
+  if (!videoEl || !placeholder) return;
+  const showVideo = !cw.videoHiddenByMe && !cw.videoOff;
+  videoEl.style.display = showVideo ? '' : 'none';
+  placeholder.hidden = showVideo;
+  if (!showVideo) {
+    const txt = placeholder.querySelector('.cam-solo-voce-txt');
+    if (txt) txt.textContent = cw.videoHiddenByMe ? 'Video nascosto' : 'Solo voce';
+  }
 }
 
 /* ── Toggle solo voce nella propria cam (nascondi video, solo audio) ── */
