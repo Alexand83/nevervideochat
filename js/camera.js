@@ -118,8 +118,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     videoEl.play().catch(() => {});
     if (!isOwn) {
       videoEl.volume = 1;
-      initRemoteVolumeControl(uid);
-      startRemoteSpeakingIndicator(uid, stream);
+      initRemoteVolumeControl(uid); /* volume + indicatore "sta parlando" */
     }
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
@@ -296,6 +295,7 @@ export async function closeCameraWindow(uid) {
   /* Check if this camera is in events grid */
   const camWin = state.cameraWindows[uid];
   stopRemoteSpeakingIndicator(uid);
+  closeRemoteVolumeContext(uid);
 
   /* CRITICO: Pulisci l'interval di monitoraggio del flusso se presente */
   if (camWin?.streamCheckInterval) {
@@ -725,10 +725,15 @@ function stopMicMeter(uid) {
 function startRemoteSpeakingIndicator(uid, stream) {
   stopRemoteSpeakingIndicator(uid);
   const audioTrack = stream?.getAudioTracks()[0];
-  if (!audioTrack) return;
+  if (!audioTrack) {
+    setTimeout(() => {
+      const s = state.cameraWindows[uid]?.stream;
+      if (s) startRemoteSpeakingIndicator(uid, s);
+    }, 400);
+    return;
+  }
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const src = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
@@ -738,6 +743,7 @@ function startRemoteSpeakingIndicator(uid, stream) {
     const SPEAKING_THRESHOLD = 18;
     function tick() {
       if (!state.cameraWindows[uid]) return;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       analyser.getByteFrequencyData(data);
       const avg = data.reduce((a, b) => a + b, 0) / data.length;
       const win = state.cameraWindows[uid]?.el;
@@ -810,35 +816,80 @@ function initMicVolumeSlider(uid) {
   });
 }
 
-/* ── Volume e mute della voce della cam remota (quello che vedi) ── */
+/* ── Volume e mute della voce della cam remota (Web Audio: gain + indicatore "sta parlando") ── */
 function initRemoteVolumeControl(uid) {
+  const cw = state.cameraWindows[uid];
+  const stream = cw?.stream;
   const muteBtn = $(`cam-remote-mute-${uid}`);
   const wrap = $(`cam-remote-volume-wrap-${uid}`);
   const fill = $(`cam-remote-fill-${uid}`);
   const thumb = $(`cam-remote-thumb-${uid}`);
-  if (!wrap) return;
-  const getVideo = () => $(`cam-vid-${uid}`);
+  const video = $(`cam-vid-${uid}`);
+  if (!wrap || !video) return;
+
+  const audioTrack = stream?.getAudioTracks()[0];
+  let remoteCtx = null;
+  let remoteGain = null;
+  let analyser = null;
+
+  if (audioTrack) {
+    try {
+      remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (remoteCtx.state === 'suspended') remoteCtx.resume().catch(() => {});
+      const src = remoteCtx.createMediaStreamSource(new MediaStream([audioTrack]));
+      remoteGain = remoteCtx.createGain();
+      remoteGain.gain.value = 1;
+      src.connect(remoteGain);
+      remoteGain.connect(remoteCtx.destination);
+      video.muted = true; /* audio da Web Audio, non dal video */
+
+      /* stesso stream per indicatore "sta parlando" */
+      analyser = remoteCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.75;
+      src.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const SPEAKING_THRESHOLD = 18;
+      function tick() {
+        if (!state.cameraWindows[uid]) return;
+        if (remoteCtx.state === 'suspended') remoteCtx.resume().catch(() => {});
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        const win = state.cameraWindows[uid]?.el;
+        const wrapEl = win?.querySelector('.cam-win-video-wrap');
+        if (wrapEl) wrapEl.classList.toggle('cam-speaking', avg > SPEAKING_THRESHOLD);
+        if (cw.remoteVolumeCtx) cw.remoteSpeakRaf = requestAnimationFrame(tick);
+      }
+      cw.remoteVolumeCtx = remoteCtx;
+      cw.remoteSpeakRaf = requestAnimationFrame(tick);
+    } catch (err) { console.warn('[Camera] Remote Web Audio failed:', err); }
+  }
+
+  if (!remoteGain) video.muted = false;
+
+  let lastVolumePct = 100;
   const setVolumeFromPct = (pct) => {
     const clamped = Math.max(0, Math.min(100, pct));
-    const video = getVideo();
-    if (video) {
-      video.volume = clamped / 100;
-      if (clamped > 0) video.muted = false;
-    }
+    lastVolumePct = clamped;
+    const vol = clamped / 100;
+    if (remoteGain) remoteGain.gain.value = vol;
+    else { video.volume = vol; if (vol > 0) video.muted = false; }
     if (fill) fill.style.width = clamped + '%';
     if (thumb) thumb.style.left = clamped + '%';
   };
   setVolumeFromPct(100);
+
+  let isMuted = false;
   if (muteBtn) {
     muteBtn.addEventListener('click', () => {
-      const video = getVideo();
-      if (video) {
-        video.muted = !video.muted;
-        muteBtn.setAttribute('aria-pressed', String(video.muted));
-        muteBtn.textContent = video.muted ? '🔇' : '🔊';
-      }
+      isMuted = !isMuted;
+      if (remoteGain) remoteGain.gain.value = isMuted ? 0 : lastVolumePct / 100;
+      else video.muted = isMuted;
+      muteBtn.setAttribute('aria-pressed', String(isMuted));
+      muteBtn.textContent = isMuted ? '🔇' : '🔊';
     });
   }
+
   const onInput = (e) => {
     const rect = wrap.getBoundingClientRect();
     if (rect.width <= 0) return;
@@ -846,8 +897,7 @@ function initRemoteVolumeControl(uid) {
     const x = clientX - rect.left;
     const pct = (x / rect.width) * 100;
     setVolumeFromPct(pct);
-    const video = getVideo();
-    if (video && video.muted && pct > 0) { video.muted = false; if (muteBtn) { muteBtn.setAttribute('aria-pressed', 'false'); muteBtn.textContent = '🔊'; } }
+    if (isMuted && pct > 0) { isMuted = false; if (muteBtn) { muteBtn.setAttribute('aria-pressed', 'false'); muteBtn.textContent = '🔊'; } }
   };
   wrap.addEventListener('mousedown', (e) => {
     e.preventDefault();
@@ -873,6 +923,17 @@ function initRemoteVolumeControl(uid) {
     document.addEventListener('touchmove', move, { passive: false });
     document.addEventListener('touchend', end);
   });
+}
+
+function closeRemoteVolumeContext(uid) {
+  const cw = state.cameraWindows[uid];
+  if (!cw) return;
+  if (cw.remoteSpeakRaf) cancelAnimationFrame(cw.remoteSpeakRaf);
+  cw.remoteSpeakRaf = null;
+  if (cw.remoteVolumeCtx) {
+    cw.remoteVolumeCtx.close().catch(() => {});
+    cw.remoteVolumeCtx = null;
+  }
 }
 
 function updateVideoToggleButton(uid) {
