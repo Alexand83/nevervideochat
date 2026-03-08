@@ -305,7 +305,7 @@ export function switchRoom(roomId) {
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {
-      import('./camera.js?v=20260452').then(async ({ insertCameraIntoEventsGrid }) => {
+      import('./camera.js?v=20260308').then(async ({ insertCameraIntoEventsGrid }) => {
         if (state.activeRoom === roomIdStr) {
           const ownCamWin = state.cameraWindows[state.currentUser.id];
           /* CRITICO: Se la cam esiste già, ri-inserirla nella grid invece di ricrearla */
@@ -324,7 +324,7 @@ export function switchRoom(roomId) {
             }
           } else if (!ownCamWin) {
             /* La cam non esiste - crearla */
-            const { createCameraWindow } = await import('./camera.js?v=20260452');
+            const { createCameraWindow } = await import('./camera.js?v=20260308');
             createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
           }
         }
@@ -340,7 +340,7 @@ export function switchRoom(roomId) {
         /* Only close if still away from the Events room and camera is still for that room */
         if (state.activeRoom !== previousRoomId && state.cameraRoom === previousRoomId) {
           console.log('[Events Room] User away > 1 min — closing camera');
-          const { closeCameraWindow } = await import('./camera.js?v=20260452');
+          const { closeCameraWindow } = await import('./camera.js?v=20260308');
           closeCameraWindow(state.currentUser.id);
         }
       }, 60000);
@@ -390,7 +390,7 @@ export function switchRoom(roomId) {
         /* Guard: abort if user has left this room */
         if (state.activeRoom !== roomIdStr) return;
 
-        const { requestPublicCamera } = await import('./camera.js?v=20260452');
+        const { requestPublicCamera } = await import('./camera.js?v=20260308');
         const allUsers = Object.values(room.users);
         const usersWithCam = allUsers.filter(user =>
           user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)
