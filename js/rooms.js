@@ -80,7 +80,16 @@ export async function joinRoom(roomId) {
 
   presenceCh
     .on('presence', { event: 'sync' }, () => {
-      syncPresence(presenceCh.presenceState(), roomIdStr);
+      const presenceState = presenceCh.presenceState();
+      /* Annulla leave in sospeso per utenti ancora presenti (Supabase invia leave+join quando qualcuno fa track(), es. cam on/off) */
+      Object.keys(presenceState).forEach(uid => {
+        const timerKey = roomIdStr + ':' + uid;
+        if (state.presenceLeaveTimers[timerKey]) {
+          clearTimeout(state.presenceLeaveTimers[timerKey]);
+          delete state.presenceLeaveTimers[timerKey];
+        }
+      });
+      syncPresence(presenceState, roomIdStr);
       /* CRITICO: Renderizza utenti dopo il sync della presenza */
       if (roomIdStr === String(state.activeRoom)) {
         renderUsers();
@@ -89,6 +98,12 @@ export async function joinRoom(roomId) {
     .on('presence', { event: 'join' }, ({ key, newPresences }) => {
       const uid = String(key);
       if (uid === String(state.currentUser.id)) return;
+      /* Annulla leave in sospeso: era un falso leave da track() (es. cam on/off), non una vera uscita */
+      const timerKey = roomIdStr + ':' + uid;
+      if (state.presenceLeaveTimers[timerKey]) {
+        clearTimeout(state.presenceLeaveTimers[timerKey]);
+        delete state.presenceLeaveTimers[timerKey];
+      }
       const info = newPresences[0];
       if (!state.rooms[roomIdStr]) return;
       
@@ -131,15 +146,20 @@ export async function joinRoom(roomId) {
     .on('presence', { event: 'leave' }, async ({ key }) => {
       const uid = String(key);
       if (!state.rooms[roomIdStr]) return;
-      /* Non reagire al leave su noi stessi: Supabase può emettere leave quando aggiorniamo la presenza (es. hasCamera) e chiuderemmo la nostra cam */
       if (uid === String(state.currentUser?.id)) return;
-      delete state.rooms[roomIdStr].users[uid];
-      /* Chiudi la finestra della sua cam se l'avevamo aperta (es. ha fatto refresh) */
-      if (state.cameraWindows[uid]) {
-        const { closeCameraWindow } = await import('./camera.js?v=20260308');
-        await closeCameraWindow(uid);
-      }
-      if (roomIdStr === String(state.activeRoom)) renderUsers();
+      /* Debounce: Supabase invia leave+join quando qualcuno fa track() (es. cam on/off). Aspettiamo 2s: se arriva sync/join con l'utente ancora presente, annulliamo. */
+      const timerKey = roomIdStr + ':' + uid;
+      if (state.presenceLeaveTimers[timerKey]) clearTimeout(state.presenceLeaveTimers[timerKey]);
+      state.presenceLeaveTimers[timerKey] = setTimeout(async () => {
+        delete state.presenceLeaveTimers[timerKey];
+        if (!state.rooms[roomIdStr]) return;
+        delete state.rooms[roomIdStr].users[uid];
+        if (state.cameraWindows[uid]) {
+          const { closeCameraWindow } = await import('./camera.js?v=20260308');
+          await closeCameraWindow(uid);
+        }
+        if (roomIdStr === String(state.activeRoom)) renderUsers();
+      }, 2000);
     })
     .subscribe(async status => {
       if (status === 'SUBSCRIBED') {
