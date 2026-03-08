@@ -63,9 +63,14 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       <div class="mic-volume-section mic-volume-vertical" id="mic-volume-wrap-${uid}" title="Volume microfono: trascina la pallina">
         <div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${uid}"></div><div class="mic-volume-thumb" id="mic-thumb-${uid}"></div></div>
       </div>
-      <button class="cam-ctrl-btn cam-solo-voce-btn" id="cam-solo-voce-btn-${uid}" aria-label="Solo voce" title="Solo voce (nascondi video)">
-        <span id="cam-solo-voce-icon-${uid}">🎤</span><span id="cam-solo-voce-lbl-${uid}">Solo voce</span>
-      </button>
+      <div class="cam-options-wrap">
+        <button class="cam-ctrl-btn cam-options-btn" id="cam-options-btn-${uid}" type="button" aria-label="Opzioni" title="Opzioni camera">⋮</button>
+        <div class="cam-options-dropdown" id="cam-options-dropdown-${uid}" hidden>
+          <button type="button" class="cam-options-item" id="cam-options-solo-voce-${uid}">
+            <span id="cam-options-solo-voce-lbl-${uid}">Solo voce</span>
+          </button>
+        </div>
+      </div>
       <div class="cam-device-wrap">
         <button class="cam-ctrl-btn cam-device-btn" id="cam-device-btn-${uid}" aria-label="Cambia camera" title="Cambia dispositivo camera">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -187,8 +192,19 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     if (mb) mb.addEventListener('click', () => toggleCamMic(uid));
     startMicMeter(stream, uid);
     initMicVolumeSlider(uid);
-    const soloVoceBtn = $(`cam-solo-voce-btn-${uid}`);
-    if (soloVoceBtn) soloVoceBtn.addEventListener('click', () => toggleSoloVoce(uid));
+    const optBtn = $(`cam-options-btn-${uid}`);
+    const optDrop = $(`cam-options-dropdown-${uid}`);
+    const optSoloVoce = $(`cam-options-solo-voce-${uid}`);
+    if (optBtn && optDrop) {
+      optBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        optDrop.hidden = !optDrop.hidden;
+        if (!optDrop.hidden) updateSoloVoceMenuLabel(uid);
+      });
+      optDrop.addEventListener('click', (e) => e.stopPropagation());
+      document.addEventListener('click', () => { if (optDrop) optDrop.hidden = true; });
+    }
+    if (optSoloVoce) optSoloVoce.addEventListener('click', (e) => { e.stopPropagation(); toggleSoloVoce(uid); if (optDrop) optDrop.hidden = true; });
     const devBtn = $(`cam-device-btn-${uid}`);
     const devDrop = $(`cam-device-dropdown-${uid}`);
     if (devBtn && devDrop) {
@@ -197,6 +213,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         devDrop.hidden = !devDrop.hidden;
         if (!devDrop.hidden) await openCameraDeviceDropdown(uid, devDrop);
       });
+      devDrop.addEventListener('click', (e) => e.stopPropagation());
       document.addEventListener('click', () => { if (devDrop) devDrop.hidden = true; });
     }
     const vBtn   = $(`cam-viewers-btn-${uid}`);
@@ -814,15 +831,18 @@ function initRemoteVolumeControl(uid) {
   });
 }
 
+function updateSoloVoceMenuLabel(uid) {
+  const cw = state.cameraWindows[uid];
+  const lbl = $(`cam-options-solo-voce-lbl-${uid}`);
+  if (lbl) lbl.textContent = cw?.videoOff ? 'Mostra video' : 'Solo voce';
+}
+
 /* ── Toggle solo voce nella propria cam (nascondi video, solo audio) ── */
 function toggleSoloVoce(uid) {
   const cw = state.cameraWindows[uid];
   if (!cw?.isOwn || !state.localStream) return;
   const videoEl = $(`cam-vid-${uid}`);
   const placeholder = $(`cam-solo-voce-${uid}`);
-  const btn = $(`cam-solo-voce-btn-${uid}`);
-  const lbl = $(`cam-solo-voce-lbl-${uid}`);
-  const icon = $(`cam-solo-voce-icon-${uid}`);
   if (!videoEl) return;
   const videoTrack = state.localStream.getVideoTracks()[0];
   cw.videoOff = !cw.videoOff;
@@ -830,16 +850,11 @@ function toggleSoloVoce(uid) {
   if (cw.videoOff) {
     videoEl.style.display = 'none';
     if (placeholder) placeholder.hidden = false;
-    if (btn) btn.classList.add('solo-voce-active');
-    if (lbl) lbl.textContent = 'Mostra video';
-    if (icon) icon.textContent = '📹';
   } else {
     videoEl.style.display = '';
     if (placeholder) placeholder.hidden = true;
-    if (btn) btn.classList.remove('solo-voce-active');
-    if (lbl) lbl.textContent = 'Solo voce';
-    if (icon) icon.textContent = '🎤';
   }
+  updateSoloVoceMenuLabel(uid);
 }
 
 /* ── Cambio camera on the fly (dropdown in footer) ── */

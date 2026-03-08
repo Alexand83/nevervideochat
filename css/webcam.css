@@ -125,13 +125,16 @@
   gap: var(--s1);
 }
 
-/* ── Mic toggle button (own camera) ── */
+/* ── Mic toggle button (own camera) — aree click generose per precisione ── */
 .cam-ctrl-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--s2);
   touch-action: none;
-  padding: 5px var(--s3);
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px var(--s3);
   border-radius: var(--r2);
   background: var(--bg3);
   border: 1px solid var(--border);
@@ -237,7 +240,7 @@
   height: 14px;
 }
 
-/* ── Solo voce (nella propria cam): placeholder e bottone ── */
+/* ── Solo voce: placeholder in area video (testo quando video off) ── */
 .cam-solo-voce-placeholder {
   position: absolute;
   inset: 0;
@@ -257,32 +260,26 @@
   font-size: var(--fz-sm);
   font-weight: 600;
 }
-.cam-solo-voce-btn {
-  flex-shrink: 0;
-}
-.cam-solo-voce-btn.solo-voce-active {
-  background: var(--accent-dim);
-  color: var(--accent-h);
-  border-color: var(--accent);
-}
 
-/* ── Camera device selector (dropdown) ── */
-.cam-device-wrap {
+/* ── Menu opzioni (⋮): Solo voce qui per evitare click accidentali ── */
+.cam-options-wrap {
   position: relative;
   flex-shrink: 0;
 }
-.cam-device-btn {
-  padding: 5px 8px !important;
+.cam-options-btn {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px 10px !important;
+  font-size: 18px;
+  line-height: 1;
+  justify-content: center;
 }
-.cam-device-dropdown {
+.cam-options-dropdown {
   position: absolute;
   bottom: 100%;
   left: 0;
   margin-bottom: 4px;
-  min-width: 180px;
-  max-width: 240px;
-  max-height: 200px;
-  overflow-y: auto;
+  min-width: 160px;
   background: var(--bg1);
   border: 1px solid var(--border);
   border-radius: var(--r2);
@@ -290,18 +287,69 @@
   z-index: 700;
   padding: 4px;
 }
-.cam-device-item {
+.cam-options-item {
   display: block;
   width: 100%;
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-align: left;
-  font-size: var(--fz-xs);
+  font-size: var(--fz-sm);
   color: var(--tx0);
   background: none;
   border: none;
   border-radius: var(--r1);
   cursor: pointer;
   transition: background var(--tf);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.cam-options-item:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Camera device selector (dropdown): elenco leggibile, non tagliato ── */
+.cam-device-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.cam-device-btn {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 6px 10px !important;
+}
+.cam-device-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 340px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  box-shadow: var(--sh-lg);
+  z-index: 700;
+  padding: 6px;
+}
+.cam-device-item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: var(--fz-sm);
+  color: var(--tx0);
+  background: none;
+  border: none;
+  border-radius: var(--r1);
+  cursor: pointer;
+  transition: background var(--tf);
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .cam-device-item:hover {
   background: var(--bg-hover);
@@ -314,6 +362,7 @@
 .cam-device-empty {
   color: var(--tx2);
   cursor: default;
+  padding: 10px 12px;
 }
 
 /* ── Resize handle — bottom-right grip ── */
