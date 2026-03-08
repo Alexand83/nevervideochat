@@ -128,10 +128,15 @@ export async function joinRoom(roomId) {
         }
       }
     })
-    .on('presence', { event: 'leave' }, ({ key }) => {
+    .on('presence', { event: 'leave' }, async ({ key }) => {
       const uid = String(key);
       if (!state.rooms[roomIdStr]) return;
       delete state.rooms[roomIdStr].users[uid];
+      /* Chiudi la finestra della sua cam se l'avevamo aperta (es. ha fatto refresh) */
+      if (state.cameraWindows[uid]) {
+        const { closeCameraWindow } = await import('./camera.js?v=20260308');
+        await closeCameraWindow(uid);
+      }
       if (roomIdStr === String(state.activeRoom)) renderUsers();
     })
     .subscribe(async status => {
