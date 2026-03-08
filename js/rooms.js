@@ -136,9 +136,13 @@ export async function joinRoom(roomId) {
       };
       if (roomIdStr === String(state.activeRoom)) {
         renderUsers();
-        /* Mostra toast solo se è un vero join, non un update presenza */
+        /* Toast solo per join veri: non se era già online (track/update), non se ha appena rientrato dopo breve disconnect */
         const wasAlreadyOnline = existingUser?.online;
-        if (!wasAlreadyOnline) {
+        const leftKey = roomIdStr + ':' + uid;
+        const leftAt = state.presenceLeftAt[leftKey];
+        if (leftAt) delete state.presenceLeftAt[leftKey];
+        const justRejoined = leftAt && (Date.now() - leftAt < 30000);
+        if (!wasAlreadyOnline && !justRejoined) {
           showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
         }
       }
@@ -153,7 +157,11 @@ export async function joinRoom(roomId) {
       state.presenceLeaveTimers[timerKey] = setTimeout(async () => {
         delete state.presenceLeaveTimers[timerKey];
         if (!state.rooms[roomIdStr]) return;
+        /* Double-check: se è ancora in presenceState() non rimuovere (falso leave, es. cam off / tab switch) */
+        const currentPresence = presenceCh.presenceState();
+        if (Object.prototype.hasOwnProperty.call(currentPresence, uid)) return;
         delete state.rooms[roomIdStr].users[uid];
+        state.presenceLeftAt[roomIdStr + ':' + uid] = Date.now();
         if (state.cameraWindows[uid]) {
           const { closeCameraWindow } = await import('./camera.js?v=20260308');
           await closeCameraWindow(uid);

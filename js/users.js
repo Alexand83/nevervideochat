@@ -322,7 +322,12 @@ export function syncPresence(presenceState, roomId) {
     state.presenceLeaveTimers[timerKey] = setTimeout(async () => {
       delete state.presenceLeaveTimers[timerKey];
       if (!state.rooms[rId]) return;
+      /* Double-check: se è ancora in presenceState() non rimuovere (falso leave da sync in ritardo) */
+      const ch = state.rooms[rId]?.presenceCh;
+      const currentPresence = ch?.presenceState?.() ?? {};
+      if (Object.prototype.hasOwnProperty.call(currentPresence, uid)) return;
       delete state.rooms[rId].users[uid];
+      state.presenceLeftAt[rId + ':' + uid] = Date.now();
       if (state.cameraWindows[uid]) {
         const { closeCameraWindow } = await import('./camera.js');
         await closeCameraWindow(uid);
