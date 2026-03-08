@@ -110,7 +110,8 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     <div class="cam-resize-handle" id="cam-rz-${uid}" aria-hidden="true"></div>`;
 
   document.body.appendChild(win);
-  state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true, videoOff: false, videoHiddenByMe: false };
+  const remoteSenderVideoOff = !isOwn && !!state.remoteVideoOffState?.[uid];
+  state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true, videoOff: false, videoHiddenByMe: false, remoteSenderVideoOff };
 
   const videoEl = $(`cam-vid-${uid}`);
   if (videoEl) {
@@ -119,6 +120,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     if (!isOwn) {
       videoEl.volume = 1;
       initRemoteVolumeControl(uid); /* volume + indicatore "sta parlando" */
+      updateRemoteVideoVisibility(uid); /* applica stato iniziale video off (es. da cam-opened) */
     }
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
@@ -669,7 +671,7 @@ export async function startOwnCamera() {
     state.currentUser.hasCamera = true;
     
     /* Broadcast e aggiorna presenza in Supabase */
-    broadcastAll('cam-opened', { room_id: state.cameraRoom });
+    broadcastAll('cam-opened', { room_id: state.cameraRoom, videoOff: state.cameraWindows[state.currentUser?.id]?.videoOff === true });
     
     /* Aggiorna la presenza in tutte le stanze - chiama più volte per assicurarsi che sia propagata */
     await updateAllRoomPresences();
@@ -981,13 +983,21 @@ function updateRemoteVideoVisibility(uid) {
   const videoEl = $(`cam-vid-${uid}`);
   const placeholder = $(`cam-solo-voce-${uid}`);
   if (!videoEl || !placeholder) return;
-  const showVideo = !cw.videoHiddenByMe && !cw.videoOff;
+  const showVideo = !cw.videoHiddenByMe && !cw.videoOff && !cw.remoteSenderVideoOff;
   videoEl.style.display = showVideo ? '' : 'none';
   placeholder.hidden = showVideo;
   if (!showVideo) {
     const txt = placeholder.querySelector('.cam-solo-voce-txt');
     if (txt) txt.textContent = cw.videoHiddenByMe ? 'Video nascosto' : 'Solo voce';
   }
+}
+
+/** Chiamato quando riceviamo broadcast cam-video-off: il remoto ha disattivato/riattivato il video (solo voce). */
+export function setRemoteSenderVideoOff(remoteUid, videoOff) {
+  const cw = state.cameraWindows[remoteUid];
+  if (!cw || cw.isOwn) return;
+  cw.remoteSenderVideoOff = !!videoOff;
+  updateRemoteVideoVisibility(remoteUid);
 }
 
 /* ── Toggle solo voce nella propria cam (nascondi video, solo audio) ── */
@@ -1008,6 +1018,8 @@ function toggleSoloVoce(uid) {
     if (placeholder) placeholder.hidden = true;
   }
   updateVideoToggleButton(uid);
+  /* Notifica i viewer così mostrano placeholder "Solo voce" invece di schermo nero */
+  broadcastAll('cam-video-off', { from: state.currentUser.id, videoOff: cw.videoOff });
 }
 
 /* ── Cambio camera on the fly (dropdown in footer) ── */
@@ -1215,7 +1227,7 @@ export async function sharePublicCameraTo(toUid) {
       state.cameraRoom = state.activeRoom;
       dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
       createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
-      broadcastAll('cam-opened', { room_id: state.cameraRoom });
+      broadcastAll('cam-opened', { room_id: state.cameraRoom, videoOff: state.cameraWindows[state.currentUser?.id]?.videoOff === true });
       await updateAllRoomPresences();
     }
     console.log('[WebRTC] Creating peer connection for', toUid);

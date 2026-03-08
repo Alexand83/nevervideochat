@@ -9,7 +9,7 @@ import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers 
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
-         closeCameraWindow, endCall } from './camera.js?v=20260308';
+         closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260308';
 import { clearPendingCamRequest } from './storage.js';
 
 /* Flag per indicare se la sessione è appena stata creata (non controllare subito) */
@@ -390,6 +390,7 @@ export async function connectSupabase() {
         if (String(payload.from) === String(state.currentUser?.id)) return;
         const fromId   = String(payload.from);
         const camRoom  = payload.room_id || null;   /* room where cam was activated */
+        if (payload.videoOff !== undefined) state.remoteVideoOffState[fromId] = !!payload.videoOff;
 
         console.log('[Supabase] cam-opened received:', { from: fromId, roomId: camRoom });
 
@@ -478,6 +479,12 @@ export async function connectSupabase() {
           const { updateEventsCamGrid } = await import('./rooms.js');
           updateEventsCamGrid();
         }
+      })
+      .on('broadcast', { event: 'cam-video-off' }, ({ payload }) => {
+        if (String(payload.from) === String(state.currentUser?.id)) return;
+        const fromId = String(payload.from);
+        state.remoteVideoOffState[fromId] = !!payload.videoOff;
+        setRemoteSenderVideoOff(fromId, !!payload.videoOff);
       })
       .on('broadcast', { event: 'cam-closed'   }, ({ payload }) => handleCamClosed(payload))
       .on('broadcast', { event: 'call-ended'   }, ({ payload }) => {

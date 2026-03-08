@@ -319,6 +319,21 @@ export function syncPresence(presenceState, roomId) {
     }
   });
 
+  /* CRITICO: Inserisci sempre il current user in lista se è nella stanza (fix: nick non appariva dopo refresh) */
+  if (state.currentUser && rId === state.activeRoom) {
+    room.users[myId] = {
+      id: myId,
+      name: state.currentUser.name,
+      username: state.currentUser.username || null,
+      isGuest: state.currentUser.isGuest,
+      online: true,
+      hasCamera: state.cameraRoom === rId,
+      avatarUrl: state.currentUser.avatarUrl || null,
+      roleName: state.currentUser.roleName || 'User',
+      roleColor: state.currentUser.roleColor || '#8b949e',
+    };
+  }
+
   if (rId === state.activeRoom) renderUsers();
 }
 

@@ -66,6 +66,9 @@ export const state = {
   /* Context menu */
   contextTargetUID: null,
 
+  /* Stato "video off" ricevuto via broadcast (cam-video-off / cam-opened) per finestre remote */
+  remoteVideoOffState: {},  /* { [remoteUid]: true|false } */
+
   /* Supabase channels (global) */
   supa:     null,
   signalCh: null,   /* global broadcast channel for WebRTC/PM */
