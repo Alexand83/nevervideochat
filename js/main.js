@@ -6,7 +6,7 @@ import { dom }                from './dom.js';
 import { showToast }          from './utils.js';
 import { loadRejectedCams, loadIgnoredUsers, loadDeviceSettings } from './storage.js';
 import { initSupabaseClient, connectSupabase, connectRoom } from './supabase-client.js';
-import { tryRestoreSession, applyAuthIdentity, getOrCreateGuestIdentity,
+import { applyAuthIdentity, getOrCreateGuestIdentity,
          initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
 import { renderUsers, setOpenContextMenu } from './users.js';
@@ -110,44 +110,16 @@ async function init() {
   initSupabaseClient();
 
   /* CRITICO: Imposta finishInit PRIMA che l'utente possa fare login */
-  /* Questo assicura che _finishInit sia disponibile quando viene chiamato dopo il login */
   const { setFinishInit } = await import('./auth.js');
   setFinishInit(finishInit);
   console.log('[Main] ✅ finishInit registered in auth module');
 
-  /* 3. Try to restore a registered session */
-  const restoredUser = await tryRestoreSession();
-  if (restoredUser) {
-    state.currentUser = restoredUser;
-    localStorage.setItem('nvc_identity', JSON.stringify(state.currentUser));
-    state.settings = loadDeviceSettings();
-    await finishInit();
-    return;
-  }
+  /* OBBLIGATORIO: Nessun ripristino sessione/guest. Ad ogni caricamento (refresh, ritorno dopo caduta rete, ecc.) si va sempre al modal di login. */
+  localStorage.removeItem('nvc_identity');
+  localStorage.removeItem('nvc_auth_session');
+  localStorage.removeItem('nvc_browser_session_id');
+  localStorage.removeItem('nvc_session_id');
 
-  /* 4. Check existing guest identity */
-  /* CRITICO: Non permettere a utenti registrati di entrare senza sessione valida */
-  try {
-    const stored = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
-    if (stored?.id && stored?.name) {
-      /* Se è un utente registrato (non guest), richiedi login se non c'è sessione */
-      if (stored.isGuest === false) {
-        console.log('[Main] Cached identity is registered user but no session found - requiring login');
-        /* Rimuovi l'identity cache per forzare il login */
-        localStorage.removeItem('nvc_identity');
-        /* Mostra modal di login */
-        dom.authModal.hidden = false;
-        return;
-      }
-      /* Se è un guest, permettere l'accesso */
-      state.currentUser = stored;
-      state.settings    = loadDeviceSettings();
-      await finishInit();
-      return;
-    }
-  } catch {}
-
-  /* 5. No identity → show auth modal */
   dom.authModal.hidden = false;
 }
 

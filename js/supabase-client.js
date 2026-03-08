@@ -249,25 +249,8 @@ function startSessionCheckInterval() {
         /* Se non c'è sessione ma l'utente è registrato, potrebbe essere un problema */
         /* Ma non loggare come warning se è un guest */
         if (!state.currentUser.isGuest) {
-          console.warn('[Session Check] No active session found for registered user (even after restore attempt)');
-          console.warn('[Session Check] Current user:', {
-            id: state.currentUser.id,
-            name: state.currentUser.name,
-            isGuest: state.currentUser.isGuest
-          });
-          /* Prova a ripristinare la sessione */
-          try {
-            const { tryRestoreSession } = await import('./auth.js');
-            const restored = await tryRestoreSession();
-            if (restored) {
-              console.log('[Session Check] Successfully restored session');
-              state.currentUser = restored;
-            } else {
-              console.warn('[Session Check] Failed to restore session');
-            }
-          } catch (restoreErr) {
-            console.error('[Session Check] Error trying to restore session:', restoreErr);
-          }
+          console.warn('[Session Check] No active session for registered user — showing login modal');
+          showDisconnectedOverlay();
         }
         return;
       }

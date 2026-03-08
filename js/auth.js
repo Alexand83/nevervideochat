@@ -318,7 +318,22 @@ export async function loginUser(nick, password) {
     /* Se fallisce completamente, continua comunque - la sessione corrente è già valida */
     console.warn('[Auth] Could not disconnect old sessions (this is OK if first login):', signOutErr);
   }
-  
+
+  /* Invalida le altre sessioni (altri dispositivi) via Edge Function: il vecchio dispositivo riceverà SIGNED_OUT e mostrerà il modal di login */
+  if (data.session?.access_token) {
+    try {
+      const { data: fnResult, error: fnError } = await state.supa.functions.invoke('invalidate-other-sessions', {
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      });
+      if (!fnError && fnResult?.invalidated != null) {
+        console.log('[Auth] Invalidated other sessions (other devices):', fnResult.invalidated);
+      }
+      if (fnError) console.warn('[Auth] Edge function invalidate-other-sessions:', fnError.message);
+    } catch (e) {
+      console.warn('[Auth] Could not call invalidate-other-sessions:', e?.message || e);
+    }
+  }
+
   if (data.session) persistAuthSession(data.session);
   
   /* Marca la sessione come nuova anche dopo il persist */

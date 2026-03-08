@@ -267,15 +267,11 @@ export function syncPresence(presenceState, roomId) {
       /* La presenza dice esplicitamente true - usa quello */
       hasCamera = true;
     } else if (info.hasCamera === false) {
-      /* La presenza dice esplicitamente false - MA se c'è un broadcast recente, preserva true */
-      /* Questo è importante perché la presenza potrebbe non essere ancora aggiornata */
+      /* La presenza dice esplicitamente false: rispetta sempre (es. utente ha aggiornato la pagina, cam spenta) */
+      /* Solo se c'è un broadcast molto recente (cam appena aperta) preserva true per latenza presenza */
       if (isRecentBroadcast) {
         hasCamera = true;
         console.log('[Users] Preserving hasCamera=true for', uid, 'during sync (presence says false but broadcast was', Math.round(broadcastTime/1000), 's ago)');
-      } else if (existingUser?.hasCamera === true || globalUser?.hasCamera === true) {
-        /* Se non c'è broadcast recente ma hasCamera è già true, preservalo per sicurezza */
-        hasCamera = true;
-        console.log('[Users] Preserving hasCamera=true for', uid, 'during sync (presence says false but was true)');
       } else {
         hasCamera = false;
       }
