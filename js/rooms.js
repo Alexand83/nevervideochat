@@ -352,26 +352,25 @@ export function switchRoom(roomId) {
         }
       }, 60000);
     }
-    /* Close ALL incoming PCs for remote cameras — they belong to the Events room.
-       Leaving them open causes new offers to be processed in the wrong room context,
-       which opens floating camera windows in non-Events rooms. */
+    /* Chiudi SOLO le PC e finestre della grid Eventi. Le cam in General (floating) restano aperte per quando torni in General. */
     if (wasEventsRoom) {
       for (const uid of Object.keys(state.incomingPCs)) {
+        const cw = state.cameraWindows[uid];
+        if (!cw?.isEventsGrid) continue; /* non chiudere la PC di cam in altra stanza (es. General) */
         try { state.incomingPCs[uid].close(); } catch {}
         delete state.incomingPCs[uid];
       }
-      /* Clean up pending cam requests so they don't re-trigger on re-entry */
+      /* Pending cam requests: pulisci solo per utenti che avevano cam in Eventi (opzionale: pulisci tutto per semplicità) */
       for (const uid of Object.keys(state.pendingCamRequests || {})) {
         delete state.pendingCamRequests[uid];
       }
-      /* Remove Events-grid cameraWindows entries (DOM already cleared by clearEventsCamGrid below).
-         Keep own camera window if it exists since localStream is still active. */
+      /* Rimuovi solo le finestre della grid Eventi; tieni le floating (cam in General). */
       for (const uid of Object.keys(state.cameraWindows)) {
-        if (String(uid) === String(state.currentUser?.id)) continue; /* keep own */
+        if (String(uid) === String(state.currentUser?.id)) continue;
         const cw = state.cameraWindows[uid];
         if (cw?.isEventsGrid) delete state.cameraWindows[uid];
       }
-      console.log('[Events Room] Left Events room — closed all incoming PCs and cleaned up grid windows');
+      console.log('[Events Room] Left Events room — closed only grid PCs and cleaned up grid windows');
     }
     /* Hide events cam grid */
     if (dom.eventsCamGrid) {
@@ -385,6 +384,22 @@ export function switchRoom(roomId) {
   if (ownWin && !ownWin.isEventsGrid && ownWin.el) {
     const camInThisRoom = String(state.cameraRoom) === String(state.activeRoom);
     ownWin.el.style.display = camInThisRoom ? '' : 'none';
+  }
+
+  /* Remote cameras: mostra solo quelle che hanno la cam in QUESTA stanza (non la cam di General in Eventi e viceversa) */
+  const activeRoomUsers = state.rooms[state.activeRoom]?.users || {};
+  for (const uid of Object.keys(state.cameraWindows)) {
+    if (String(uid) === String(state.currentUser?.id)) continue;
+    const cw = state.cameraWindows[uid];
+    if (!cw?.el) continue;
+    const hasCamInThisRoom = !!activeRoomUsers[uid]?.hasCamera;
+    if (cw.isEventsGrid) {
+      /* Slot nella grid Eventi: visibile solo se siamo in Eventi e l'utente ha cam qui (la grid stessa è già hidden se non Eventi) */
+      cw.el.style.display = hasCamInThisRoom ? '' : 'none';
+    } else {
+      /* Finestra floating: nascondi se la cam è in un'altra stanza */
+      cw.el.style.display = hasCamInThisRoom ? '' : 'none';
+    }
   }
 
   renderRoomTabs();

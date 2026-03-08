@@ -1565,10 +1565,10 @@ export async function handleWebRTCSignal(payload) {
           }
         }
       });
-      /* Retry play() when connection becomes ready — multiple triggers for robustness */
+      /* Retry play() when connection becomes ready — for grid and floating windows */
       const retryPlay = (trigger) => {
         const cw = state.cameraWindows[from];
-        if (!cw?.isEventsGrid || !cw.el) {
+        if (!cw?.el) {
           console.log('[WebRTC] Retry play() skipped for', from, '— no camera window (trigger:', trigger, ')');
           return;
         }
