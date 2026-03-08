@@ -20,6 +20,10 @@ let sessionCheckInterval = null; /* Intervallo per controllare periodicamente la
 /* Grazia prima di mostrare login su disconnect (es. tab in background su smartphone): 1 minuto per rientrare */
 let disconnectGraceTimer = null;
 let reconnectingSupabase = false;
+/* Timestamp ultima volta che la scheda è passata a hidden (evita race: disconnect arriva dopo visibility visible) */
+let lastHiddenAt = 0;
+const GRACE_AFTER_HIDDEN_MS = 120000; /* 2 min: grazia se tab era nascosto da meno di 2 min */
+let graceReconnectInterval = null; /* retry reconnect ogni 15s quando in grazia e tab visibile */
 
 export function initSupabaseClient() {
   if (!SUPABASE_URL.includes('supabase.co') || SUPABASE_ANON_KEY.startsWith('YOUR_')) {
@@ -29,11 +33,19 @@ export function initSupabaseClient() {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
   });
 
-  /* Quando l'utente torna sulla scheda dopo tab/app switch: se siamo in grazia (Realtime disconnesso), ritenta connessione */
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible' || !disconnectGraceTimer || !state.currentUser) return;
-    console.log('[Supabase] Tab visible again — trying to reconnect...');
-    connectSupabase();
+    if (document.visibilityState === 'hidden') {
+      lastHiddenAt = Date.now();
+    } else if (disconnectGraceTimer && state.currentUser) {
+      console.log('[Supabase] Tab visible again — trying to reconnect...');
+      connectSupabase();
+      if (!graceReconnectInterval) {
+        graceReconnectInterval = setInterval(() => {
+          if (!disconnectGraceTimer || !state.currentUser) return;
+          connectSupabase();
+        }, 15000);
+      }
+    }
   });
   
   /* Listener per rilevare quando la sessione viene invalidata (disconnessione da altra sessione) */
@@ -77,13 +89,28 @@ export function markDisconnectingOthers() {
   }, 10000); /* 10 secondi di protezione durante la disconnessione */
 }
 
-/* ── Programma overlay di disconnessione dopo delay (es. 60s grazia per tab in background) ── */
+/* ── Programma overlay di disconnessione dopo delay (es. 90s grazia per tab in background) ── */
 export function scheduleDisconnectedOverlay(delayMs) {
   if (disconnectGraceTimer) clearTimeout(disconnectGraceTimer);
+  if (graceReconnectInterval) {
+    clearInterval(graceReconnectInterval);
+    graceReconnectInterval = null;
+  }
   disconnectGraceTimer = setTimeout(() => {
     disconnectGraceTimer = null;
-    showDisconnectedOverlay();
+    if (graceReconnectInterval) {
+      clearInterval(graceReconnectInterval);
+      graceReconnectInterval = null;
+    }
+    showDisconnectedOverlay(true); /* forceShow: timer scaduto, mostra senza rivalutare grazia */
   }, delayMs);
+  /* Se tab visibile, ritenta reconnect ogni 15s così non aspetti 90s al desk */
+  if (document.visibilityState === 'visible' && state.currentUser) {
+    graceReconnectInterval = setInterval(() => {
+      if (!disconnectGraceTimer || !state.currentUser) return;
+      connectSupabase();
+    }, 15000);
+  }
   console.log('[Supabase] Disconnect overlay scheduled in', delayMs / 1000, 's (grace period)');
 }
 
@@ -94,18 +121,27 @@ export function clearDisconnectGrace() {
     disconnectGraceTimer = null;
     console.log('[Supabase] Disconnect grace cancelled');
   }
+  if (graceReconnectInterval) {
+    clearInterval(graceReconnectInterval);
+    graceReconnectInterval = null;
+  }
 }
 
-/* ── Mostra overlay di disconnessione ── */
-export async function showDisconnectedOverlay() {
-  /* Evita doppie esecuzioni (es. signOut che scatena onAuthStateChange dopo ritorno online) */
+/* ── Mostra overlay di disconnessione (forceShow=true quando scatta il timer di grazia) ── */
+export async function showDisconnectedOverlay(forceShow) {
   if (!state.currentUser) return;
 
-  /* Tab in background (altra app/scheda): aspetta 60s invece di uscire subito; al ritorno si tenta riconnessione */
-  if (document.hidden) {
-    console.log('[Supabase] Disconnect while tab hidden — 60s grace before login');
-    scheduleDisconnectedOverlay(60000);
-    return;
+  /* Già in grazia: non sovrascrivere (altri trigger non devono mostrare subito) */
+  if (!forceShow && disconnectGraceTimer) return;
+
+  /* Timer scaduto o tab visibile e non "recently hidden": mostra subito. Altrimenti grazia 90s */
+  if (!forceShow) {
+    const recentlyHidden = lastHiddenAt && (Date.now() - lastHiddenAt < GRACE_AFTER_HIDDEN_MS);
+    if (document.hidden || recentlyHidden) {
+      console.log('[Supabase] Disconnect while tab hidden/recent — 90s grace before login');
+      scheduleDisconnectedOverlay(90000);
+      return;
+    }
   }
 
   clearDisconnectGrace();
