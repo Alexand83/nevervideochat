@@ -1613,15 +1613,10 @@ a:hover { text-decoration: underline; }
   gap: var(--s3);
   flex-shrink: 0;
 }
-/* Remote camera footer: just a "Live" badge, centred */
-.cam-win-footer-remote { justify-content: center; }
-.cam-win-live-badge {
-  font-size: var(--fz-xs);
-  font-weight: 700;
-  color: var(--clr-danger);
-  display: flex;
-  align-items: center;
-  gap: var(--s1);
+/* Remote camera footer: allineato a sinistra, mute + barra volume (come tua cam) */
+.cam-win-footer-remote {
+  justify-content: flex-start;
+  padding-right: 36px;
 }
 
 /* ── Mic toggle button (own camera) ── */
