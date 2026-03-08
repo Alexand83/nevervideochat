@@ -78,9 +78,8 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       </div>
     </div>` : `
     <div class="cam-win-footer cam-win-footer-remote">
-      <span class="cam-win-live-badge">🔴 Live</span>
       <button class="cam-ctrl-btn cam-remote-mute-btn" id="cam-remote-mute-${uid}" title="Mute voce" aria-pressed="false">🔊</button>
-      <div class="cam-remote-volume-wrap" id="cam-remote-volume-wrap-${uid}" title="Volume sua voce">
+      <div class="cam-remote-volume-wrap mic-volume-vertical" id="cam-remote-volume-wrap-${uid}" title="Volume sua voce">
         <div class="mic-volume-track"><div class="mic-volume-fill" id="cam-remote-fill-${uid}"></div><div class="mic-volume-thumb" id="cam-remote-thumb-${uid}"></div></div>
       </div>
     </div>`;
