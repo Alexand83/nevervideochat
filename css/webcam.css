@@ -161,12 +161,9 @@
   min-width: 0;
 }
 .mic-volume-section.mic-volume-vertical {
-  cursor: grab;
+  cursor: ew-resize;
   -webkit-user-select: none;
   user-select: none;
-}
-.mic-volume-section.mic-volume-vertical:active {
-  cursor: grabbing;
 }
 .mic-volume-section.mic-volume-vertical .mic-volume-track {
   position: relative;
@@ -219,12 +216,9 @@
 .cam-remote-volume-wrap {
   flex: 1;
   min-width: 60px;
-  cursor: grab;
+  cursor: ew-resize;
   -webkit-user-select: none;
   user-select: none;
-}
-.cam-remote-volume-wrap:active {
-  cursor: grabbing;
 }
 .cam-remote-volume-wrap .mic-volume-track {
   position: relative;
@@ -261,49 +255,18 @@
   font-weight: 600;
 }
 
-/* ── Menu opzioni (⋮): Solo voce qui per evitare click accidentali ── */
-.cam-options-wrap {
-  position: relative;
-  flex-shrink: 0;
-}
-.cam-options-btn {
-  min-width: 36px;
-  min-height: 36px;
-  padding: 6px 10px !important;
-  font-size: 18px;
-  line-height: 1;
-  justify-content: center;
-}
-.cam-options-dropdown {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 4px;
-  min-width: 160px;
-  background: var(--bg1);
-  border: 1px solid var(--border);
-  border-radius: var(--r2);
-  box-shadow: var(--sh-lg);
-  z-index: 700;
-  padding: 4px;
-}
-.cam-options-item {
+/* ── Toggle video (icona webcam: abilita/disabilita video, solo voce) ── */
+.cam-video-toggle-btn .cam-video-icon {
   display: block;
-  width: 100%;
-  padding: 10px 12px;
-  text-align: left;
-  font-size: var(--fz-sm);
-  color: var(--tx0);
-  background: none;
-  border: none;
-  border-radius: var(--r1);
-  cursor: pointer;
-  transition: background var(--tf);
-  -webkit-user-select: none;
-  user-select: none;
 }
-.cam-options-item:hover {
-  background: var(--bg-hover);
+.cam-video-toggle-btn .cam-video-icon[hidden] {
+  display: none;
+}
+.cam-video-toggle-btn.cam-video-off {
+  color: var(--tx2);
+}
+.cam-video-toggle-btn.cam-video-off:hover {
+  color: var(--tx0);
 }
 
 /* ── Camera device selector (dropdown): elenco leggibile, non tagliato ── */
