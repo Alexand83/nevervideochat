@@ -17,6 +17,31 @@
   /* shown/hidden via hidden attr — [hidden] wins */
 }
 
+/* ── Login: sfondo dedicato con gradient e scritta NeverVideoChat ── */
+#authModal.nvc-modal-backdrop {
+  background: linear-gradient(145deg, #0d1117 0%, #161b22 35%, #1c2128 50%, #21262d 100%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+#authModal.nvc-modal-backdrop::before {
+  content: 'NeverVideoChat';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(3rem, 12vw, 6rem);
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.04);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+#authModal .nvc-modal.auth-modal {
+  position: relative;
+  z-index: 1;
+}
+
 /* Base card */
 .nvc-modal {
   background: var(--bg1);

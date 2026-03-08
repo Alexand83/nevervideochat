@@ -131,6 +131,8 @@ export async function joinRoom(roomId) {
     .on('presence', { event: 'leave' }, async ({ key }) => {
       const uid = String(key);
       if (!state.rooms[roomIdStr]) return;
+      /* Non reagire al leave su noi stessi: Supabase può emettere leave quando aggiorniamo la presenza (es. hasCamera) e chiuderemmo la nostra cam */
+      if (uid === String(state.currentUser?.id)) return;
       delete state.rooms[roomIdStr].users[uid];
       /* Chiudi la finestra della sua cam se l'avevamo aperta (es. ha fatto refresh) */
       if (state.cameraWindows[uid]) {

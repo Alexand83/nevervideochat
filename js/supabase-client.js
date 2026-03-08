@@ -89,12 +89,6 @@ export async function showDisconnectedOverlay() {
     console.warn('[Supabase] resetCameraStateOnDisconnect failed:', e);
   }
 
-  /* Nascondi l'overlay di disconnessione se presente */
-  const overlay = document.getElementById('disconnectedOverlay');
-  if (overlay) {
-    overlay.hidden = true;
-  }
-
   /* Mostra di nuovo app-main e app-header */
   const appMain = document.querySelector('.app-main');
   const appHeader = document.querySelector('.app-header');
@@ -660,9 +654,9 @@ export async function connectSupabase() {
         }
       })
       .subscribe((status) => {
-        /* Canale chiuso/timeout per mancanza di connessione → porta a login */
-        if ((status === 'CLOSED' || status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') && !navigator.onLine && state.currentUser) {
-          console.log('[Supabase] Realtime disconnected (offline) — redirecting to login');
+        /* Canale chiuso/timeout/errore → mostra sempre il modal di login (aggiornamento, internet perso, ecc.) */
+        if ((status === 'CLOSED' || status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') && state.currentUser) {
+          console.log('[Supabase] Realtime disconnected (' + status + ') — showing login modal');
           showDisconnectedOverlay();
         }
       });
