@@ -83,6 +83,37 @@
 }
 .cam-win-close-btn:hover { background: var(--clr-danger); color: #fff; }
 
+/* ── Volume in header (dopo il nick): propria cam = volume mic, remota = mute + volume sua voce ── */
+.mic-volume-in-hdr {
+  flex: 1;
+  min-width: 50px;
+  max-width: 120px;
+  margin: 0 var(--s1);
+  cursor: ew-resize;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mic-volume-in-hdr.grabbing { cursor: grabbing; }
+.mic-volume-in-hdr .mic-volume-track {
+  position: relative;
+  height: 8px;
+  overflow: visible;
+}
+.cam-win-hdr .cam-remote-mute-btn {
+  flex-shrink: 0;
+  padding: 4px 6px !important;
+  min-width: 32px;
+  min-height: 28px;
+}
+.cam-win-hdr .cam-remote-volume-wrap {
+  flex: 1;
+  min-width: 40px;
+  max-width: 100px;
+}
+.cam-win-hdr .cam-remote-volume-wrap .mic-volume-track {
+  height: 6px;
+}
+
 /* ── Video area ── */
 .cam-win-video-wrap {
   flex: 1;
@@ -104,10 +135,9 @@
   display: block;
 }
 
-/* ── Controls footer: pulsanti a sinistra, volume a destra con spazio per resize (smartphone) ── */
+/* ── Controls footer (volume è in alto nell'header, qui solo pulsanti) ── */
 .cam-win-footer {
   padding: 7px var(--s3);
-  padding-right: 38px;
   background: var(--bg2);
   border-top: 1px solid var(--border);
   display: flex;
@@ -115,7 +145,7 @@
   gap: var(--s3);
   flex-shrink: 0;
 }
-/* Remote camera footer: just a "Live" badge, centred */
+/* Remote camera footer: solo badge Live */
 .cam-win-footer-remote { justify-content: center; }
 .cam-win-live-badge {
   font-size: var(--fz-xs);
