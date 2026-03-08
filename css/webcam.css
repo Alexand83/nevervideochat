@@ -159,7 +159,7 @@
   flex-direction: column;
   justify-content: center;
   min-width: 0;
-  max-width: 72px;
+  max-width: 88px;
 }
 .mic-volume-section.mic-volume-vertical {
   cursor: ew-resize;
@@ -224,7 +224,7 @@
 .cam-remote-volume-wrap {
   flex: 0 1 auto;
   min-width: 40px;
-  max-width: 72px;
+  max-width: 88px;
   cursor: ew-resize;
   -webkit-user-select: none;
   user-select: none;
