@@ -53,6 +53,13 @@ export function createCameraWindow(uid, stream, name, isOwn) {
 
   const footer = isOwn ? `
     <div class="cam-win-footer">
+      <button class="cam-ctrl-btn cam-video-toggle-btn" id="cam-video-toggle-btn-${uid}" type="button" aria-label="Video on/off" title="Disattiva video (solo voce)" aria-pressed="false">
+        <span class="cam-video-toggle-icons">
+          <svg class="cam-video-icon cam-video-icon-on" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          <svg class="cam-video-icon cam-video-icon-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+        </span>
+        <span class="cam-video-toggle-lbl" id="cam-video-toggle-lbl-${uid}">Video</span>
+      </button>
       <button class="cam-ctrl-btn" id="cam-mic-btn-${uid}" aria-label="Toggle microphone" aria-pressed="true">
         <svg id="cam-mic-on-${uid}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
@@ -74,10 +81,6 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         </button>
         <div class="cam-device-dropdown" id="cam-device-dropdown-${uid}" hidden></div>
       </div>
-      <button class="cam-ctrl-btn cam-video-toggle-btn" id="cam-video-toggle-btn-${uid}" type="button" aria-label="Video on/off" title="Disattiva video (solo voce)" aria-pressed="false">
-        <svg class="cam-video-icon cam-video-icon-on" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-        <svg class="cam-video-icon cam-video-icon-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
-      </button>
     </div>` : `
     <div class="cam-win-footer cam-win-footer-remote">
       <span class="cam-win-live-badge">🔴 Live</span>
@@ -831,11 +834,13 @@ function updateVideoToggleButton(uid) {
   if (!btn) return;
   const onIcon = btn.querySelector('.cam-video-icon-on');
   const offIcon = btn.querySelector('.cam-video-icon-off');
+  const lbl = $(`cam-video-toggle-lbl-${uid}`);
   const isOff = !!cw?.videoOff;
   btn.setAttribute('aria-pressed', String(isOff));
   btn.title = isOff ? 'Riattiva video' : 'Disattiva video (solo voce)';
   if (onIcon) onIcon.hidden = isOff;
   if (offIcon) offIcon.hidden = !isOff;
+  if (lbl) lbl.textContent = isOff ? 'Solo voce' : 'Video';
   btn.classList.toggle('cam-video-off', isOff);
 }
 

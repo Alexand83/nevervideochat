@@ -107,7 +107,6 @@
 /* ── Controls footer ── */
 .cam-win-footer {
   padding: 7px var(--s3);
-  padding-right: 44px; /* spazio dall'angolo resize su smartphone così il pulsante video è tappabile */
   background: var(--bg2);
   border-top: 1px solid var(--border);
   display: flex;
@@ -272,6 +271,11 @@
 }
 
 /* ── Toggle video (icona webcam: abilita/disabilita video, solo voce) ── */
+.cam-video-toggle-btn .cam-video-toggle-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .cam-video-toggle-btn .cam-video-icon {
   display: block;
 }
@@ -284,13 +288,23 @@
 .cam-video-toggle-btn.cam-video-off:hover {
   color: var(--tx0);
 }
-/* Su touch: area tap più grande per non confondere con il resize in angolo ── */
+/* Etichetta sotto icona: "Video" / "Solo voce" così su smartphone è chiaro lo stato grigio ── */
+.cam-video-toggle-btn .cam-video-toggle-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.1;
+  max-width: 3.2em;
+  text-align: center;
+}
 @media (hover: none) and (pointer: coarse) {
   .cam-video-toggle-btn {
     min-width: 44px;
     min-height: 44px;
-    padding: 10px 12px !important;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px !important;
   }
+  .cam-video-toggle-btn .cam-video-toggle-lbl { font-size: 9px; }
 }
 
 /* ── Camera device selector (dropdown): elenco leggibile, non tagliato ── */
