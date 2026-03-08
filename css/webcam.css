@@ -165,6 +165,9 @@
   -webkit-user-select: none;
   user-select: none;
 }
+.mic-volume-section.mic-volume-vertical.grabbing {
+  cursor: grabbing;
+}
 .mic-volume-section.mic-volume-vertical .mic-volume-track {
   position: relative;
   width: 100%;
@@ -198,8 +201,12 @@
   background: var(--accent);
   border: 2px solid var(--bg1);
   box-shadow: 0 1px 3px rgba(0,0,0,.3);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: grab;
   transition: left .1s ease-out;
+}
+.mic-volume-section.mic-volume-vertical.grabbing .mic-volume-thumb {
+  cursor: grabbing;
 }
 
 /* ── Footer cam remota: volume e mute della sua voce ── */
@@ -220,6 +227,9 @@
   -webkit-user-select: none;
   user-select: none;
 }
+.cam-remote-volume-wrap.grabbing {
+  cursor: grabbing;
+}
 .cam-remote-volume-wrap .mic-volume-track {
   position: relative;
   height: 8px;
@@ -232,6 +242,11 @@
 .cam-remote-volume-wrap .mic-volume-thumb {
   width: 14px;
   height: 14px;
+  pointer-events: auto;
+  cursor: grab;
+}
+.cam-remote-volume-wrap.grabbing .mic-volume-thumb {
+  cursor: grabbing;
 }
 
 /* ── Solo voce: placeholder in area video (testo quando video off) ── */
@@ -281,9 +296,9 @@
 }
 .cam-device-dropdown {
   position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 4px;
+  left: 100%;
+  top: 0;
+  margin-left: 6px;
   min-width: 220px;
   max-width: 320px;
   max-height: 340px;
