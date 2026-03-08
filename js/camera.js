@@ -16,6 +16,11 @@ import { getAvailableRooms } from './rooms.js';
 const CAM_STEP = 30;
 function camCount() { return Object.keys(state.cameraWindows).length; }
 
+/** True se la cam è attiva nella stanza (per obbligare a disattivarla prima della videochiamata privata). */
+export function isRoomCameraActive() {
+  return !!(state.localStream && state.cameraRoom != null);
+}
+
 /* ── Camera window ─────────────────────────────────────────────── */
 export function createCameraWindow(uid, stream, name, isOwn) {
   /* Check if active room has max_cams (Events room) */
@@ -70,8 +75,8 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         <div class="cam-device-dropdown" id="cam-device-dropdown-${uid}" hidden></div>
       </div>
       <button class="cam-ctrl-btn cam-video-toggle-btn" id="cam-video-toggle-btn-${uid}" type="button" aria-label="Video on/off" title="Disattiva video (solo voce)" aria-pressed="false">
-        <svg class="cam-video-icon cam-video-icon-on" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="6" width="16" height="12" rx="2"/><circle cx="12" cy="12" r="4"/></svg>
-        <svg class="cam-video-icon cam-video-icon-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><rect x="4" y="6" width="16" height="12" rx="2"/><circle cx="12" cy="12" r="4"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+        <svg class="cam-video-icon cam-video-icon-on" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        <svg class="cam-video-icon cam-video-icon-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
       </button>
     </div>` : `
     <div class="cam-win-footer cam-win-footer-remote">
@@ -1027,7 +1032,11 @@ export function handleCamRequest(payload) {
   } else if (payload.reqType === 'private') {
     dom.camReqBody.textContent   = `${fromName} wants to start a private video call.`;
     dom.camReqOverlay.hidden     = false;
-    dom.camAcceptBtn.onclick = async () => { dom.camReqOverlay.hidden = true; await acceptPrivateCall(fromId, fromName); };
+    dom.camAcceptBtn.onclick = async () => {
+      if (isRoomCameraActive()) { showToast('Disattiva prima la cam nella stanza.'); return; }
+      dom.camReqOverlay.hidden = true;
+      await acceptPrivateCall(fromId, fromName);
+    };
     dom.camRejectBtn.onclick = () => {
       dom.camReqOverlay.hidden = true;
       addRejectedCam(fromId, fromName);

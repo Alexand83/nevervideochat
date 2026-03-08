@@ -7,6 +7,7 @@ import { escHtml, avatarColor, initials, fmtTime, showToast, playNotificationSou
 import { findUser, ensureUser } from './users.js';
 import { broadcast }   from './broadcast.js';
 import { setPendingCamRequest } from './storage.js';
+import { isRoomCameraActive } from './camera.js';
 
 /* Forward ref: set by main.js */
 let _supabaseReady = null;
@@ -65,6 +66,7 @@ export function openPrivateChat(uid) {
   popup.querySelector('.pchat-vcall-btn').addEventListener('click', () => {
     if (!_supabaseReady?.()) { showToast('⚠️ Server connection required for video calls.'); return; }
     if (!dom.vcallWin.hidden) { showToast('📹 A video call is already active.'); return; }
+    if (isRoomCameraActive()) { showToast('Disattiva prima la cam nella stanza.'); return; }
     if (state.rejectedCamUsers?.[String(uid)]) {
       showToast(`🚫 ${user.name} rejected your request. Unblock in Settings.`); return;
     }

@@ -1531,6 +1531,7 @@ function openPrivateChat(uid) {
   popup.querySelector('.pchat-vcall-btn').addEventListener('click', () => {
     if (!supabaseReady()) { showToast('⚠️ Server connection required for video calls.'); return; }
     if (!dom.vcallWin.hidden) { showToast('📹 A video call is already active.'); return; }
+    if (state.localStream && state.cameraRoom != null) { showToast('Disattiva prima la cam nella stanza.'); return; }
     if (state.rejectedCamUsers[String(uid)]) {
       showToast(`🚫 ${user.name} rejected your request. Unblock them in Settings → "Blocked Requests".`); return;
     }
@@ -2068,6 +2069,7 @@ function handleCamRequest(payload) {
     dom.camReqBody.textContent = `${fromName} wants to start a private video call.`;
     dom.camReqOverlay.hidden = false;
     dom.camAcceptBtn.onclick = async () => {
+      if (state.localStream && state.cameraRoom != null) { showToast('Disattiva prima la cam nella stanza.'); return; }
       dom.camReqOverlay.hidden = true;
       await acceptPrivateCall(fromId, fromName);
     };
