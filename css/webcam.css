@@ -83,17 +83,6 @@
 }
 .cam-win-close-btn:hover { background: var(--clr-danger); color: #fff; }
 
-/* ── Icona video/solo audio affianco al nick (solo propria cam) ── */
-.cam-video-toggle-in-hdr {
-  flex-shrink: 0;
-  padding: 4px 6px !important;
-  min-width: 32px;
-  min-height: 28px;
-}
-.cam-video-toggle-in-hdr .cam-video-toggle-lbl {
-  font-size: 9px;
-}
-
 /* ── Video area ── */
 .cam-win-video-wrap {
   flex: 1;
@@ -163,13 +152,14 @@
   color: var(--clr-danger);
 }
 
-/* ── Controllo volume microfono: barra con pallina (cursor grab) ── */
+/* ── Controllo volume microfono: barra un po' corta con pallina ── */
 .mic-volume-section {
-  flex: 1;
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
   min-width: 0;
+  max-width: 72px;
 }
 .mic-volume-section.mic-volume-vertical {
   cursor: ew-resize;
@@ -183,7 +173,7 @@
   position: relative;
   width: 100%;
   height: 10px;
-  min-width: 50px;
+  min-width: 44px;
   background: var(--bg3);
   border-radius: var(--r-pill);
   border: 1px solid var(--border);
@@ -232,8 +222,9 @@
   flex-shrink: 0;
 }
 .cam-remote-volume-wrap {
-  flex: 1;
-  min-width: 60px;
+  flex: 0 1 auto;
+  min-width: 40px;
+  max-width: 72px;
   cursor: ew-resize;
   -webkit-user-select: none;
   user-select: none;

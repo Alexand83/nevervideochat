@@ -51,15 +51,12 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     ? `<button class="cam-viewers-btn" id="cam-viewers-btn-${uid}" title="Who is watching">👁 <span id="cam-viewers-count-${uid}">0</span></button>
        <div class="cam-viewers-panel" id="cam-viewers-panel-${uid}" hidden></div>` : '';
 
-  const headerVideoToggleHtml = isOwn
-    ? `<button class="cam-ctrl-btn cam-video-toggle-btn cam-video-toggle-in-hdr" id="cam-video-toggle-btn-${uid}" type="button" aria-label="Video on/off" title="Disattiva video (solo voce)" aria-pressed="false">
-        <span class="cam-video-toggle-icons"><svg class="cam-video-icon cam-video-icon-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg><svg class="cam-video-icon cam-video-icon-off" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/><line x1="2" y1="2" x2="22" y2="22"/></svg></span>
-        <span class="cam-video-toggle-lbl" id="cam-video-toggle-lbl-${uid}">Video</span>
-      </button>`
-    : '';
-
   const footer = isOwn ? `
     <div class="cam-win-footer">
+      <button class="cam-ctrl-btn cam-video-toggle-btn" id="cam-video-toggle-btn-${uid}" type="button" aria-label="Video on/off" title="Disattiva video (solo voce)" aria-pressed="false">
+        <span class="cam-video-toggle-icons"><svg class="cam-video-icon cam-video-icon-on" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg><svg class="cam-video-icon cam-video-icon-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/><line x1="2" y1="2" x2="22" y2="22"/></svg></span>
+        <span class="cam-video-toggle-lbl" id="cam-video-toggle-lbl-${uid}">Video</span>
+      </button>
       <div class="mic-volume-section mic-volume-vertical" id="mic-volume-wrap-${uid}" title="Volume microfono: trascina la pallina">
         <div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${uid}"></div><div class="mic-volume-thumb" id="mic-thumb-${uid}"></div></div>
       </div>
@@ -97,7 +94,6 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         <span class="cam-win-name">${escHtml(name)}</span>
         ${isOwn ? '<span class="cam-win-you-tag">You</span>' : ''}
       </div>
-      ${headerVideoToggleHtml}
       ${viewersBtnHtml}
       <button class="cam-win-close-btn" aria-label="Close camera window">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -198,11 +194,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     startMicMeter(stream, uid);
     initMicVolumeSlider(uid);
     const videoToggleBtn = $(`cam-video-toggle-btn-${uid}`);
-    if (videoToggleBtn) {
-      videoToggleBtn.addEventListener('click', () => toggleSoloVoce(uid));
-      videoToggleBtn.addEventListener('mousedown', e => e.stopPropagation());
-      videoToggleBtn.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
-    }
+    if (videoToggleBtn) videoToggleBtn.addEventListener('click', () => toggleSoloVoce(uid));
     const devBtn = $(`cam-device-btn-${uid}`);
     const devDrop = $(`cam-device-dropdown-${uid}`);
     if (devBtn && devDrop) {
