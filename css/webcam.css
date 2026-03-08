@@ -83,42 +83,15 @@
 }
 .cam-win-close-btn:hover { background: var(--clr-danger); color: #fff; }
 
-/* ── Riga volume (sotto l'header, non si trascina la finestra cliccando qui) ── */
-.cam-win-volume-row {
-  padding: 4px var(--s3);
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  flex-shrink: 0;
-}
-.mic-volume-in-row {
-  flex: 1;
-  min-width: 50px;
-  max-width: 100%;
-  cursor: ew-resize;
-  -webkit-user-select: none;
-  user-select: none;
-}
-.mic-volume-in-row.grabbing { cursor: grabbing; }
-.mic-volume-in-row .mic-volume-track {
-  position: relative;
-  height: 8px;
-  overflow: visible;
-}
-.cam-win-volume-row .cam-remote-mute-btn {
+/* ── Icona video/solo audio affianco al nick (solo propria cam) ── */
+.cam-video-toggle-in-hdr {
   flex-shrink: 0;
   padding: 4px 6px !important;
   min-width: 32px;
   min-height: 28px;
 }
-.cam-win-volume-row .cam-remote-volume-wrap {
-  flex: 1;
-  min-width: 40px;
-}
-.cam-win-volume-row .cam-remote-volume-wrap .mic-volume-track {
-  height: 6px;
+.cam-video-toggle-in-hdr .cam-video-toggle-lbl {
+  font-size: 9px;
 }
 
 /* ── Video area ── */
@@ -142,9 +115,10 @@
   display: block;
 }
 
-/* ── Controls footer (volume è in alto nell'header, qui solo pulsanti) ── */
+/* ── Controls footer: volume a sinistra, pulsanti, spazio per resize ── */
 .cam-win-footer {
   padding: 7px var(--s3);
+  padding-right: 38px;
   background: var(--bg2);
   border-top: 1px solid var(--border);
   display: flex;
@@ -152,8 +126,7 @@
   gap: var(--s3);
   flex-shrink: 0;
 }
-/* Remote camera footer: solo badge Live */
-.cam-win-footer-remote { justify-content: center; }
+.cam-win-footer-remote { justify-content: center; padding-right: var(--s3); }
 .cam-win-live-badge {
   font-size: var(--fz-xs);
   font-weight: 700;
