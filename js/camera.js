@@ -703,8 +703,7 @@ function startMicMeter(stream, uid) {
       const avg = data.reduce((a, b) => a + b, 0) / data.length;
       const pct = Math.min(100, Math.round((avg / 70) * 100));
       const win = state.cameraWindows[uid]?.el;
-      const wrap = win?.querySelector('.cam-win-video-wrap');
-      if (wrap) wrap.classList.toggle('cam-speaking', (state.cameraWindows[uid]?.micEnabled !== false) && pct > SPEAKING_THRESHOLD);
+      if (win) win.classList.toggle('cam-speaking', (state.cameraWindows[uid]?.micEnabled !== false) && pct > SPEAKING_THRESHOLD);
       if (state.micAnalysers[uid]) state.micAnalysers[uid].raf = requestAnimationFrame(tick);
     }
     state.micAnalysers[uid] = { ctx: pipeline.ctx, raf: requestAnimationFrame(tick) };
@@ -717,8 +716,7 @@ function stopMicMeter(uid) {
   if (a.ctx && a.ctx !== state.micPipeline?.ctx) a.ctx.close().catch(() => {});
   delete state.micAnalysers[uid];
   const win = state.cameraWindows[uid]?.el;
-  const wrap = win?.querySelector('.cam-win-video-wrap');
-  if (wrap) wrap.classList.remove('cam-speaking');
+  if (win) win.classList.remove('cam-speaking');
 }
 
 /* ── Indicatore "sta parlando" per cam remota (analisi audio stream remoto) ── */
@@ -747,8 +745,7 @@ function startRemoteSpeakingIndicator(uid, stream) {
       analyser.getByteFrequencyData(data);
       const avg = data.reduce((a, b) => a + b, 0) / data.length;
       const win = state.cameraWindows[uid]?.el;
-      const wrap = win?.querySelector('.cam-win-video-wrap');
-      if (wrap) wrap.classList.toggle('cam-speaking', avg > SPEAKING_THRESHOLD);
+      if (win) win.classList.toggle('cam-speaking', avg > SPEAKING_THRESHOLD);
       if (state.remoteMicAnalysers[uid]) state.remoteMicAnalysers[uid].raf = requestAnimationFrame(tick);
     }
     state.remoteMicAnalysers[uid] = { ctx, raf: requestAnimationFrame(tick) };
@@ -763,8 +760,7 @@ function stopRemoteSpeakingIndicator(uid) {
     delete state.remoteMicAnalysers[uid];
   }
   const win = state.cameraWindows[uid]?.el;
-  const wrap = win?.querySelector('.cam-win-video-wrap');
-  if (wrap) wrap.classList.remove('cam-speaking');
+  if (win) win.classList.remove('cam-speaking');
 }
 
 /* ── Controllo volume mic: barra con pallina (cursor grab) ── */
@@ -856,8 +852,7 @@ function initRemoteVolumeControl(uid) {
         analyser.getByteFrequencyData(data);
         const avg = data.reduce((a, b) => a + b, 0) / data.length;
         const win = state.cameraWindows[uid]?.el;
-        const wrapEl = win?.querySelector('.cam-win-video-wrap');
-        if (wrapEl) wrapEl.classList.toggle('cam-speaking', avg > SPEAKING_THRESHOLD);
+        if (win) win.classList.toggle('cam-speaking', avg > SPEAKING_THRESHOLD);
         if (cw.remoteVolumeCtx) cw.remoteSpeakRaf = requestAnimationFrame(tick);
       }
       cw.remoteVolumeCtx = remoteCtx;

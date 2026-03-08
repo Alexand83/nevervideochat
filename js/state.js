@@ -56,8 +56,9 @@ export const state = {
   /* Quote reply context */
   replyTo: null,
 
-  /* Typing */
+  /* Typing: { [userId]: { name, roomId } } — chi sta scrivendo per stanza */
   typingTimer: null,
+  typingUsers: {},
 
   /* Presence leave debounce */
   presenceLeaveTimers: {},

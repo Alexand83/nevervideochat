@@ -18,6 +18,7 @@
   flex-direction: column;
   overflow: visible;
   animation: slideUpIn .2s ease;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 /* ── Header (drag handle) ── */
@@ -93,7 +94,8 @@
   border-radius: 0;
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
-.cam-win-video-wrap.cam-speaking {
+/* Indicatore "sta parlando": bordo/glow su tutta la finestra (header + video + footer) */
+.cam-window.cam-speaking {
   box-shadow: 0 0 0 3px var(--accent), 0 0 18px rgba(31, 111, 235, 0.45);
   border: 2px solid var(--accent);
 }

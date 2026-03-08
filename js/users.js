@@ -353,17 +353,47 @@ export function stopTyping() {
 export function handleTyping(payload) {
   /* Mostra solo se è nella stessa stanza */
   if (payload.roomId != null && String(payload.roomId) !== String(state.activeRoom)) return;
+  const uid = String(payload.from);
   if (payload.isTyping) {
-    const isMe = payload.from === state.currentUser?.id;
-    import('./i18n.js').then(({ t }) => {
-      dom.typingTxt.textContent = isMe
-        ? t('chat.typingYou', 'Stai scrivendo...')
-        : `${payload.name} ${t('chat.typing', 'sta scrivendo...')}`;
-    }).catch(() => {
-      dom.typingTxt.textContent = isMe ? 'Stai scrivendo...' : `${payload.name} sta scrivendo...`;
-    });
-    dom.typingRow.classList.add('visible');
+    state.typingUsers[uid] = { name: payload.name || 'User', roomId: payload.roomId };
   } else {
-    dom.typingRow.classList.remove('visible');
+    delete state.typingUsers[uid];
   }
+  updateTypingDisplay();
+}
+
+/** Aggiorna il testo "X sta scrivendo" / "X, Y, Z stanno scrivendo..." in base a state.typingUsers (solo stanza attiva). */
+function updateTypingDisplay() {
+  const roomId = String(state.activeRoom);
+  const myId = state.currentUser?.id ? String(state.currentUser.id) : '';
+  const list = Object.entries(state.typingUsers || {})
+    .filter(([, v]) => v && String(v.roomId) === roomId)
+    .map(([uid, v]) => ({ uid, name: v.name }));
+
+  if (list.length === 0) {
+    dom.typingRow.classList.remove('visible');
+    return;
+  }
+
+  import('./i18n.js').then(({ t }) => {
+    const single = t('chat.typing', 'sta scrivendo...');
+    const plural = t('chat.typingPlural', 'stanno scrivendo...');
+    const you = t('chat.typingYou', 'Stai scrivendo...');
+    let text;
+    if (list.length === 1) {
+      text = list[0].uid === myId ? you : `${list[0].name} ${single}`;
+    } else {
+      const names = list.map(({ uid, name }) => (uid === myId ? (t('users.you', 'Tu') || 'Tu') : name));
+      text = `${names.join(', ')} ${plural}`;
+    }
+    dom.typingTxt.textContent = text;
+  }).catch(() => {
+    if (list.length === 1) {
+      dom.typingTxt.textContent = list[0].uid === myId ? 'Stai scrivendo...' : `${list[0].name} sta scrivendo...`;
+    } else {
+      const names = list.map(({ uid, name }) => (uid === myId ? 'Tu' : name));
+      dom.typingTxt.textContent = `${names.join(', ')} stanno scrivendo...`;
+    }
+  });
+  dom.typingRow.classList.add('visible');
 }

@@ -718,6 +718,11 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.events-cam-slot.cam-speaking {
+  box-shadow: 0 0 0 3px var(--accent), 0 0 18px rgba(31, 111, 235, 0.45);
+  border: 2px solid var(--accent);
 }
 
 .events-cam-slot video {
