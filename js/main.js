@@ -91,18 +91,10 @@ async function init() {
     }
   });
 
-  /* Quando perde la connessione di rete: grazia 1 min SOLO se tab non visibile. Altrimenti login subito. */
+  /* Quando perde la connessione di rete (grazia 60s se tab hidden, gestita in showDisconnectedOverlay) */
   window.addEventListener('offline', () => {
     if (!navigator.onLine && state.currentUser) {
-      import('./supabase-client.js').then(({ scheduleDisconnectedOverlay, showDisconnectedOverlay }) => {
-        if (document.hidden) {
-          console.log('[Main] Connection lost — tab hidden, 60s grace');
-          scheduleDisconnectedOverlay(60000);
-        } else {
-          console.log('[Main] Connection lost — showing login modal');
-          showDisconnectedOverlay();
-        }
-      });
+      import('./supabase-client.js').then(({ showDisconnectedOverlay }) => showDisconnectedOverlay());
     }
   });
   window.addEventListener('online', () => {

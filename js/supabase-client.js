@@ -98,10 +98,17 @@ export function clearDisconnectGrace() {
 
 /* ── Mostra overlay di disconnessione ── */
 export async function showDisconnectedOverlay() {
-  clearDisconnectGrace();
   /* Evita doppie esecuzioni (es. signOut che scatena onAuthStateChange dopo ritorno online) */
   if (!state.currentUser) return;
 
+  /* Tab in background (altra app/scheda): aspetta 60s invece di uscire subito; al ritorno si tenta riconnessione */
+  if (document.hidden) {
+    console.log('[Supabase] Disconnect while tab hidden — 60s grace before login');
+    scheduleDisconnectedOverlay(60000);
+    return;
+  }
+
+  clearDisconnectGrace();
   console.log('[Supabase] Session invalidated - redirecting to login');
 
   /* Ferma subito il controllo periodico sessione e canale Realtime per evitare blocchi al ritorno online */
@@ -667,15 +674,9 @@ export async function connectSupabase() {
         }
       })
       .subscribe((status) => {
-        /* Canale chiuso/timeout/errore: grazia 1 min SOLO se tab non visibile (es. altra app). Altrimenti login subito. */
+        /* Canale chiuso/timeout/errore → showDisconnectedOverlay (grazia 60s se tab hidden, gestita dentro) */
         if ((status === 'CLOSED' || status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') && state.currentUser) {
-          if (document.hidden) {
-            console.log('[Supabase] Realtime disconnected (' + status + ') — tab hidden, 60s grace');
-            scheduleDisconnectedOverlay(60000);
-          } else {
-            console.log('[Supabase] Realtime disconnected (' + status + ') — showing login modal');
-            showDisconnectedOverlay();
-          }
+          showDisconnectedOverlay();
         }
       });
 
