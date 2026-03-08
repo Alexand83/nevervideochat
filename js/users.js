@@ -326,12 +326,15 @@ export function syncPresence(presenceState, roomId) {
 export function sendTypingEvent() {
   if (!state.signalCh || !state.currentUser) return;
   const roomId = state.activeRoom;
-  state.signalCh.send({ type: 'broadcast', event: 'typing',
-    payload: { from: state.currentUser.id, name: state.currentUser.name, isTyping: true, roomId } });
+  const payload = { from: state.currentUser.id, name: state.currentUser.name, isTyping: true, roomId };
+  state.signalCh.send({ type: 'broadcast', event: 'typing', payload });
+  /* Mostra subito "Stai scrivendo..." anche a te (il broadcast di solito non torna al mittente) */
+  handleTyping(payload);
   clearTimeout(state.typingTimer);
   state.typingTimer = setTimeout(() => {
-    state.signalCh?.send({ type: 'broadcast', event: 'typing',
-      payload: { from: state.currentUser.id, name: state.currentUser.name, isTyping: false, roomId } });
+    const stopPayload = { from: state.currentUser.id, name: state.currentUser.name, isTyping: false, roomId };
+    state.signalCh?.send({ type: 'broadcast', event: 'typing', payload: stopPayload });
+    handleTyping(stopPayload); /* nasconde "Stai scrivendo..." anche per te */
   }, 2500);
 }
 
@@ -342,19 +345,22 @@ export function stopTyping() {
     state.typingTimer = null;
   }
   if (!state.signalCh || !state.currentUser) return;
-  state.signalCh.send({ type: 'broadcast', event: 'typing',
-    payload: { from: state.currentUser.id, name: state.currentUser.name, isTyping: false, roomId: state.activeRoom } });
+  const payload = { from: state.currentUser.id, name: state.currentUser.name, isTyping: false, roomId: state.activeRoom };
+  state.signalCh.send({ type: 'broadcast', event: 'typing', payload });
+  handleTyping(payload); /* nasconde "Stai scrivendo..." subito */
 }
 
 export function handleTyping(payload) {
-  if (payload.from === state.currentUser?.id) return;
   /* Mostra solo se è nella stessa stanza */
   if (payload.roomId != null && String(payload.roomId) !== String(state.activeRoom)) return;
   if (payload.isTyping) {
+    const isMe = payload.from === state.currentUser?.id;
     import('./i18n.js').then(({ t }) => {
-      dom.typingTxt.textContent = `${payload.name} ${t('chat.typing', 'sta scrivendo...')}`;
+      dom.typingTxt.textContent = isMe
+        ? t('chat.typingYou', 'Stai scrivendo...')
+        : `${payload.name} ${t('chat.typing', 'sta scrivendo...')}`;
     }).catch(() => {
-      dom.typingTxt.textContent = `${payload.name} sta scrivendo...`;
+      dom.typingTxt.textContent = isMe ? 'Stai scrivendo...' : `${payload.name} sta scrivendo...`;
     });
     dom.typingRow.classList.add('visible');
   } else {

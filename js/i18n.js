@@ -22,6 +22,7 @@ const translations = {
     'chat.welcome': 'Benvenuto in NeverVideoChat',
     'chat.welcomeDesc': 'Inizia a chattare con gli altri utenti!',
     'chat.typing': 'sta scrivendo...',
+    'chat.typingYou': 'Stai scrivendo...',
     'chat.reply': 'Rispondi',
     'chat.react': 'Reagisci',
     
@@ -88,6 +89,7 @@ const translations = {
     'chat.welcome': 'Welcome to NeverVideoChat',
     'chat.welcomeDesc': 'Start chatting with other users!',
     'chat.typing': 'is typing...',
+    'chat.typingYou': 'You are typing...',
     'chat.reply': 'Reply',
     'chat.react': 'React',
     
@@ -154,6 +156,7 @@ const translations = {
     'chat.welcome': 'Bienvenido a NeverVideoChat',
     'chat.welcomeDesc': '¡Comienza a chatear con otros usuarios!',
     'chat.typing': 'está escribiendo...',
+    'chat.typingYou': 'Estás escribiendo...',
     'chat.reply': 'Responder',
     'chat.react': 'Reaccionar',
     
@@ -220,6 +223,7 @@ const translations = {
     'chat.welcome': 'Willkommen bei NeverVideoChat',
     'chat.welcomeDesc': 'Beginne mit anderen Benutzern zu chatten!',
     'chat.typing': 'schreibt...',
+    'chat.typingYou': 'Du schreibst...',
     'chat.reply': 'Antworten',
     'chat.react': 'Reagieren',
     
