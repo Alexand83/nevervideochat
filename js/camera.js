@@ -1084,8 +1084,62 @@ async function switchCameraDevice(ownUid, deviceId) {
   }
 }
 
+/**
+ * Su smartphone quando si cambia app e si torna nel browser, il tab può essere
+ * sospeso e lo stream della camera (getUserMedia) viene fermato → video nero.
+ * Al ritorno in pagina rileviamo track non più "live" e riacquisiamo lo stream.
+ */
+async function recoverLocalStreamAfterVisibility() {
+  if (!state.localStream || state.cameraRoom == null) return;
+  const videoTrack = state.localStream.getVideoTracks()[0];
+  const audioTrack = state.localStream.getAudioTracks()[0];
+  const stillLive = state.localStream.active &&
+    videoTrack?.readyState === 'live' &&
+    (!audioTrack || audioTrack.readyState === 'live');
+  if (stillLive) return;
+
+  const ownUid = state.currentUser?.id;
+  if (!ownUid || !state.cameraWindows[ownUid]) return;
+
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
+    state.localStream.getTracks().forEach(t => t.stop());
+    state.localStream = newStream;
+    state.micPipeline = createMicVolumePipeline(state.localStream) || null;
+
+    const cw = state.cameraWindows[ownUid];
+    const videoEl = cw?.el?.querySelector?.('video') || $(`cam-vid-${ownUid}`);
+    if (videoEl) {
+      videoEl.srcObject = null;
+      videoEl.srcObject = state.localStream;
+      videoEl.play().catch(() => {});
+    }
+
+    Object.keys(state.outgoingPCs).forEach(peerId => {
+      const pc = state.outgoingPCs[peerId];
+      const newVideo = state.localStream.getVideoTracks()[0];
+      const newAudio = state.localStream.getAudioTracks()[0];
+      pc.getSenders().forEach(sender => {
+        if (sender.track?.kind === 'video' && newVideo) sender.replaceTrack(newVideo).catch(() => {});
+        if (sender.track?.kind === 'audio' && newAudio) sender.replaceTrack(newAudio).catch(() => {});
+      });
+    });
+
+    startMicMeter(state.localStream, ownUid);
+    showToast('📹 Camera ripristinata.');
+  } catch (err) {
+    console.warn('[Camera] recoverLocalStreamAfterVisibility failed:', err);
+    showToast('⚠️ Ripristino camera non riuscito. Prova a disattivare e riattivare la camera.');
+  }
+}
+
 export function initCameraSystem() {
   dom.cameraBtnHeader.addEventListener('click', toggleOwnCamera);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') recoverLocalStreamAfterVisibility();
+  });
 }
 
 /* ── Public camera request ────────────────────────────────────── */
