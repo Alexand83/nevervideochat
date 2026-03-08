@@ -17,6 +17,9 @@ let sessionJustCreated = false;
 let sessionCreationTime = 0;
 let isDisconnectingOthers = false; /* Flag per indicare che stiamo disconnettingo le altre sessioni */
 let sessionCheckInterval = null; /* Intervallo per controllare periodicamente la sessione */
+/* Grazia prima di mostrare login su disconnect (es. tab in background su smartphone): 1 minuto per rientrare */
+let disconnectGraceTimer = null;
+let reconnectingSupabase = false;
 
 export function initSupabaseClient() {
   if (!SUPABASE_URL.includes('supabase.co') || SUPABASE_ANON_KEY.startsWith('YOUR_')) {
@@ -24,6 +27,13 @@ export function initSupabaseClient() {
   }
   state.supa = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+  });
+
+  /* Quando l'utente torna sulla scheda dopo tab/app switch: se siamo in grazia (Realtime disconnesso), ritenta connessione */
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !disconnectGraceTimer || !state.currentUser) return;
+    console.log('[Supabase] Tab visible again — trying to reconnect...');
+    connectSupabase();
   });
   
   /* Listener per rilevare quando la sessione viene invalidata (disconnessione da altra sessione) */
@@ -67,8 +77,28 @@ export function markDisconnectingOthers() {
   }, 10000); /* 10 secondi di protezione durante la disconnessione */
 }
 
+/* ── Programma overlay di disconnessione dopo delay (es. 60s grazia per tab in background) ── */
+export function scheduleDisconnectedOverlay(delayMs) {
+  if (disconnectGraceTimer) clearTimeout(disconnectGraceTimer);
+  disconnectGraceTimer = setTimeout(() => {
+    disconnectGraceTimer = null;
+    showDisconnectedOverlay();
+  }, delayMs);
+  console.log('[Supabase] Disconnect overlay scheduled in', delayMs / 1000, 's (grace period)');
+}
+
+/* ── Annulla la grazia (es. utente è tornato e connesso) ── */
+export function clearDisconnectGrace() {
+  if (disconnectGraceTimer) {
+    clearTimeout(disconnectGraceTimer);
+    disconnectGraceTimer = null;
+    console.log('[Supabase] Disconnect grace cancelled');
+  }
+}
+
 /* ── Mostra overlay di disconnessione ── */
 export async function showDisconnectedOverlay() {
+  clearDisconnectGrace();
   /* Evita doppie esecuzioni (es. signOut che scatena onAuthStateChange dopo ritorno online) */
   if (!state.currentUser) return;
 
@@ -321,7 +351,14 @@ export async function connectSupabase() {
     console.warn('[Supabase] connectSupabase: state.supa is null!');
     showToast('⚠️ Supabase not configured — local mode.'); return;
   }
+  if (reconnectingSupabase) return;
+  reconnectingSupabase = true;
   try {
+    /* Chiudi canale precedente se esiste (evita duplicati) */
+    if (state.signalCh) {
+      try { state.signalCh.unsubscribe(); } catch (_) {}
+      state.signalCh = null;
+    }
     /* ── Global signal channel (WebRTC, PM, cam requests — user-to-user) ── */
     state.signalCh = state.supa.channel('broadcast:signals-main');
     
@@ -630,13 +667,19 @@ export async function connectSupabase() {
         }
       })
       .subscribe((status) => {
-        /* Canale chiuso/timeout/errore → mostra sempre il modal di login (aggiornamento, internet perso, ecc.) */
+        /* Canale chiuso/timeout/errore: grazia 1 min SOLO se tab non visibile (es. altra app). Altrimenti login subito. */
         if ((status === 'CLOSED' || status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') && state.currentUser) {
-          console.log('[Supabase] Realtime disconnected (' + status + ') — showing login modal');
-          showDisconnectedOverlay();
+          if (document.hidden) {
+            console.log('[Supabase] Realtime disconnected (' + status + ') — tab hidden, 60s grace');
+            scheduleDisconnectedOverlay(60000);
+          } else {
+            console.log('[Supabase] Realtime disconnected (' + status + ') — showing login modal');
+            showDisconnectedOverlay();
+          }
         }
       });
 
+    clearDisconnectGrace();
     showToast('🟢 Connected to NeverVideoChat');
     console.log('[NVC] Supabase connected.');
     
@@ -650,6 +693,8 @@ export async function connectSupabase() {
     } else {
       showToast('⚠️ Could not connect — check your credentials.');
     }
+  } finally {
+    reconnectingSupabase = false;
   }
 }
 

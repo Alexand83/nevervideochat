@@ -91,12 +91,22 @@ async function init() {
     }
   });
 
-  /* Quando perde la connessione di rete: mostra subito il modal di login */
+  /* Quando perde la connessione di rete: grazia 1 min SOLO se tab non visibile. Altrimenti login subito. */
   window.addEventListener('offline', () => {
     if (!navigator.onLine && state.currentUser) {
-      console.log('[Main] Connection lost — showing login modal');
-      import('./supabase-client.js').then(({ showDisconnectedOverlay }) => showDisconnectedOverlay());
+      import('./supabase-client.js').then(({ scheduleDisconnectedOverlay, showDisconnectedOverlay }) => {
+        if (document.hidden) {
+          console.log('[Main] Connection lost — tab hidden, 60s grace');
+          scheduleDisconnectedOverlay(60000);
+        } else {
+          console.log('[Main] Connection lost — showing login modal');
+          showDisconnectedOverlay();
+        }
+      });
     }
+  });
+  window.addEventListener('online', () => {
+    import('./supabase-client.js').then(({ clearDisconnectGrace }) => clearDisconnectGrace());
   });
   /* 1. Init UI subsystems */
   initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording();
