@@ -295,23 +295,22 @@
 .cam-video-toggle-btn.cam-video-off:hover {
   color: var(--tx0);
 }
-/* Etichetta sotto icona: "Video" / "Solo voce" così su smartphone è chiaro lo stato grigio ── */
-.cam-video-toggle-btn .cam-video-toggle-lbl {
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.1;
-  max-width: 3.2em;
-  text-align: center;
+
+/* Mic disattivato: icona rossa (senza scritta "Mic On/Muted") */
+.cam-mic-btn.mic-muted {
+  color: var(--clr-danger);
 }
+.cam-mic-btn.mic-muted:hover {
+  color: var(--clr-danger);
+  opacity: 0.9;
+}
+
 @media (hover: none) and (pointer: coarse) {
   .cam-video-toggle-btn {
     min-width: 44px;
     min-height: 44px;
-    flex-direction: column;
-    gap: 2px;
     padding: 6px 8px !important;
   }
-  .cam-video-toggle-btn .cam-video-toggle-lbl { font-size: 9px; }
 }
 
 /* ── Camera device selector (dropdown): elenco leggibile, non tagliato ── */

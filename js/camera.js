@@ -63,11 +63,9 @@ export function createCameraWindow(uid, stream, name, isOwn) {
           <path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/>
           <path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23M12 19v4M8 23h8"/>
         </svg>
-        <span id="cam-mic-lbl-${uid}">Mic On</span>
       </button>
       <button class="cam-ctrl-btn cam-video-toggle-btn" id="cam-video-toggle-btn-${uid}" type="button" aria-label="Video on/off" title="Disattiva video (solo voce)" aria-pressed="false">
         <span class="cam-video-toggle-icons"><svg class="cam-video-icon cam-video-icon-on" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg><svg class="cam-video-icon cam-video-icon-off" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/><line x1="2" y1="2" x2="22" y2="22"/></svg></span>
-        <span class="cam-video-toggle-lbl" id="cam-video-toggle-lbl-${uid}">Video</span>
       </button>
       <div class="cam-device-wrap">
         <button class="cam-ctrl-btn cam-device-btn" id="cam-device-btn-${uid}" aria-label="Cambia camera" title="Dispositivo camera (frontale/retro)">
@@ -520,11 +518,10 @@ function toggleCamMic(uid) {
   const cw = state.cameraWindows[uid]; if (!cw) return;
   cw.micEnabled = !cw.micEnabled;
   state.localStream?.getAudioTracks().forEach(t => { t.enabled = cw.micEnabled; });
-  const mb = $(`cam-mic-btn-${uid}`), on = $(`cam-mic-on-${uid}`), off = $(`cam-mic-off-${uid}`), lbl = $(`cam-mic-lbl-${uid}`);
+  const mb = $(`cam-mic-btn-${uid}`), on = $(`cam-mic-on-${uid}`), off = $(`cam-mic-off-${uid}`);
   if (mb) { mb.setAttribute('aria-pressed', String(cw.micEnabled)); mb.classList.toggle('mic-muted', !cw.micEnabled); }
   if (on)  on.style.display  = cw.micEnabled ? '' : 'none';
   if (off) off.style.display = cw.micEnabled ? 'none' : '';
-  if (lbl) lbl.textContent   = cw.micEnabled ? 'Mic On' : 'Mic Muted';
 }
 
 export async function toggleOwnCamera() {
@@ -937,13 +934,11 @@ function updateVideoToggleButton(uid) {
   if (!btn) return;
   const onIcon = btn.querySelector('.cam-video-icon-on');
   const offIcon = btn.querySelector('.cam-video-icon-off');
-  const lbl = $(`cam-video-toggle-lbl-${uid}`);
   const isOff = !!cw?.videoOff;
   btn.setAttribute('aria-pressed', String(isOff));
   btn.title = isOff ? 'Riattiva video' : 'Disattiva video (solo voce)';
   if (onIcon) onIcon.hidden = isOff;
   if (offIcon) offIcon.hidden = !isOff;
-  if (lbl) lbl.textContent = isOff ? 'Solo voce' : 'Video';
   btn.classList.toggle('cam-video-off', isOff);
 }
 
