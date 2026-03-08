@@ -1338,7 +1338,13 @@ export async function handleWebRTCSignal(payload) {
            DO NOT check for video tracks here — on some browsers/PCs, audio track arrives first
            and streams[0] may not yet include video. Using streamOpened flag is sufficient. */
         if (streamOpened) {
-          console.log('[WebRTC] Stream already opened for', from, '- ignoring duplicate ontrack (kind:', track?.kind, ')');
+          /* Secondo track (es. audio dopo video): lo stream nella finestra è lo stesso streams[0], che ora ha anche questo track — attiva volume e "sta parlando" */
+          if (track?.kind === 'audio') {
+            const cw = state.cameraWindows[from];
+            if (cw?.stream && !cw.stream.getAudioTracks().length) cw.stream.addTrack(track);
+            closeRemoteVolumeContext(from);
+            initRemoteVolumeControl(from);
+          }
           return;
         }
         streamOpened = true;

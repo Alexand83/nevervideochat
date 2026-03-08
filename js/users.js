@@ -324,19 +324,38 @@ export function syncPresence(presenceState, roomId) {
 
 /* ── Typing indicator ── */
 export function sendTypingEvent() {
-  if (!state.signalCh) return;
+  if (!state.signalCh || !state.currentUser) return;
+  const roomId = state.activeRoom;
   state.signalCh.send({ type: 'broadcast', event: 'typing',
-    payload: { from: state.currentUser.id, name: state.currentUser.name, isTyping: true } });
+    payload: { from: state.currentUser.id, name: state.currentUser.name, isTyping: true, roomId } });
   clearTimeout(state.typingTimer);
   state.typingTimer = setTimeout(() => {
     state.signalCh?.send({ type: 'broadcast', event: 'typing',
-      payload: { from: state.currentUser.id, name: state.currentUser.name, isTyping: false } });
+      payload: { from: state.currentUser.id, name: state.currentUser.name, isTyping: false, roomId } });
   }, 2500);
 }
+
+/** Invia "non sta scrivendo" e azzera il timer (es. quando si invia un messaggio). */
+export function stopTyping() {
+  if (state.typingTimer) {
+    clearTimeout(state.typingTimer);
+    state.typingTimer = null;
+  }
+  if (!state.signalCh || !state.currentUser) return;
+  state.signalCh.send({ type: 'broadcast', event: 'typing',
+    payload: { from: state.currentUser.id, name: state.currentUser.name, isTyping: false, roomId: state.activeRoom } });
+}
+
 export function handleTyping(payload) {
   if (payload.from === state.currentUser?.id) return;
+  /* Mostra solo se è nella stessa stanza */
+  if (payload.roomId != null && String(payload.roomId) !== String(state.activeRoom)) return;
   if (payload.isTyping) {
-    dom.typingTxt.textContent = `${payload.name} is typing…`;
+    import('./i18n.js').then(({ t }) => {
+      dom.typingTxt.textContent = `${payload.name} ${t('chat.typing', 'sta scrivendo...')}`;
+    }).catch(() => {
+      dom.typingTxt.textContent = `${payload.name} sta scrivendo...`;
+    });
     dom.typingRow.classList.add('visible');
   } else {
     dom.typingRow.classList.remove('visible');

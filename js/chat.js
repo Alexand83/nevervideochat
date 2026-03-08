@@ -4,7 +4,7 @@
 import { state }          from './state.js';
 import { dom }            from './dom.js';
 import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml } from './utils.js';
-import { findUser, ensureUser } from './users.js';
+import { findUser, ensureUser, stopTyping } from './users.js';
 
 /* Forward refs — set by main.js to avoid circular deps */
 let _openContextMenu = null;
@@ -403,6 +403,9 @@ export async function sendMessage() {
     quoteName = escHtml(quoteName);
   }
   
+  /* Nascondi "sta scrivendo" quando si invia */
+  stopTyping();
+
   /* Optimistic render */
   const tempId = `m${Date.now()}${Math.random()}`;
   addMessage({ userId: 'me', html, ts: Date.now(), quoteHtml, quoteName, msgId: tempId });

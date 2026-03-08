@@ -203,7 +203,8 @@
   transition: opacity var(--tn);
   pointer-events: none;
 }
-.typing-row.show { opacity: 1; }
+.typing-row.show,
+.typing-row.visible { opacity: 1; }
 
 .typing-dots {
   display: flex;
