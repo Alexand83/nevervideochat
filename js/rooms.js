@@ -304,11 +304,15 @@ export function switchRoom(roomId) {
       clearTimeout(_eventsRoomCamOffTimer);
       _eventsRoomCamOffTimer = null;
     }
-    /* Show events cam grid */
+    /* Show events cam grid: clear e re-render SOLO se si arriva da un'altra stanza (altrimenti si perdono le cam remote) */
     if (dom.eventsCamGrid) {
       dom.eventsCamGrid.hidden = false;
       dom.eventsCamGrid.setAttribute('data-max-cams', String(maxCams));
-      renderEventsCamGrid(maxCams);
+      if (previousRoomId !== roomIdStr) {
+        renderEventsCamGrid(maxCams);
+      } else {
+        updateEventsCamGrid();
+      }
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {

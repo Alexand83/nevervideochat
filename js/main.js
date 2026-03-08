@@ -114,7 +114,7 @@ async function init() {
   setFinishInit(finishInit);
   console.log('[Main] ✅ finishInit registered in auth module');
 
-  /* OBBLIGATORIO: Nessun ripristino sessione/guest. Ad ogni caricamento (refresh, ritorno dopo caduta rete, ecc.) si va sempre al modal di login. */
+  /* OBBLIGATORIO: Nessun ripristino sessione/guest. Modal login solo a: caricamento pagina, offline, sessione invalidata. Il cambio stanza NON apre il modal. */
   localStorage.removeItem('nvc_identity');
   localStorage.removeItem('nvc_auth_session');
   localStorage.removeItem('nvc_browser_session_id');
