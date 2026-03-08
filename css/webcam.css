@@ -154,8 +154,8 @@
 
 /* ── Controllo volume microfono: barra con pallina (tua cam) ── */
 .mic-volume-section {
-  flex: 0 0 180px;
-  width: 180px;
+  flex: 0 0 120px;
+  width: 120px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -216,8 +216,8 @@
   flex-shrink: 0;
 }
 .cam-remote-volume-wrap {
-  flex: 0 0 180px;
-  width: 180px;
+  flex: 0 0 120px;
+  width: 120px;
   display: flex;
   flex-direction: column;
   justify-content: center;
