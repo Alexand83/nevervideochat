@@ -104,9 +104,10 @@
   display: block;
 }
 
-/* ── Controls footer ── */
+/* ── Controls footer: pulsanti a sinistra, volume a destra con spazio per resize (smartphone) ── */
 .cam-win-footer {
   padding: 7px var(--s3);
+  padding-right: 38px;
   background: var(--bg2);
   border-top: 1px solid var(--border);
   display: flex;
@@ -172,7 +173,7 @@
   position: relative;
   width: 100%;
   height: 10px;
-  min-width: 60px;
+  min-width: 50px;
   background: var(--bg3);
   border-radius: var(--r-pill);
   border: 1px solid var(--border);
