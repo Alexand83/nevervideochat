@@ -159,7 +159,7 @@
   flex-direction: column;
   justify-content: center;
   min-width: 0;
-  max-width: 130px;
+  max-width: 180px;
 }
 .mic-volume-section.mic-volume-vertical {
   cursor: ew-resize;
@@ -221,7 +221,7 @@
   flex-direction: column;
   justify-content: center;
   min-width: 0;
-  max-width: 130px;
+  max-width: 180px;
   cursor: ew-resize;
   -webkit-user-select: none;
   user-select: none;
