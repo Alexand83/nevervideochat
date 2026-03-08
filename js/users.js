@@ -303,16 +303,32 @@ export function syncPresence(presenceState, roomId) {
       roleColor: info.roleColor || '#8b949e',
     };
     room.users[String(uid)] = user;
+    /* Annulla leave in sospeso: utente ancora in presenza (evita falso "esce/rientra" da track cam) */
+    const timerKey = rId + ':' + uid;
+    if (state.presenceLeaveTimers[timerKey]) {
+      clearTimeout(state.presenceLeaveTimers[timerKey]);
+      delete state.presenceLeaveTimers[timerKey];
+    }
     /* Also keep the global state.users in sync */
     ensureUser(String(uid), info.name || info.username || 'User', { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: hasCamera, avatarUrl: info.avatarUrl || null, roleName: user.roleName, roleColor: user.roleColor });
   });
-  
-  /* Rimuovi utenti che non sono più nella presenza */
+
+  /* Rimuovi utenti che non sono più nella presenza — con debounce 2s come per leave (Supabase invia sync senza utente prima del join su track()) */
   const presentUserIds = new Set(Object.keys(presenceState).map(String));
   Object.keys(room.users).forEach(uid => {
-    if (uid !== myId && !presentUserIds.has(uid)) {
-      delete room.users[uid];
-    }
+    if (uid === myId || presentUserIds.has(uid)) return;
+    const timerKey = rId + ':' + uid;
+    if (state.presenceLeaveTimers[timerKey]) clearTimeout(state.presenceLeaveTimers[timerKey]);
+    state.presenceLeaveTimers[timerKey] = setTimeout(async () => {
+      delete state.presenceLeaveTimers[timerKey];
+      if (!state.rooms[rId]) return;
+      delete state.rooms[rId].users[uid];
+      if (state.cameraWindows[uid]) {
+        const { closeCameraWindow } = await import('./camera.js');
+        await closeCameraWindow(uid);
+      }
+      if (rId === state.activeRoom) renderUsers();
+    }, 2000);
   });
 
   /* CRITICO: Inserisci sempre il current user in lista se è nella stanza (fix: nick non appariva dopo refresh) */
