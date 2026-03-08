@@ -51,9 +51,9 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     ? `<button class="cam-viewers-btn" id="cam-viewers-btn-${uid}" title="Who is watching">👁 <span id="cam-viewers-count-${uid}">0</span></button>
        <div class="cam-viewers-panel" id="cam-viewers-panel-${uid}" hidden></div>` : '';
 
-  const headerVolumeHtml = isOwn
-    ? `<div class="mic-volume-section mic-volume-in-hdr" id="mic-volume-wrap-${uid}" title="Volume microfono: trascina la pallina"><div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${uid}"></div><div class="mic-volume-thumb" id="mic-thumb-${uid}"></div></div></div>`
-    : `<button class="cam-ctrl-btn cam-remote-mute-btn" id="cam-remote-mute-${uid}" title="Mute voce" aria-pressed="false">🔊</button><div class="cam-remote-volume-wrap" id="cam-remote-volume-wrap-${uid}" title="Volume sua voce"><div class="mic-volume-track"><div class="mic-volume-fill" id="cam-remote-fill-${uid}"></div><div class="mic-volume-thumb" id="cam-remote-thumb-${uid}"></div></div></div>`;
+  const volumeRowHtml = isOwn
+    ? `<div class="cam-win-volume-row"><div class="mic-volume-section mic-volume-in-row" id="mic-volume-wrap-${uid}" title="Volume microfono: trascina la pallina"><div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${uid}"></div><div class="mic-volume-thumb" id="mic-thumb-${uid}"></div></div></div></div>`
+    : `<div class="cam-win-volume-row"><button class="cam-ctrl-btn cam-remote-mute-btn" id="cam-remote-mute-${uid}" title="Mute voce" aria-pressed="false">🔊</button><div class="cam-remote-volume-wrap" id="cam-remote-volume-wrap-${uid}" title="Volume sua voce"><div class="mic-volume-track"><div class="mic-volume-fill" id="cam-remote-fill-${uid}"></div><div class="mic-volume-thumb" id="cam-remote-thumb-${uid}"></div></div></div></div>`;
 
   const footer = isOwn ? `
     <div class="cam-win-footer">
@@ -94,7 +94,6 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         <span class="cam-win-name">${escHtml(name)}</span>
         ${isOwn ? '<span class="cam-win-you-tag">You</span>' : ''}
       </div>
-      ${headerVolumeHtml}
       ${viewersBtnHtml}
       <button class="cam-win-close-btn" aria-label="Close camera window">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -102,6 +101,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         </svg>
       </button>
     </div>
+    ${volumeRowHtml}
     <div class="cam-win-video-wrap">
       <video id="cam-vid-${uid}" autoplay ${isOwn ? 'muted' : ''} playsinline
              style="${isOwn ? 'transform:scaleX(-1)' : ''}"></video>

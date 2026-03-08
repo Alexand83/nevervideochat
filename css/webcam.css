@@ -83,34 +83,41 @@
 }
 .cam-win-close-btn:hover { background: var(--clr-danger); color: #fff; }
 
-/* ── Volume in header (dopo il nick): propria cam = volume mic, remota = mute + volume sua voce ── */
-.mic-volume-in-hdr {
+/* ── Riga volume (sotto l'header, non si trascina la finestra cliccando qui) ── */
+.cam-win-volume-row {
+  padding: 4px var(--s3);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-shrink: 0;
+}
+.mic-volume-in-row {
   flex: 1;
   min-width: 50px;
-  max-width: 120px;
-  margin: 0 var(--s1);
+  max-width: 100%;
   cursor: ew-resize;
   -webkit-user-select: none;
   user-select: none;
 }
-.mic-volume-in-hdr.grabbing { cursor: grabbing; }
-.mic-volume-in-hdr .mic-volume-track {
+.mic-volume-in-row.grabbing { cursor: grabbing; }
+.mic-volume-in-row .mic-volume-track {
   position: relative;
   height: 8px;
   overflow: visible;
 }
-.cam-win-hdr .cam-remote-mute-btn {
+.cam-win-volume-row .cam-remote-mute-btn {
   flex-shrink: 0;
   padding: 4px 6px !important;
   min-width: 32px;
   min-height: 28px;
 }
-.cam-win-hdr .cam-remote-volume-wrap {
+.cam-win-volume-row .cam-remote-volume-wrap {
   flex: 1;
   min-width: 40px;
-  max-width: 100px;
 }
-.cam-win-hdr .cam-remote-volume-wrap .mic-volume-track {
+.cam-win-volume-row .cam-remote-volume-wrap .mic-volume-track {
   height: 6px;
 }
 
