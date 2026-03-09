@@ -1155,7 +1155,7 @@ export function initCameraSystem() {
 export function requestPublicCamera(targetUid) {
   const uid    = String(targetUid);
   const target = findUser(uid);
-  console.log('[Camera Request] requestPublicCamera called for', uid, 'target:', target);
+  console.log('[WebRTC-FLOW] CAM-REQ: request camera from', (uid || '').slice(0, 8) + '…', 'target=', (target?.id || '').slice(0, 8) + '…');
   if (!target?.online) { 
     console.warn('[Camera Request] Target is offline:', target);
     showToast(`${target?.name || 'User'} is offline.`); 
@@ -1280,6 +1280,7 @@ export function handleCamAccepted(payload) {
 
 /* ── Share own camera to a viewer via WebRTC ───────────────────── */
 export async function sharePublicCameraTo(toUid) {
+  console.log('[WebRTC-FLOW] sharePublicCameraTo called → will send offer to', (toUid || '').slice(0, 8) + '…');
   try {
     if (!state.localStream) {
       const msSince = Date.now() - state.cameraClosedAt;
@@ -1293,10 +1294,10 @@ export async function sharePublicCameraTo(toUid) {
       broadcastAll('cam-opened', { room_id: state.cameraRoom, videoOff: state.cameraWindows[state.currentUser?.id]?.videoOff === true });
       await updateAllRoomPresences();
     }
-    console.log('[WebRTC] Creating peer connection for', toUid);
+    console.log('[WebRTC-FLOW] OUTGOING PC: create for', (toUid || '').slice(0, 8) + '…');
     /* Close existing peer connection if it exists */
     if (state.outgoingPCs[toUid]) {
-      console.log('[WebRTC] Closing existing peer connection for', toUid);
+      console.log('[WebRTC-FLOW] OUTGOING: close existing for', (toUid || '').slice(0, 8) + '…');
       const oldPc = state.outgoingPCs[toUid];
       oldPc.close();
       delete state.outgoingPCs[toUid];
@@ -1304,19 +1305,18 @@ export async function sharePublicCameraTo(toUid) {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.outgoingPCs[toUid] = pc;
     const tracks = state.localStream.getTracks().filter(t => t.readyState === 'live');
-    console.log('[WebRTC] Adding', tracks.length, 'tracks to peer connection:', tracks.map(t => ({ kind: t.kind, readyState: t.readyState })));
+    console.log('[WebRTC-FLOW] OUTGOING: add', tracks.length, 'tracks to', (toUid || '').slice(0, 8) + '…');
     tracks.forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
-        console.log('[WebRTC] Outgoing ICE candidate type:', candidate.type, 'protocol:', candidate.protocol, 'to', toUid);
+        console.log('[WebRTC-FLOW] TX ICE dir=out to', (toUid || '').slice(0, 8) + '…', 'type=', candidate.type);
         /* dir:'out' = from our outgoing PC → guest adds to their incomingPC */
         broadcast('webrtc', toUid, { sigType: 'ice', candidate, ctx: 'public', dir: 'out' });
       }
     };
-    console.log('[WebRTC] Creating offer for', toUid);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    console.log('[WebRTC] Sending offer to', toUid, 'SDP length:', offer.sdp.length);
+    console.log('[WebRTC-FLOW] OUTGOING: send offer to', (toUid || '').slice(0, 8) + '…', 'sdpLen=', offer.sdp?.length);
     broadcast('webrtc', toUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'public', room_id: state.cameraRoom });
     broadcast('cam-accepted', toUid, {});
     
@@ -1351,13 +1351,16 @@ export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload;
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
 
+  /* FLOW: ogni messaggio webrtc indirizzato a noi */
+  console.log('[WebRTC-FLOW] RX', sigType, 'from', (from || '').slice(0, 8) + '…', 'dir=' + dir, 'me=' + (state.currentUser?.id || '').slice(0, 8) + '…');
+
   if (isPublic) {
       if (sigType === 'offer') {
         /* Accetta offerte in Eventi e in stanze normali. Il controllo sotto (guestHasCamInEventsOnly) rifiuta solo se siamo in General e la cam dell'altro è solo in Eventi. */
 
         /* CRITICO: Non accettare offerte se l'utente ha chiuso manualmente questa camera */
         if (state.manuallyClosedCameras[from]) {
-          console.log('[WebRTC] Rejecting offer from', from, '— camera was manually closed by user');
+          console.log('[WebRTC-FLOW] RX offer from', from, '→ REJECT (manually closed)');
           return;
         }
         
@@ -1374,18 +1377,18 @@ export async function handleWebRTCSignal(payload) {
         /* If already connected + video is playing → ignore new offer (ICE restart noise) */
         if ((existingPc.connectionState === 'connected' || existingPc.iceConnectionState === 'connected') &&
             streamAlive && videoPlaying) {
-          console.log('[WebRTC] Ignoring new offer from', from, '— already connected with live video. connectionState:', existingPc.connectionState);
+          console.log('[WebRTC-FLOW] RX offer from', from, '→ IGNORE (already connected)');
           return;
         }
 
         /* If PC stuck in new/connecting (e.g. stale offer from Firebase replay, or ICE never completed),
            replace with new offer so the latest signaling wins and ICE can be applied to the new PC. */
         if (existingPc.connectionState === 'new' || existingPc.connectionState === 'connecting') {
-          console.log('[WebRTC] Replacing incoming PC for', from, '(stuck in', existingPc.connectionState, ') with new offer');
+          console.log('[WebRTC-FLOW] RX offer from', from, '→ REPLACE (existing PC stuck', existingPc.connectionState, ')');
         }
 
         /* Otherwise: close stale/dead PC and accept the new offer (keep pendingIncomingICE so new PC can flush it) */
-        console.log('[WebRTC] Closing stale incoming PC for', from, 'to accept new offer. state:', existingPc.signalingState, existingPc.connectionState);
+        console.log('[WebRTC-FLOW] RX offer from', from, '→ CLOSE STALE then accept');
         existingPc.close();
         delete state.incomingPCs[from];
         
@@ -1433,14 +1436,14 @@ export async function handleWebRTCSignal(payload) {
         }
       }
       
-      console.log('[WebRTC] Creating new incoming peer connection for', from);
+      console.log('[WebRTC-FLOW] INCOMING PC: create for', from, '| activeRoom=', state.activeRoom);
       const pc = new RTCPeerConnection(ICE_SERVERS);
       pc._createdInRoom = state.activeRoom; /* Track room at creation — used to discard stale streams */
       pc._camRoom = payload.room_id != null ? String(payload.room_id) : null; /* room where cam was opened (from offer) */
       state.incomingPCs[from] = pc;
       pc.onicecandidate = ({ candidate: c }) => {
         if (c) {
-          console.log('[WebRTC] Local ICE candidate type:', c.type, 'protocol:', c.protocol, 'for incoming from', from);
+          console.log('[WebRTC-FLOW] TX ICE dir=in to', (from || '').slice(0, 8) + '…', 'type=', c.type);
           /* dir:'in' = from our incomingPC → guest adds to their outgoingPC */
           broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public', dir: 'in' });
         }
@@ -1451,7 +1454,7 @@ export async function handleWebRTCSignal(payload) {
       let streamOpened = false;
       
       pc.ontrack = ({ streams, track }) => {
-        console.log('[WebRTC] ontrack from', from, '- kind:', track?.kind, 'readyState:', track?.readyState, 'streams:', streams?.length, 'streamOpened:', streamOpened);
+        console.log('[WebRTC-FLOW] INCOMING ontrack from', (from || '').slice(0, 8) + '…', 'kind=', track?.kind, 'readyState=', track?.readyState, 'streamOpened=', streamOpened);
         if (!streams || !streams[0]) { console.warn('[WebRTC] No streams in ontrack from', from); return; }
         
         /* Only open the camera window ONCE per peer connection regardless of track type.
@@ -1553,7 +1556,7 @@ export async function handleWebRTCSignal(payload) {
       let connectingTimeout = setTimeout(() => {
         if (state.incomingPCs[from] !== pc) return;
         if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
-          console.log('[WebRTC] Connection stuck in', pc.connectionState, 'for 25s for', from, '- removing from grid (no connection)');
+          console.warn('[WebRTC-FLOW] INCOMING TIMEOUT 25s for', from, '| connectionState=', pc.connectionState, 'iceState=', pc.iceConnectionState, '→ remove from grid');
           try { pc.close(); } catch {}
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           removeRemoteCameraFromGrid(from).catch(() => {});
@@ -1665,30 +1668,33 @@ export async function handleWebRTCSignal(payload) {
       };
 
       pc.addEventListener('iceconnectionstatechange', () => {
-        console.log('[WebRTC] ICE connection state changed:', pc.iceConnectionState, 'for', from);
+        console.log('[WebRTC-FLOW] INCOMING iceConnectionState', from, '→', pc.iceConnectionState);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
           setTimeout(() => retryPlay('ICE-connected'), 100); /* Small delay to ensure video is in DOM */
         }
       });
       
       pc.addEventListener('connectionstatechange', () => {
-        console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
+        console.log('[WebRTC-FLOW] INCOMING connectionState', from, '→', pc.connectionState, 'iceConnectionState=', pc.iceConnectionState);
         if (pc.connectionState === 'connected') {
           setTimeout(() => retryPlay('connection-connected'), 200); /* Retry when full connection is established */
         }
       });
+      console.log('[WebRTC-FLOW] INCOMING: setRemoteDescription(offer) for', from);
       await pc.setRemoteDescription({ type: 'offer', sdp });
       /* Flush ICE that arrived before we had an incoming PC (dir 'out' from this peer) */
-      if (state.pendingIncomingICE[from]?.length) {
-        console.log('[WebRTC] Flushing', state.pendingIncomingICE[from].length, 'pre-PC ICE candidates for incoming from', from);
+      const prePcCount = state.pendingIncomingICE[from]?.length || 0;
+      if (prePcCount) {
+        console.log('[WebRTC-FLOW] INCOMING: flush pre-PC ICE', prePcCount, 'for', from);
         for (const c of state.pendingIncomingICE[from]) {
           await pc.addIceCandidate(c).catch(err => console.warn('[WebRTC] Pre-PC ICE flush error:', err.message));
         }
         state.pendingIncomingICE[from] = [];
       }
       /* Flush any buffered ICE candidates that arrived before the offer (on this PC) */
-      if (pc._pendingCandidates?.length) {
-        console.log('[WebRTC] Flushing', pc._pendingCandidates.length, 'buffered ICE candidates for incoming PC from', from);
+      const onPcCount = pc._pendingCandidates?.length || 0;
+      if (onPcCount) {
+        console.log('[WebRTC-FLOW] INCOMING: flush on-PC ICE', onPcCount, 'for', from);
         for (const c of pc._pendingCandidates) {
           await pc.addIceCandidate(c).catch(err => console.warn('[WebRTC] Buffered ICE flush error:', err.message));
         }
@@ -1696,16 +1702,18 @@ export async function handleWebRTCSignal(payload) {
       }
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      console.log('[WebRTC-FLOW] INCOMING: send answer to', from, 'sdpLen=', answer.sdp?.length);
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
     } else if (sigType === 'answer') {
       const pc = state.outgoingPCs[from];
+      console.log('[WebRTC-FLOW] RX answer from', from, '| hasOutgoingPC=', !!pc, pc ? 'signaling=' + pc.signalingState + ' conn=' + pc.connectionState : '');
       if (pc) {
-        console.log('[WebRTC] Received answer from', from, 'PC state:', pc.signalingState, 'connectionState:', pc.connectionState);
         /* Only set remote description if we're in the correct state */
         if (pc.signalingState === 'have-local-offer') {
           try {
+            console.log('[WebRTC-FLOW] OUTGOING: setRemoteDescription(answer) for', from);
             await pc.setRemoteDescription({ type: 'answer', sdp });
-            console.log('[WebRTC] Successfully set remote answer from', from);
+            console.log('[WebRTC-FLOW] OUTGOING: answer applied for', from);
             /* Flush any buffered ICE candidates that arrived before the answer */
             if (pc._pendingCandidates?.length) {
               console.log('[WebRTC] Flushing', pc._pendingCandidates.length, 'buffered ICE candidates for outgoing PC to', from);
@@ -1731,8 +1739,7 @@ export async function handleWebRTCSignal(payload) {
           }
         }
       } else {
-        /* Normale se l'answer è arrivata dopo refresh o è un messaggio replay; non spammare */
-        console.log('[WebRTC] Received answer from', from, 'but no outgoing PC found (ignored)');
+        console.log('[WebRTC-FLOW] RX answer from', from, '→ no outgoing PC (ignored)');
       }
     } else if (sigType === 'ice') {
       /* Route ICE candidate to correct PC based on 'dir' field:
@@ -1755,26 +1762,24 @@ export async function handleWebRTCSignal(payload) {
       if (dir === 'out' && !pc) {
         state.pendingIncomingICE[from] = state.pendingIncomingICE[from] || [];
         state.pendingIncomingICE[from].push(iceCandidate);
-        console.log('[WebRTC] Buffering ICE (dir out) from', from, '(no incoming PC yet) — buffer size:', state.pendingIncomingICE[from].length);
+        console.log('[WebRTC-FLOW] ICE dir=out from', (from || '').slice(0, 8) + '…', '→ BUFFER (no incoming PC) size=', state.pendingIncomingICE[from].length);
         return;
       }
       if (pc) {
-        /* candidate may be deserialized as plain object — reconstruct RTCIceCandidate for logging */
         const candType = candidate.type || (candidate.candidate?.includes(' typ relay ') ? 'relay' : 
                                           candidate.candidate?.includes(' typ srflx ') ? 'srflx' : 
                                           candidate.candidate?.includes(' typ host ') ? 'host' : 'unknown');
-        const candProto = candidate.protocol || (candidate.candidate?.includes(' UDP ') ? 'udp' : 
-                                                 candidate.candidate?.includes(' TCP ') ? 'tcp' : 'unknown');
         const pcType = pc === state.outgoingPCs[from] ? 'outgoing' : 'incoming';
-        console.log('[WebRTC] Remote ICE candidate type:', candType, 'protocol:', candProto, 'from', from, '→', pcType, 'PC (dir:', dir, ')');
-        /* If remote description not set yet, buffer the candidate and apply later */
         if (!pc.remoteDescription) {
           pc._pendingCandidates = pc._pendingCandidates || [];
           pc._pendingCandidates.push(iceCandidate);
-          console.log('[WebRTC] Buffering ICE candidate from', from, '(remoteDescription not set yet, PC:', pcType, ') — buffer size:', pc._pendingCandidates.length);
+          console.log('[WebRTC-FLOW] ICE from', (from || '').slice(0, 8) + '…', 'dir=', dir, '→', pcType, 'BUFFER (no remoteDesc) size=', pc._pendingCandidates.length);
         } else {
+          console.log('[WebRTC-FLOW] ICE from', (from || '').slice(0, 8) + '…', 'dir=', dir, '→', pcType, 'ADD', candType);
           await pc.addIceCandidate(iceCandidate).catch(err => console.warn('[WebRTC] addIceCandidate error:', err.message));
         }
+      } else {
+        console.log('[WebRTC-FLOW] ICE from', (from || '').slice(0, 8) + '…', 'dir=', dir, '→ DROP (no PC)');
       }
     }
   }
@@ -1805,6 +1810,7 @@ export async function handleWebRTCSignal(payload) {
 }
 
 function openRemoteCamWindow(uid, stream, userName = null) {
+  console.log('[WebRTC-FLOW] openRemoteCamWindow', (uid || '').slice(0, 8) + '…', 'tracks=', stream?.getTracks?.()?.length);
   clearPendingCamRequest(String(uid));
   const user = findUser(uid);
   const name = userName || user?.name || uid;
