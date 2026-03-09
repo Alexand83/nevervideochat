@@ -120,17 +120,30 @@ export function createCameraWindow(uid, stream, name, isOwn) {
   if (videoEl) {
     videoEl.srcObject = null; videoEl.srcObject = stream;
     if (!isOwn) {
-      /* Autoplay: i browser bloccano play() con audio se non muted → prima muted, play(), poi unmute */
       videoEl.muted = true;
       videoEl.volume = 1;
     }
     videoEl.play().then(() => {
       if (!isOwn) {
-        videoEl.muted = false; /* abilita audio dopo che play() è partito */
-        initRemoteVolumeControl(uid); /* volume + indicatore "sta parlando" */
+        videoEl.muted = false;
+        initRemoteVolumeControl(uid);
       }
     }).catch(() => {});
-    if (!isOwn) updateRemoteVideoVisibility(uid); /* applica stato iniziale video off (es. da cam-opened) */
+    if (!isOwn) {
+      updateRemoteVideoVisibility(uid);
+      /* Fallback: dopo 2s se il video è ancora senza frame, reattach (utile su stessa rete quando i frame arrivano un po' dopo) */
+      setTimeout(() => {
+        const cw = state.cameraWindows[uid];
+        if (!cw?.stream || cw.el !== win) return;
+        const v = cw.el.querySelector('video');
+        if (v && v.srcObject === cw.stream && v.videoWidth === 0 && cw.stream.getVideoTracks().some(t => t.readyState === 'live')) {
+          v.srcObject = null;
+          v.srcObject = cw.stream;
+          v.muted = true;
+          v.play().then(() => { v.muted = false; }).catch(() => {});
+        }
+      }, 2000);
+    }
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
     if (!isOwn && stream) {
@@ -1345,8 +1358,8 @@ export async function sharePublicCameraTo(toUid) {
   } catch (err) { showToast('⚠️ Could not share camera: ' + err.message); }
 }
 
-/* Filtro anti-replay Firebase: child_added consegna tutti i messaggi passati al subscribe → scarta webrtc pubblici troppo vecchi */
-const WEBRTC_MAX_AGE_MS = 60000;
+/* Filtro anti-replay Firebase: child_added consegna tutti i messaggi passati → scarta webrtc scritti prima della nostra connessione */
+const WEBRTC_CONNECT_SKEW_MS = 5000;
 
 /* ── All incoming WebRTC signals ──────────────────────────────── */
 export async function handleWebRTCSignal(payload) {
@@ -1354,8 +1367,8 @@ export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload;
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
 
-  /* Firebase replay: ignora offer/answer/ICE pubblici più vecchi di 60s (evita finestre cam all'avvio da messaggi vecchi) */
-  if (isPublic && payload._ts != null && (Date.now() - payload._ts > WEBRTC_MAX_AGE_MS)) return;
+  /* Firebase replay: ignora webrtc pubblici scritti prima che ci connettessimo (evita cam che riappaiono al refresh) */
+  if (isPublic && payload._ts != null && state.broadcastConnectedAt > 0 && payload._ts < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) return;
 
   if (isPublic) {
       if (sigType === 'offer') {
@@ -1571,43 +1584,35 @@ export async function handleWebRTCSignal(payload) {
           }
         }
       });
-      /* Retry play() when connection becomes ready — for grid and floating windows */
-      const retryPlay = (trigger) => {
+      /* Retry play() quando la connessione è pronta; reattach forzato per evitare video nero (stesso LAN o remoto) */
+      const retryPlay = (trigger, forceReattach = false) => {
         const cw = state.cameraWindows[from];
-        if (!cw?.el) {
-          console.log('[WebRTC] Retry play() skipped for', from, '— no camera window (trigger:', trigger, ')');
-          return;
-        }
+        if (!cw?.el) return;
         const vid = cw.el.querySelector('video');
-        if (!vid || !vid.srcObject) {
-          console.log('[WebRTC] Retry play() skipped for', from, '— no video/srcObject (trigger:', trigger, ')');
-          return;
+        if (!vid) return;
+        if (forceReattach && cw.stream) {
+          vid.srcObject = null;
+          vid.srcObject = cw.stream;
+          vid.muted = true;
         }
-        if (!vid.paused) {
-          console.log('[WebRTC] Retry play() skipped for', from, '— already playing (trigger:', trigger, ')');
-          return; /* Already playing */
-        }
-        
-        console.log('[WebRTC] Retrying play() for', from, 'ICE:', pc.iceConnectionState, 'conn:', pc.connectionState, 'trigger:', trigger);
+        if (!vid.srcObject) return;
+        if (!vid.paused && !forceReattach) return;
         vid.play().then(() => {
-          console.log('[Events Grid] Playing for', from, '(retry-triggered:', trigger, ') — unmuting:', !cw.isOwn);
           if (!cw.isOwn) vid.muted = false;
-        }).catch(err => {
-          console.warn('[WebRTC] Retry play() failed for', from, ':', err.name, '(trigger:', trigger, ')');
-        });
+        }).catch(() => {});
       };
 
       pc.addEventListener('iceconnectionstatechange', () => {
-        console.log('[WebRTC-FLOW] INCOMING iceConnectionState', from, '→', pc.iceConnectionState);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          setTimeout(() => retryPlay('ICE-connected'), 100); /* Small delay to ensure video is in DOM */
+          setTimeout(() => retryPlay('ICE-connected', true), 150);
+          setTimeout(() => retryPlay('ICE-connected+1s', true), 1150);
         }
       });
       
       pc.addEventListener('connectionstatechange', () => {
-        console.log('[WebRTC-FLOW] INCOMING connectionState', from, '→', pc.connectionState, 'iceConnectionState=', pc.iceConnectionState);
         if (pc.connectionState === 'connected') {
-          setTimeout(() => retryPlay('connection-connected'), 200); /* Retry when full connection is established */
+          setTimeout(() => retryPlay('connection-connected', true), 300);
+          setTimeout(() => retryPlay('connection-connected+2s', true), 2300);
         }
       });
       console.log('[WebRTC-FLOW] INCOMING: setRemoteDescription(offer) for', from);
@@ -1666,10 +1671,9 @@ export async function handleWebRTCSignal(payload) {
             }
           }
         } else {
-          console.warn('[WebRTC] Cannot set remote answer - wrong state:', pc.signalingState, 'expected: have-local-offer');
-          /* If connection is already established, this is fine */
-          if (pc.signalingState === 'stable' && pc.connectionState === 'connected') {
-            console.log('[WebRTC] Connection already established, answer not needed');
+          /* Replay Firebase o answer duplicata: PC già stable, ignora senza warn */
+          if (pc.signalingState !== 'stable' || pc.connectionState !== 'connected') {
+            console.warn('[WebRTC] Cannot set remote answer - wrong state:', pc.signalingState, 'expected: have-local-offer');
           }
         }
       } else {

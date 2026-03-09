@@ -77,6 +77,7 @@ export const state = {
   fb:       null,   /* { auth, firestore, rtdb, storageRef } dopo init */
   supa:     null,   /* impostato solo da supabase-client.js (backend alternativo) */
   signalCh: null,   /* global broadcast channel for WebRTC/PM */
+  broadcastConnectedAt: 0, /* timestamp quando ci siamo connessi al canale broadcast (Firebase: filtra replay) */
   pendingSessionInvalidation: null, /* queue session-invalidated to send after connect */
 
   /* Web Audio */

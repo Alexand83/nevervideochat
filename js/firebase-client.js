@@ -197,6 +197,7 @@ function authAdapter() {
 const BROADCAST_UI_MAX_AGE_MS = 25000;
 
 export function createBroadcastChannel() {
+  state.broadcastConnectedAt = Date.now(); /* solo messaggi con ts >= questo (meno skew) sono "live"; replay ha ts nel passato */
   const broadcastRef = rtdb.ref('broadcast');
   const handlers = {};
   const unsub = broadcastRef.on('child_added', (snap) => {
