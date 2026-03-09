@@ -21,6 +21,19 @@
 - **Firestore**: copia il contenuto di `firebase/firestore.rules` in Firestore → Regole (o usa `firebase deploy --only firestore:rules` se usi Firebase CLI).
 - **Storage**: in Storage → Regole incolla `firebase/storage.rules` (adatta il path se non usi `chat-media`).
 
+### CORS su Storage (upload da dominio esterno, es. GitHub Pages)
+
+Se l'app è hostata su un altro dominio (es. `https://alexand83.github.io`) e vedi **CORS** quando carichi avatar o file su Firebase Storage, devi applicare CORS al bucket con **gsutil** (Google Cloud SDK):
+
+1. Installa [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) e autenticati: `gcloud auth login` e `gcloud config set project nevervideochat`.
+2. Applica il file CORS incluso nel repo:
+   ```bash
+   gsutil cors set firebase/storage-cors.json gs://nevervideochat.firebasestorage.app
+   ```
+3. In `firebase/storage-cors.json` sono già presenti `https://alexand83.github.io` e alcune origini locali. Se usi un altro dominio, aggiungilo nell'array `"origin"`.
+
+**Alternativa:** da [Google Cloud Console](https://console.cloud.google.com/) → Cloud Shell, carica `firebase/storage-cors.json` e lancia lo stesso comando `gsutil cors set ...`.
+
 ## 4. Configurazione nell’app
 
 La config è in **js/firebase-config.js**. L’app attualmente usa ancora **Supabase**; la conversione completa a Firebase (Auth, Firestore, Realtime/Realtime DB, Storage) richiederà la modifica di:

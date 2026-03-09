@@ -2,7 +2,7 @@
    firebase-client.js — Firebase init + adapter (state.supa API)
    Replaces Supabase: Auth, Firestore, Realtime DB (presence/broadcast), Storage
 ================================================================ */
-import { firebaseConfig } from './firebase-config.js';
+import { firebaseConfig, FIREBASE_RTDB_URL } from './firebase-config.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { state } from './state.js';
 import { dom } from './dom.js';
@@ -32,7 +32,7 @@ let messageUnsubscribes = {};
 
 /* ── Firestore adapter: state.supa.from(collection) ── */
 function docToRow(docSnap) {
-  if (!docSnap.exists()) return null;
+  if (!docSnap.exists) return null;
   return { id: docSnap.id, ...docSnap.data() };
 }
 function mapTimestamp(o) {
@@ -47,9 +47,10 @@ function mapTimestamp(o) {
 function from(collection) {
   const col = firestore.collection(collection);
   let query = col;
-  const chain = { _col: col, _query: null, _docId: null, _order: null, _updatePayload: null, _delete: false };
+  const chain = { _col: col, _query: null, _docId: null, _order: null, _limit: null, _updatePayload: null, _delete: false };
 
   chain.select = function() { return chain; };
+  chain.limit = function(n) { chain._limit = n; return chain; };
   chain.eq = function(field, value) {
     if (field === 'id' && ['profiles', 'rooms', 'themes', 'custom_roles', 'active_sessions'].includes(collection)) {
       chain._docId = value;
@@ -77,7 +78,8 @@ function from(collection) {
     if (chain._docId != null) return chain.single().then(r => (r.error && r.error.message === 'Not found' ? { data: null, error: null } : r));
     let q = chain._query || col;
     if (chain._order) q = q.orderBy(chain._order.field, chain._order.ascending ? 'asc' : 'desc');
-    return q.limit(1).get().then(snap => {
+    const limit = chain._limit != null ? chain._limit : 1;
+    return q.limit(limit).get().then(snap => {
       const doc = snap.docs[0];
       const d = doc ? mapTimestamp(docToRow(doc)) : null;
       return { data: d, error: null };
@@ -97,6 +99,7 @@ function from(collection) {
     if (chain._docId != null) return chain.single().then(resolve);
     let q = chain._query || col;
     if (chain._order) q = q.orderBy(chain._order.field, chain._order.ascending ? 'asc' : 'desc');
+    if (chain._limit != null) q = q.limit(chain._limit);
     return q.get().then(snap => ({ data: snap.docs.map(d => mapTimestamp(docToRow(d))), error: null }))
       .catch(err => ({ data: null, error: err })).then(resolve);
   };
@@ -705,14 +708,23 @@ export function initFirebaseClient() {
   app = firebase.initializeApp(firebaseConfig);
   auth = app.auth();
   firestore = app.firestore();
-  rtdb = app.database();
+  rtdb = FIREBASE_RTDB_URL ? app.database(FIREBASE_RTDB_URL) : app.database();
   const storage = app.storage();
   storageRef = storage.ref();
 
-  if (SUPABASE_URL && SUPABASE_ANON_KEY && typeof window.supabase === 'function' &&
-      SUPABASE_URL.includes('supabase') && !SUPABASE_ANON_KEY.startsWith('YOUR_')) {
-    supabaseStorageClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('[NVC] Storage: using Supabase bucket chat-media');
+  if (SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_URL.includes('supabase') && !SUPABASE_ANON_KEY.startsWith('YOUR_')) {
+    const supabaseGlobal = typeof window !== 'undefined' && window.supabase;
+    const createClient = supabaseGlobal?.createClient ?? (typeof supabaseGlobal === 'function' ? supabaseGlobal : null);
+    if (typeof createClient === 'function') {
+      try {
+        supabaseStorageClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('[NVC] Storage: using Supabase bucket chat-media');
+      } catch (e) {
+        console.warn('[NVC] Storage: Supabase createClient failed, using Firebase Storage:', e?.message || e);
+      }
+    } else {
+      console.warn('[NVC] Storage: Supabase script not loaded (window.supabase missing); using Firebase Storage. Load js/vendor/supabase.min.js for Supabase.');
+    }
   }
 
   document.addEventListener('visibilitychange', () => {
