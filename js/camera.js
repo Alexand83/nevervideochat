@@ -1351,67 +1351,13 @@ export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload;
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
 
-  /* FLOW: ogni messaggio webrtc indirizzato a noi */
-  console.log('[WebRTC-FLOW] RX', sigType, 'from', (from || '').slice(0, 8) + '…', 'dir=' + dir, 'me=' + (state.currentUser?.id || '').slice(0, 8) + '…');
-
   if (isPublic) {
       if (sigType === 'offer') {
-        /* Serializza per peer: così la seconda/terza offer (replay Firebase) aspetta la prima e vede già state.incomingPCs[from] → IGNORE, niente PC duplicate. */
-        const fromKey = String(from);
-        const runOffer = async () => {
-        /* Accetta offerte in Eventi e in stanze normali. Il controllo sotto (guestHasCamInEventsOnly) rifiuta solo se siamo in General e la cam dell'altro è solo in Eventi. */
+        /* ─── Regola unica: una sola incoming PC per peer. Se esiste già, ignora (replay Firebase / offerte duplicate). ─── */
+        if (state.manuallyClosedCameras[from]) return;
+        if (state.incomingPCs[from]) return;
 
-        /* CRITICO: Non accettare offerte se l'utente ha chiuso manualmente questa camera */
-        if (state.manuallyClosedCameras[from]) {
-          console.log('[WebRTC-FLOW] RX offer from', from, '→ REJECT (manually closed)');
-          return;
-        }
-        
-        /* Prevent duplicate PC creation — if we're already connected with live video, ignore the new offer.
-         New offers while connected are usually ICE restart attempts that we don't need to re-negotiate. */
-        if (state.incomingPCs[from]) {
-        const existingPc = state.incomingPCs[from];
-        const existingCw = state.cameraWindows[from];
-        const existingVideo = existingCw?.el?.querySelector('video');
-        const streamAlive   = existingCw?.stream?.active &&
-                              existingCw.stream.getTracks().some(t => t.readyState === 'live');
-        const videoPlaying  = existingVideo && !existingVideo.paused && existingVideo.readyState >= 2;
-
-        /* If already connected + video is playing → ignore new offer (ICE restart noise) */
-        if ((existingPc.connectionState === 'connected' || existingPc.iceConnectionState === 'connected') &&
-            streamAlive && videoPlaying) {
-          console.log('[WebRTC-FLOW] RX offer from', from, '→ IGNORE (already connected)');
-          return;
-        }
-
-        /* NON sostituire se la PC è ancora in new/connecting: gli ICE stanno arrivando sulla PC
-           corrente. Sostituire creerebbe una PC nuova senza ICE → cam nera. Ignoriamo l'offer duplicata. */
-        if (existingPc.connectionState === 'new' || existingPc.connectionState === 'connecting') {
-          console.log('[WebRTC-FLOW] RX offer from', from, '→ IGNORE (existing PC still', existingPc.connectionState, ', keep it so ICE can complete)');
-          return;
-        }
-
-        /* Otherwise: close stale/dead PC and accept the new offer (keep pendingIncomingICE so new PC can flush it) */
-        console.log('[WebRTC-FLOW] RX offer from', from, '→ CLOSE STALE then accept');
-        existingPc.close();
-        delete state.incomingPCs[from];
-        
-        /* Remove old slot from Events grid to avoid stale video */
-        if (existingCw?.isEventsGrid && existingCw.el && existingCw.el.parentNode) {
-          const oldVideo = existingCw.el.querySelector('video');
-          if (oldVideo) { oldVideo.pause(); oldVideo.srcObject = null; }
-          existingCw.el.remove();
-          delete state.cameraWindows[from];
-          await new Promise(r => setTimeout(r, 50));
-        }
-      }
-      /* NOTE: We intentionally do NOT close the outgoing PC when an offer arrives.
-         Both incoming and outgoing PCs can coexist independently.
-         ICE candidate buffering below handles the case where candidates arrive
-         before setRemoteDescription is called. */
-      
-      /* Guard: if guest's camera is only active in an Events room, and we're not in that Events room,
-         reject the offer — don't create a floating window in the wrong room */
+      /* Guard: camera solo in stanza Eventi e noi non siamo in quella stanza → rifiuta */
       const availableRooms = getAvailableRooms();
       const eventsRooms = availableRooms.filter(r => r.max_cams && r.max_cams >= 1 && r.max_cams <= 8);
       const guestHasCamInEventsOnly = eventsRooms.some(eventsRoom => {
@@ -1440,17 +1386,12 @@ export async function handleWebRTCSignal(payload) {
         }
       }
       
-      console.log('[WebRTC-FLOW] INCOMING PC: create for', from, '| activeRoom=', state.activeRoom);
       const pc = new RTCPeerConnection(ICE_SERVERS);
       pc._createdInRoom = state.activeRoom; /* Track room at creation — used to discard stale streams */
       pc._camRoom = payload.room_id != null ? String(payload.room_id) : null; /* room where cam was opened (from offer) */
       state.incomingPCs[from] = pc;
       pc.onicecandidate = ({ candidate: c }) => {
-        if (c) {
-          console.log('[WebRTC-FLOW] TX ICE dir=in to', (from || '').slice(0, 8) + '…', 'type=', c.type);
-          /* dir:'in' = from our incomingPC → guest adds to their outgoingPC */
-          broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public', dir: 'in' });
-        }
+        if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public', dir: 'in' });
       };
       
       /* Flag to prevent openRemoteCamWindow from being called multiple times
@@ -1458,8 +1399,7 @@ export async function handleWebRTCSignal(payload) {
       let streamOpened = false;
       
       pc.ontrack = ({ streams, track }) => {
-        console.log('[WebRTC-FLOW] INCOMING ontrack from', (from || '').slice(0, 8) + '…', 'kind=', track?.kind, 'readyState=', track?.readyState, 'streamOpened=', streamOpened);
-        if (!streams || !streams[0]) { console.warn('[WebRTC] No streams in ontrack from', from); return; }
+        if (!streams || !streams[0]) return;
         
         /* Only open the camera window ONCE per peer connection regardless of track type.
            DO NOT check for video tracks here — on some browsers/PCs, audio track arrives first
@@ -1707,13 +1647,10 @@ export async function handleWebRTCSignal(payload) {
       }
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      console.log('[WebRTC-FLOW] INCOMING: send answer to', from, 'sdpLen=', answer.sdp?.length);
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
-        }; /* end runOffer */
-        state._incomingOfferLock[fromKey] = (state._incomingOfferLock[fromKey] || Promise.resolve()).then(runOffer, () => {});
-        await state._incomingOfferLock[fromKey];
-        return;
-    } else if (sigType === 'answer') {
+      return;
+    }
+    if (sigType === 'answer') {
       const pc = state.outgoingPCs[from];
       console.log('[WebRTC-FLOW] RX answer from', from, '| hasOutgoingPC=', !!pc, pc ? 'signaling=' + pc.signalingState + ' conn=' + pc.connectionState : '');
       if (pc) {
