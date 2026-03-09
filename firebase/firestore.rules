@@ -5,10 +5,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Chiunque può leggere stanze aperte
+    // Stanze: lettura pubblica. Create senza auth solo per 'general' (setup-firebase.html)
     match /rooms/{roomId} {
       allow read: if true;
-      allow write: if request.auth != null; // In produzione: solo admin (verifica claim o doc profiles)
+      allow create: if roomId == 'general' || request.auth != null;
+      allow update, delete: if request.auth != null;
     }
 
     // Profili: lettura pubblica, scrittura solo proprio
@@ -25,16 +26,18 @@ service cloud.firestore {
       allow update, delete: if request.auth != null;
     }
 
-    // Temi: lettura pubblica, scrittura solo admin (in produzione legare a profiles.role)
+    // Temi: lettura pubblica. Create senza auth solo per i 4 temi default (setup-firebase.html)
     match /themes/{themeId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create: if themeId in ['dark', 'light', 'blue', 'purple'] || request.auth != null;
+      allow update, delete: if request.auth != null;
     }
 
-    // Ruoli personalizzati: lettura pubblica
+    // Ruoli: lettura pubblica. Create senza auth solo per i 5 ruoli default (setup-firebase.html)
     match /custom_roles/{roleId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow create: if roleId in ['owner', 'admin', 'moderator', 'user', 'guest'] || request.auth != null;
+      allow update, delete: if request.auth != null;
     }
 
     // Sessioni attive: ogni utente può leggere e scrivere la propria
@@ -74,7 +77,7 @@ service cloud.firestore {
       allow create: if request.auth != null;
     }
     match /announcements/{id} {
-      allow read: if resource.data.is_active == true && (resource.data.expires_at == null || resource.data.expires_at > request.time);
+      allow read: if true;
       allow write: if request.auth != null;
     }
     match /reported_messages/{id} {

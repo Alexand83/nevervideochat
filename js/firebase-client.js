@@ -747,13 +747,15 @@ export function initFirebaseClient() {
         return createPresenceChannel(roomIdStr, opts?.config?.presence?.key || state.currentUser?.id);
       }
       if (name === 'broadcast:signals-main') return state.signalCh || createBroadcastChannel();
-      if (name === 'active-games-updates') {
-        return { on: () => this, subscribe: (cb) => { if (cb) cb('SUBSCRIBED'); return this; }, unsubscribe: () => {} };
+      const stubCh = {
+        on() { return stubCh; },
+        subscribe(cb) { if (cb) cb('SUBSCRIBED'); return stubCh; },
+        unsubscribe() {},
+      };
+      if (name === 'active-games-updates' || name === 'announcements_broadcast' || name === 'filtered_words_changes') {
+        return stubCh;
       }
-      if (name === 'announcements_broadcast') {
-        return { on: () => this, subscribe: (cb) => { if (cb) cb('SUBSCRIBED'); return this; }, unsubscribe: () => {} };
-      }
-      return { on: () => this, subscribe: () => this, unsubscribe: () => {} };
+      return stubCh;
     },
     storage: { from: storageFrom },
     _storageRef: () => storageRef,
