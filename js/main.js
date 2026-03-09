@@ -276,7 +276,7 @@ async function ensureUserProfile(user) {
       updated_at: new Date().toISOString(),
     };
     if (!existing) {
-      payload.role = user.isGuest ? undefined : 'user';
+      if (!user.isGuest) payload.role = 'user';
       payload.custom_role_id = user.isGuest ? 'guest' : 'user';
     } else {
       if (existing.role) delete payload.role;

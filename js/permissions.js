@@ -27,17 +27,18 @@ export async function loadUserPermissions() {
     const data = profileSnap.data();
     const role = data.role || 'user';
     const customRoleId = data.custom_role_id || null;
-    let customRole = null;
+    let customRoleData = null;
     if (customRoleId) {
       const roleSnap = await state.fb.firestore.collection('custom_roles').doc(String(customRoleId)).get();
-      if (roleSnap.exists) customRole = roleSnap.data();
+      if (roleSnap.exists) customRoleData = roleSnap.data();
     }
     userRole = role;
+    customRole = customRoleData;
     /* Solo owner ha sempre tutti i permessi; gli altri (admin, moderator, user) in base a quanto configurato dall'owner (custom role o default del ruolo) */
     if (role === 'owner') {
       userPermissions = getDefaultPermissions('owner');
-    } else if (customRole && customRole.permissions) {
-      userPermissions = customRole.permissions;
+    } else if (customRoleData && customRoleData.permissions) {
+      userPermissions = customRoleData.permissions;
     } else {
       userPermissions = getDefaultPermissions(userRole);
     }
