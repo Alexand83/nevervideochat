@@ -51,6 +51,8 @@ Se in console vedi **"The query requires an index"**, apri il link indicato nell
 | **announcements** (`is_active`, `created_at`) | [Crea indice announcements](https://console.firebase.google.com/v1/r/project/nevervideochat/firestore/indexes?create_composite=ClRwcm9qZWN0cy9uZXZlcnZpZGVvY2hhdC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvYW5ub3VuY2VtZW50cy9pbmRleGVzL18QARoNCglpc19hY3RpdmUQARoOCgpjcmVhdGVkX2F0EAIaDAoIX19uYW1lX18QAg) |
 | **rooms** (`is_open`, `created_at`) | [Crea indice rooms](https://console.firebase.google.com/v1/r/project/nevervideochat/firestore/indexes?create_composite=Ckxwcm9qZWN0cy9uZXZlcnZpZGVvY2hhdC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvcm9vbXMvaW5kZXhlcy9fEAEaCwoHaXNfb3BlbhABGg4KCmNyZWF0ZWRfYXQQARoMCghfX25hbWVfXxAB) |
 | **active_games** (`is_active`, `room_id`, `started_at`) | [Crea indice active_games](https://console.firebase.google.com/v1/r/project/nevervideochat/firestore/indexes?create_composite=ClNwcm9qZWN0cy9uZXZlcnZpZGVvY2hhdC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvYWN0aXZlX2dhbWVzL2luZGV4ZXMvXxABGg0KCWlzX2FjdGl2ZRABGgsKB3Jvb21faWQQARoOCgpzdGFydGVkX2F0EAIaDAoIX19uYW1lX18QAg) |
+| **messages** (`room_id`, `created_at`) | [Crea indice messages](https://console.firebase.google.com/v1/r/project/nevervideochat/firestore/indexes?create_composite=Ck9wcm9qZWN0cy9uZXZlcnZpZGVvY2hhdC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvbWVzc2FnZXMvaW5kZXhlcy9fEAEaCwoHcm9vbV9pZBABGg4KCmNyZWF0ZWRfYXQQARoMCghfX25hbWVfXxAB) |
+| **profiles** (`is_guest`, `display_name`) | [Crea indice profiles](https://console.firebase.google.com/v1/r/project/nevervideochat/firestore/indexes?create_composite=Ck9wcm9qZWN0cy9uZXZlcnZpZGVvY2hhdC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvcHJvZmlsZXMvaW5kZXhlcy9fEAEaDAoIaXNfZ3Vlc3QQARoQCgxkaXNwbGF5X25hbWUQARoMCghfX25hbWVfXxAB) |
 
 Per altre query (es. `messages`), Firestore mostrerà un link simile nel messaggio d’errore: aprilo e crea l’indice.
 
@@ -62,6 +64,8 @@ Per altre query (es. `messages`), Firestore mostrerà un link simile nel messagg
 | **[Announcements] The query requires an index** | Crea l'indice per `announcements` (link nella tabella **Indici Firestore** sopra). |
 | **[Rooms] The query requires an index** | Vai alla sezione **Indici Firestore** sopra e crea l’indice per `rooms` (link nella tabella). |
 | **[Games] The query requires an index** | Crea l’indice per `active_games` (link nella tabella sopra). |
+| **Firestore snapshot listener / messages: The query requires an index** | Crea l'indice per `messages` (tabella Indici sopra). Serve per i messaggi in tempo reale per stanza. |
+| **[Admin] Error loading profiles: The query requires an index** | Crea l'indice per `profiles` (tabella Indici sopra). |
 | **set at /broadcast/... failed: permission_denied** | Imposta le regole del **Realtime Database** come in **Regole di sicurezza** (file `firebase/database.rules.json`). Gli utenti devono essere autenticati (Email/Password o Anonymous). |
 | **[Chat] addMessage: Room not found general** | Di solito è conseguenza delle stanze non caricate: crea l’indice per `rooms` e pubblica le regole Firestore; poi ricarica la pagina. |
 

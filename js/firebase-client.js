@@ -64,6 +64,18 @@ function from(collection) {
     return chain;
   };
   chain.single = function() {
+    if (chain._upsertPayload != null) {
+      const payload = chain._upsertPayload;
+      const docId = payload.id != null ? String(payload.id) : (collection === 'active_sessions' && payload.user_id != null ? String(payload.user_id) : null);
+      if (!docId && collection !== 'active_sessions') return Promise.resolve({ data: null, error: { message: 'upsert requires id' } });
+      const ref = firestore.collection(collection).doc(docId);
+      const data = { ...payload };
+      if (payload.updated_at === undefined) data.updated_at = firebase.firestore.FieldValue.serverTimestamp();
+      return ref.set(data, { merge: true })
+        .then(() => ref.get())
+        .then(snap => ({ data: snap.exists ? mapTimestamp(docToRow(snap)) : null, error: null }))
+        .catch(err => ({ data: null, error: err }));
+    }
     const id = chain._docId;
     const docRef = id != null ? firestore.collection(collection).doc(String(id)) : null;
     if (docRef) {
@@ -86,6 +98,9 @@ function from(collection) {
     }).catch(err => ({ data: null, error: err }));
   };
   chain.then = function(resolve) {
+    if (chain._upsertPayload != null) {
+      return chain._runUpsert().then(resolve);
+    }
     if (chain._delete && chain._docId != null) {
       return firestore.collection(collection).doc(String(chain._docId)).delete()
         .then(() => resolve({ error: null })).catch(err => resolve({ error: err }));
@@ -94,7 +109,10 @@ function from(collection) {
       const ref = firestore.collection(collection).doc(String(chain._docId));
       const data = { ...chain._updatePayload };
       if (data.updated_at === undefined) data.updated_at = firebase.firestore.FieldValue.serverTimestamp();
-      return ref.update(data).then(() => resolve({ error: null })).catch(err => resolve({ error: err }));
+      return ref.update(data)
+        .then(() => ref.get())
+        .then(snap => resolve({ data: snap.exists ? [mapTimestamp(docToRow(snap))] : [], error: null }))
+        .catch(err => resolve({ error: err }));
     }
     if (chain._docId != null) return chain.single().then(resolve);
     let q = chain._query || col;
@@ -113,14 +131,21 @@ function from(collection) {
     return col.add(data).then(ref => ({ data: [{ id: ref.id }], error: null })).catch(err => ({ data: null, error: err }));
   };
   chain.upsert = function(payload, opts) {
+    chain._upsertPayload = payload;
+    chain._upsertOpts = opts;
+    return chain;
+  };
+  chain._runUpsert = function() {
+    const payload = chain._upsertPayload;
+    if (!payload) return Promise.resolve({ data: null, error: null });
     const id = payload.id != null ? String(payload.id) : null;
     if (!id && collection !== 'active_sessions') return Promise.resolve({ error: { message: 'upsert requires id' } });
     const docId = id || (payload.user_id != null && collection === 'active_sessions' ? String(payload.user_id) : null);
-    if (!docId) return col.add({ ...payload, updated_at: firebase.firestore.FieldValue.serverTimestamp() }).then(() => ({ error: null })).catch(e => ({ error: e }));
+    if (!docId) return col.add({ ...payload, updated_at: firebase.firestore.FieldValue.serverTimestamp() }).then(() => ({ data: null, error: null })).catch(err => ({ error: err }));
     const ref = firestore.collection(collection).doc(docId);
     const data = { ...payload };
     if (payload.updated_at === undefined) data.updated_at = firebase.firestore.FieldValue.serverTimestamp();
-    return ref.set(data, { merge: true }).then(() => ({ data: null, error: null })).catch(err => ({ error: err }));
+    return ref.set(data, { merge: true }).then(() => ({ data: [{ id: ref.id }], error: null })).catch(err => ({ error: err }));
   };
   chain.update = function(payload) {
     chain._updatePayload = payload;
