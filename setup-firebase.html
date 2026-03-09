@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeverVideoChat — Setup Firebase</title>
+  <style>
+    :root { --bg: #0d1117; --fg: #e6edf3; --border: #30363d; --accent: #58a6ff; --success: #3fb950; --error: #f85149; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); margin: 0; padding: 2rem; line-height: 1.6; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .sub { color: #8b949e; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .card { background: #161b22; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; max-width: 520px; margin-bottom: 1rem; }
+    button { background: var(--accent); color: #fff; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; font-size: 1rem; cursor: pointer; }
+    button:hover { filter: brightness(1.1); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .log { font-family: ui-monospace, monospace; font-size: 0.85rem; background: #0d1117; padding: 0.75rem; border-radius: 6px; margin-top: 1rem; max-height: 280px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    .ok { color: var(--success); }
+    .err { color: var(--error); }
+    .warn { color: #d29922; }
+  </style>
+</head>
+<body>
+  <h1>NeverVideoChat — Setup Firebase</h1>
+  <p class="sub">Crea le collezioni Firestore e i dati iniziali (stanze, temi, ruoli). Esegui una sola volta dopo aver creato il progetto Firebase.</p>
+
+  <div class="card">
+    <p><strong>Configurazione usata:</strong></p>
+    <ul style="margin: 0.5rem 0; padding-left: 1.2rem;">
+      <li>Project ID: <code>nevervideochat</code></li>
+      <li>Auth: Firebase Auth (email/password)</li>
+      <li>Database: Firestore</li>
+      <li>Storage: Firebase Storage (bucket <code>chat-media</code>)</li>
+    </ul>
+    <p style="margin-top: 1rem;">Assicurati di aver abilitato <strong>Authentication</strong> (Email/Password) e <strong>Firestore</strong> nella console Firebase.</p>
+    <button type="button" id="runSetup">Crea collezioni e dati iniziali</button>
+  </div>
+
+  <div class="card">
+    <strong>Log</strong>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script type="module">
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXBM2drCZvPz-Lqpc0ngIk47_cnaM8CxE",
+      authDomain: "nevervideochat.firebaseapp.com",
+      projectId: "nevervideochat",
+      storageBucket: "nevervideochat.firebasestorage.app",
+      messagingSenderId: "1017110864922",
+      appId: "1:1017110864922:web:b5fc6d00ec134fc9641da3"
+    };
+
+    const logEl = document.getElementById('log');
+    const btn = document.getElementById('runSetup');
+
+    function log(msg, type = '') {
+      const line = document.createElement('div');
+      line.className = type;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    const defaultThemes = {
+      dark: { name: 'Dark', display_name: 'Dark Theme', colors: { bg0: "#0d1117", bg1: "#161b22", bg2: "#21262d", bg3: "#2d333b", "bg-hover": "#30363d", border: "#30363d", "border-subtle": "#21262d", tx0: "#e6edf3", tx1: "#8b949e", tx2: "#484f58", "tx-link": "#58a6ff", accent: "#1f6feb", "accent-h": "#388bfd", "accent-dim": "rgba(31,111,235,.18)", "clr-danger": "#da3633", "clr-danger-h": "#f85149", "clr-success": "#238636", "clr-success-h": "#2ea043", "clr-online": "#3fb950", "clr-offline": "#484f58", "bubble-own": "#1a3f6f", "bubble-other": "#21262d" }, is_default: true, is_custom: false },
+      light: { name: 'Light', display_name: 'Light Theme', colors: { bg0: "#ffffff", bg1: "#f6f8fa", bg2: "#e1e4e8", bg3: "#d1d5da", "bg-hover": "#c6cbd1", border: "#d1d5da", "border-subtle": "#e1e4e8", tx0: "#24292e", tx1: "#586069", tx2: "#959da5", "tx-link": "#0366d6", accent: "#0366d6", "accent-h": "#005cc5", "accent-dim": "rgba(3,102,214,.1)", "clr-danger": "#d73a49", "clr-danger-h": "#cb2431", "clr-success": "#28a745", "clr-success-h": "#22863a", "clr-online": "#28a745", "clr-offline": "#959da5", "bubble-own": "#c8e1ff", "bubble-other": "#f1f3f5" }, is_default: false, is_custom: false },
+      blue: { name: 'Blue', display_name: 'Blue Theme', colors: { bg0: "#0a1929", bg1: "#132f4c", bg2: "#1e4976", bg3: "#2a5a8a", "bg-hover": "#35699e", border: "#2a5a8a", "border-subtle": "#1e4976", tx0: "#e3f2fd", tx1: "#90caf9", tx2: "#64b5f6", "tx-link": "#42a5f5", accent: "#2196f3", "accent-h": "#1e88e5", "accent-dim": "rgba(33,150,243,.2)", "clr-danger": "#f44336", "clr-danger-h": "#e53935", "clr-success": "#4caf50", "clr-success-h": "#43a047", "clr-online": "#4caf50", "clr-offline": "#64b5f6", "bubble-own": "#1565c0", "bubble-other": "#1e4976" }, is_default: false, is_custom: false },
+      purple: { name: 'Purple', display_name: 'Purple Theme', colors: { bg0: "#1a1a2e", bg1: "#16213e", bg2: "#0f3460", bg3: "#533483", "bg-hover": "#6a4c93", border: "#533483", "border-subtle": "#0f3460", tx0: "#e8eaf6", tx1: "#c5cae9", tx2: "#9fa8da", "tx-link": "#7986cb", accent: "#9c27b0", "accent-h": "#8e24aa", "accent-dim": "rgba(156,39,176,.2)", "clr-danger": "#e91e63", "clr-danger-h": "#c2185b", "clr-success": "#4caf50", "clr-success-h": "#43a047", "clr-online": "#4caf50", "clr-offline": "#9fa8da", "bubble-own": "#6a1b9a", "bubble-other": "#0f3460" }, is_default: false, is_custom: false }
+    };
+
+    const defaultRoles = {
+      owner: { name: 'Owner', color: '#ff6b6b', permissions: { can_ban: true, can_mute: true, can_kick: true, can_delete_messages: true, can_edit_messages: true, can_manage_rooms: true, can_manage_users: true, can_manage_roles: true, can_view_logs: true, can_manage_announcements: true, can_view_statistics: true, can_post_messages: true } },
+      admin: { name: 'Admin', color: '#4ecdc4', permissions: { can_ban: true, can_mute: true, can_kick: true, can_delete_messages: true, can_edit_messages: true, can_manage_rooms: true, can_manage_users: true, can_manage_roles: false, can_view_logs: true, can_manage_announcements: true, can_view_statistics: true, can_post_messages: true } },
+      moderator: { name: 'Moderator', color: '#95e1d3', permissions: { can_ban: false, can_mute: true, can_kick: true, can_delete_messages: true, can_edit_messages: false, can_manage_rooms: false, can_manage_users: false, can_manage_roles: false, can_view_logs: true, can_manage_announcements: false, can_view_statistics: true, can_post_messages: true } },
+      user: { name: 'User', color: '#8b949e', permissions: { can_ban: false, can_mute: false, can_kick: false, can_delete_messages: false, can_edit_messages: false, can_manage_rooms: false, can_manage_users: false, can_manage_roles: false, can_view_logs: false, can_manage_announcements: false, can_view_statistics: false, can_post_messages: true, can_change_avatar: true, can_change_nickname: true } },
+      guest: { name: 'Guest', color: '#9e9e9e', permissions: { can_ban: false, can_mute: false, can_kick: false, can_delete_messages: false, can_edit_messages: false, can_manage_rooms: false, can_manage_users: false, can_manage_roles: false, can_view_logs: false, can_manage_announcements: false, can_view_statistics: false, can_post_messages: true, can_change_avatar: true, can_change_nickname: true } }
+    };
+
+    btn.addEventListener('click', async () => {
+      logEl.innerHTML = '';
+      btn.disabled = true;
+      log('Avvio setup...', 'ok');
+
+      try {
+        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+        const { getFirestore, doc, setDoc, getDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        log('Firebase inizializzato.', 'ok');
+
+        // ── Room "General" (id "general" = DEFAULT_ROOM_ID nell'app) ──
+        const roomRef = doc(db, 'rooms', 'general');
+        const roomSnap = await getDoc(roomRef);
+        if (!roomSnap.exists()) {
+          await setDoc(roomRef, {
+            name: 'General',
+            icon: '💬',
+            is_open: true,
+            password: null,
+            max_cams: null,
+            is_games_room: false,
+            created_by: 'system',
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp()
+          });
+          log('Creata stanza "General" (id: general).', 'ok');
+        } else {
+          log('Stanza "General" già presente.', 'warn');
+        }
+
+        // ── Themes ──
+        for (const [id, data] of Object.entries(defaultThemes)) {
+          const ref = doc(db, 'themes', id);
+          const snap = await getDoc(ref);
+          if (!snap.exists()) {
+            await setDoc(ref, { ...data, created_at: serverTimestamp(), updated_at: serverTimestamp() });
+            log(`Tema "${id}" creato.`, 'ok');
+          }
+        }
+        log('Temi verificati/creati.', 'ok');
+
+        // ── Custom roles ──
+        for (const [id, data] of Object.entries(defaultRoles)) {
+          const ref = doc(db, 'custom_roles', id);
+          const snap = await getDoc(ref);
+          if (!snap.exists()) {
+            await setDoc(ref, { ...data, created_at: serverTimestamp(), updated_at: serverTimestamp() });
+            log(`Ruolo "${id}" creato.`, 'ok');
+          }
+        }
+        log('Ruoli verificati/creati.', 'ok');
+
+        log('', 'ok');
+        log('Setup completato. Puoi usare l\'app con Firebase.', 'ok');
+        log('Prossimi passi: abilita Auth (Email/Password) e imposta le Security Rules di Firestore e Storage dalla console Firebase.', 'warn');
+      } catch (e) {
+        log('Errore: ' + e.message, 'err');
+        if (e.code) log('Codice: ' + e.code, 'err');
+        console.error(e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

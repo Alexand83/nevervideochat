@@ -4,7 +4,7 @@
 import { DEFAULT_ROOM_ID } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
-import { showToast }       from './utils.js';
+import { showToast, escHtml } from './utils.js';
 import { syncPresence, updateOwnPresence, renderUsers, findUser } from './users.js';
 
 /* Forward refs set by main.js */
@@ -572,7 +572,7 @@ function renderRoomPicker() {
     row.className = 'room-picker-item';
     const roomIdStr = String(room.id);
     const alreadyIn = !!state.rooms[roomIdStr];
-    row.innerHTML = `<span>${room.icon || '💬'} ${room.name}</span>`;
+    row.innerHTML = `<span>${escHtml(room.icon || '💬')} ${escHtml(room.name)}</span>`;
     if (alreadyIn) {
       const badge = document.createElement('span');
       badge.className = 'room-picker-joined'; badge.textContent = '✓ Joined';

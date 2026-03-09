@@ -7,6 +7,10 @@ import { showToast, escHtml } from './utils.js';
 
 let filteredWordsCache = [];
 
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /* ── Carica parole filtrate ──────────────────────────────────── */
 export async function loadFilteredWords() {
   if (!state.supa) return [];
@@ -33,10 +37,10 @@ export function filterMessage(text) {
   
   let filteredText = text;
   let blocked = false;
-  
+
   for (const wordFilter of filteredWordsCache) {
     const word = wordFilter.word.toLowerCase();
-    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    const regex = new RegExp(`\\b${escapeRegex(word)}\\b`, 'gi');
     
     if (regex.test(filteredText)) {
       if (wordFilter.action === 'block') {

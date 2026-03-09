@@ -79,12 +79,24 @@ export function avatarColor(name) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 export function initials(name) {
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  if (name == null || typeof name !== 'string') return '?';
+  const s = name.trim();
+  if (!s) return '?';
+  return s.split(/\s+/).map(n => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || '?';
+}
+/** Restituisce url solo se sicuro (http/https o data:image), altrimenti null per evitare XSS */
+export function safeAvatarUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const u = url.trim().toLowerCase();
+  if (u.startsWith('https://') || u.startsWith('http://')) return url;
+  if (u.startsWith('data:image/')) return url;
+  return null;
 }
 export function setAvatarDisplay(el, name, avatarUrl) {
   if (!el) return;
-  if (avatarUrl) {
-    el.style.backgroundImage    = `url(${avatarUrl})`;
+  const safeUrl = safeAvatarUrl(avatarUrl);
+  if (safeUrl) {
+    el.style.backgroundImage    = `url(${safeUrl})`;
     el.style.backgroundSize     = 'cover';
     el.style.backgroundPosition = 'center';
     el.textContent = '';

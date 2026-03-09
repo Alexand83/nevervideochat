@@ -67,8 +67,8 @@ export async function loadCustomRoles() {
           </div>
         </div>
         <div class="admin-item-actions">
-          <button class="admin-action-btn" data-action="edit" data-role-id="${role.id}">✏️ Edit</button>
-          <button class="admin-action-btn admin-action-danger" data-action="delete" data-role-id="${role.id}">🗑️ Delete</button>
+          <button class="admin-action-btn" data-action="edit" data-role-id="${escHtml(String(role.id))}">✏️ Edit</button>
+          <button class="admin-action-btn admin-action-danger" data-action="delete" data-role-id="${escHtml(String(role.id))}">🗑️ Delete</button>
         </div>
       `;
       item.querySelector('[data-action="edit"]')?.addEventListener('click', () => openRoleEditModal(role));
@@ -663,10 +663,10 @@ export async function loadMessages() {
         </div>
         <div class="admin-item-actions">
           ${!isDeleted ? `
-            <button class="admin-action-btn" data-action="delete" data-msg-id="${msg.id}">🗑️ Delete</button>
-            <button class="admin-action-btn" data-action="edit" data-msg-id="${msg.id}">✏️ Edit</button>
+            <button class="admin-action-btn" data-action="delete" data-msg-id="${escHtml(String(msg.id))}">🗑️ Delete</button>
+            <button class="admin-action-btn" data-action="edit" data-msg-id="${escHtml(String(msg.id))}">✏️ Edit</button>
           ` : `
-            <button class="admin-action-btn" data-action="restore" data-msg-id="${msg.id}">↩️ Restore</button>
+            <button class="admin-action-btn" data-action="restore" data-msg-id="${escHtml(String(msg.id))}">↩️ Restore</button>
           `}
         </div>
       `;
@@ -947,11 +947,11 @@ export async function loadAnnouncements() {
           <div style="margin-top: 8px; color: var(--tx2);">${escHtml(ann.content.substring(0, 100))}${ann.content.length > 100 ? '...' : ''}</div>
         </div>
         <div class="admin-item-actions">
-          <button class="admin-action-btn" data-action="edit" data-ann-id="${ann.id}">✏️ Edit</button>
-          <button class="admin-action-btn ${ann.is_active ? 'admin-action-danger' : ''}" data-action="toggle" data-ann-id="${ann.id}">
+          <button class="admin-action-btn" data-action="edit" data-ann-id="${escHtml(String(ann.id))}">✏️ Edit</button>
+          <button class="admin-action-btn ${ann.is_active ? 'admin-action-danger' : ''}" data-action="toggle" data-ann-id="${escHtml(String(ann.id))}">
             ${ann.is_active ? '⏸️ Deactivate' : '▶️ Activate'}
           </button>
-          <button class="admin-action-btn admin-action-danger" data-action="delete" data-ann-id="${ann.id}">🗑️ Delete</button>
+          <button class="admin-action-btn admin-action-danger" data-action="delete" data-ann-id="${escHtml(String(ann.id))}">🗑️ Delete</button>
         </div>
       `;
       
@@ -1023,8 +1023,8 @@ export async function loadWordFilter() {
           ${wordFilter.replacement ? `<span class="admin-item-id">→ ${escHtml(wordFilter.replacement)}</span>` : ''}
         </div>
         <div class="admin-item-actions">
-          <button class="admin-action-btn" data-action="edit" data-word-id="${wordFilter.id}">✏️ Edit</button>
-          <button class="admin-action-btn admin-action-danger" data-action="delete" data-word-id="${wordFilter.id}">🗑️ Delete</button>
+          <button class="admin-action-btn" data-action="edit" data-word-id="${escHtml(String(wordFilter.id))}">✏️ Edit</button>
+          <button class="admin-action-btn admin-action-danger" data-action="delete" data-word-id="${escHtml(String(wordFilter.id))}">🗑️ Delete</button>
         </div>
       `;
       

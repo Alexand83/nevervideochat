@@ -1,5 +1,5 @@
 /* ================================================================
-   broadcast.js  — Supabase broadcast helpers
+   broadcast.js  — Broadcast helpers (Firebase Realtime DB)
 ================================================================ */
 import { state } from './state.js';
 

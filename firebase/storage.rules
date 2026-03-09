@@ -1,0 +1,15 @@
+rules_version = '2';
+// NeverVideoChat — Storage Security Rules (template)
+// Crea un bucket "chat-media" (o usa il default) e applica queste rules.
+// Firebase Console → Storage → Rules
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /chat-media/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024  // 5 MB
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

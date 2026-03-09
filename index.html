@@ -1337,8 +1337,14 @@
   </div>
 </div>
 
-<!-- Supabase JS SDK: locale per evitare "Tracking Prevention blocked storage" con CDN -->
+<!-- Supabase JS (solo per Storage: bucket chat-media) -->
 <script src="js/vendor/supabase.min.js"></script>
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 <script type="module" src="js/main.js?v=20260452"></script>
 </body>
 </html>

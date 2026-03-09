@@ -3,7 +3,7 @@
 ================================================================ */
 import { state }          from './state.js';
 import { dom }            from './dom.js';
-import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml } from './utils.js';
+import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml, safeAvatarUrl } from './utils.js';
 import { findUser, ensureUser, stopTyping } from './users.js';
 
 /* Forward refs — set by main.js to avoid circular deps */
@@ -108,9 +108,10 @@ export function renderMessage(msg) {
 
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar'; avatar.title = displayName;
-  if (user.avatarUrl) {
+  const safeUrl = safeAvatarUrl(user.avatarUrl);
+  if (safeUrl) {
     avatar.classList.add('has-photo');
-    avatar.style.backgroundImage    = `url(${user.avatarUrl})`;
+    avatar.style.backgroundImage    = `url(${safeUrl})`;
     avatar.style.backgroundSize     = 'cover';
     avatar.style.backgroundPosition = 'center';
   } else {
@@ -148,8 +149,9 @@ export function renderMessage(msg) {
     qAuthor.className = 'msg-quote-author'; qAuthor.textContent = msg.quoteName || '';
     const qText   = document.createElement('span');
     qText.className = 'msg-quote-text';
-    const tmp = document.createElement('div'); tmp.innerHTML = msg.quoteHtml;
-    qText.textContent = tmp.textContent.slice(0, 120) + (tmp.textContent.length > 120 ? '…' : '');
+    const tmp = document.createElement('div');
+    tmp.innerHTML = processHtml(msg.quoteHtml || '');
+    qText.textContent = (tmp.textContent || '').slice(0, 120) + ((tmp.textContent || '').length > 120 ? '…' : '');
     qBlock.append(qAuthor, qText);
     bubble.appendChild(qBlock);
   }
@@ -209,8 +211,9 @@ export function setReplyTo(userId, name, html) {
   if (dom.replyPreviewBar)    dom.replyPreviewBar.hidden = false;
   if (dom.replyPreviewAuthor) dom.replyPreviewAuthor.textContent = `↩ ${name}`;
   if (dom.replyPreviewText)   dom.replyPreviewText.textContent   = (() => {
-    const t = document.createElement('div'); t.innerHTML = html;
-    return t.textContent.slice(0, 80);
+    const t = document.createElement('div');
+    t.innerHTML = processHtml(html || '');
+    return (t.textContent || '').slice(0, 80);
   })();
 }
 export function clearReplyTo() {
@@ -285,7 +288,7 @@ export async function sendMessage() {
         /* La funzione restituisce TRUE se la sessione è valida, FALSE altrimenti */
         if (!isValid) {
           console.warn('[Chat] Session is NOT valid - this is an OLD session from another browser - disconnecting');
-          const { showDisconnectedOverlay } = await import('./supabase-client.js');
+          const { showDisconnectedOverlay } = await import('./firebase-client.js');
           showDisconnectedOverlay();
           return;
         }
@@ -427,7 +430,7 @@ export async function sendMessage() {
       if (error) {
         /* Se è un errore 403, la sessione è stata invalidata */
         if (error?.status === 403 || error?.message?.includes('403') || error?.code === 'PGRST301') {
-          const { checkSessionInvalid } = await import('./supabase-client.js');
+          const { checkSessionInvalid } = await import('./firebase-client.js');
           await checkSessionInvalid();
           return;
         }
@@ -674,9 +677,9 @@ function performSearch() {
   searchResults = room.messages.filter(msg => {
     const text = (() => {
       const div = document.createElement('div');
-      div.innerHTML = msg.html;
-      return div.textContent || '';
-    })().toLowerCase();
+      div.innerHTML = processHtml(msg.html || '');
+      return (div.textContent || '').toLowerCase();
+    })();
     const username = (msg.username || '').toLowerCase();
     return text.includes(searchQuery) || username.includes(searchQuery);
   });

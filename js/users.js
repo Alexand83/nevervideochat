@@ -3,7 +3,7 @@
 ================================================================ */
 import { state } from './state.js';
 import { dom }   from './dom.js';
-import { avatarColor, initials } from './utils.js';
+import { avatarColor, initials, safeAvatarUrl } from './utils.js';
 
 /* Forward-declared — set by main.js to break circular dep */
 let _openContextMenu = null;
@@ -84,9 +84,10 @@ export function renderUsers() {
 
     const av = document.createElement('div');
     av.className = 'user-item-avatar';
-    if (user.avatarUrl) {
+    const safeUrl = safeAvatarUrl(user.avatarUrl);
+    if (safeUrl) {
       av.classList.add('has-photo');
-      av.style.cssText = `background-image:url(${user.avatarUrl});background-size:cover;background-position:center;background-color:transparent`;
+      av.style.cssText = `background-image:url(${safeUrl});background-size:cover;background-position:center;background-color:transparent`;
     } else {
       av.style.backgroundColor = avatarColor(displayName);
       av.textContent = initials(displayName);

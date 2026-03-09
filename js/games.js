@@ -1590,7 +1590,7 @@ function renderSongGameUI() {
   
   return `
     <div class="games-panel-content">
-      <div class="game-hint">💡 Hint: ${hints || 'Nessun hint ancora'}</div>
+      <div class="game-hint">💡 Hint: ${escHtml(hints || 'Nessun hint ancora')}</div>
       <div class="game-stats">👥 Risposte: ${answersCount}</div>
       ${hasAnswered ? '<div class="game-instruction">✅ Hai già risposto! Attendi il risultato...</div>' : suggestionsHtml + '<div class="game-instruction">Clicca su un suggerimento o scrivi: <code>/game guess [titolo]</code></div>'}
     </div>

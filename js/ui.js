@@ -93,17 +93,21 @@ function loadImageFile(file) {
   reader.readAsDataURL(file);
 }
 
+const SAFE_FOLDER = /^[a-z0-9_-]+$/i;
+const SAFE_EXT    = /^[a-z0-9]+$/i;
 export async function uploadToStorage(input, folder, ext) {
   if (!_supabaseReady?.()) return null;
   try {
+    const safeFolder = SAFE_FOLDER.test(String(folder || '')) ? String(folder) : 'uploads';
+    const rawExt = (ext || 'bin').toString().toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
+    const safeExt = SAFE_EXT.test(rawExt) ? rawExt : 'bin';
     let blob;
     if (typeof input === 'string') { const res = await fetch(input); blob = await res.blob(); }
     else blob = input;
-    const name = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext || 'bin'}`;
-    const { error } = await state.supa.storage.from('chat-media').upload(name, blob, { cacheControl: '3600', upsert: false });
-    if (error) throw error;
-    const { data: { publicUrl } } = state.supa.storage.from('chat-media').getPublicUrl(name);
-    return publicUrl;
+    const name = `${safeFolder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${safeExt}`;
+    const res = await state.supa.storage.from('chat-media').upload(name, blob, { cacheControl: '3600', upsert: false });
+    if (res.error) throw res.error;
+    return res.data?.publicUrl ?? null;
   } catch (err) { console.warn('Storage upload error:', err); return null; }
 }
 

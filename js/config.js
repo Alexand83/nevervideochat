@@ -1,9 +1,13 @@
 /* ================================================================
    config.js  — all compile-time constants
 ================================================================ */
+/* Firebase config is in js/firebase-config.js */
+export const AUTH_EMAIL_DOMAIN = 'nvc.local';
+
+/* Storage: se impostati, usa Supabase (bucket chat-media); altrimenti Firebase Storage.
+   Lascia stringhe vuote '' per usare solo Firebase. */
 export const SUPABASE_URL      = 'https://kybarxjynjxpagxijpti.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_0HLInJsBCt5kZCVW9yifcg_1TGxHMCm';
-export const AUTH_EMAIL_DOMAIN = 'nvc.local';
 
 // Rooms are now loaded from database (see rooms.js loadRoomsFromDB)
 export const DEFAULT_ROOM_ID = 'general';

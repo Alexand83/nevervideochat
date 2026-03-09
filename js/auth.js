@@ -103,7 +103,7 @@ export async function verifySessionImmediately(userId, accessToken) {
       /* La funzione restituisce TRUE se la sessione è valida, FALSE altrimenti */
       if (!isValid) {
         console.warn('[Auth] 🚨 IMMEDIATE CHECK: Session is NOT valid - this is an OLD session from another browser - disconnecting NOW');
-        const { showDisconnectedOverlay } = await import('./supabase-client.js');
+        const { showDisconnectedOverlay } = await import('./firebase-client.js');
         showDisconnectedOverlay();
         clearAuthSession();
         return false;
@@ -130,17 +130,8 @@ export async function registerUser(nick, password) {
   const { data, error } = await state.supa.auth.signUp({ email: nickToEmail(nick), password });
   if (error) throw error;
   const userId = data.user.id;
-  
-  /* Assign default "user" role (ID is 'user' string in custom_roles table) */
   await state.supa.from('profiles').upsert(
-    { 
-      id: userId, 
-      username: nick, 
-      display_name: nick, 
-      is_guest: false,
-      role: 'user',  /* Default role for new users */
-      custom_role_id: 'user'  /* Assign default "user" custom role */
-    },
+    { id: userId, username: nick, display_name: nick, is_guest: false, role: 'user', custom_role_id: 'user' },
     { onConflict: 'id' }
   );
   if (data.session) persistAuthSession(data.session);
@@ -150,128 +141,23 @@ export async function registerUser(nick, password) {
 export async function loginUser(nick, password) {
   const { data, error } = await state.supa.auth.signInWithPassword({ email: nickToEmail(nick), password });
   if (error) throw error;
-  
-  /* IMPORTANTE: Imposta la sessione PRIMA di tutto, così auth.uid() è disponibile per RLS */
-  if (data.session) {
-    /* Salva manualmente in localStorage (backup) */
-    persistAuthSession(data.session);
-    
-    /* IMPORTANTE: Imposta la sessione nel client Supabase PRIMA di tutto */
-    /* Questo rende auth.uid() disponibile per RLS e getSession() */
-    const { error: setSessionError } = await state.supa.auth.setSession({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token
-    });
-    
-    if (setSessionError) {
-      console.error('[Auth] Error setting session:', setSessionError);
-    } else {
-      console.log('[Auth] ✅ Session set in Supabase client - auth.uid() should be available now');
-      
-      /* Verifica che la sessione sia effettivamente disponibile */
-      const { data: verifySession } = await state.supa.auth.getSession();
-      if (verifySession?.session) {
-        console.log('[Auth] ✅ Session verified - getSession() works');
-      } else {
-        console.warn('[Auth] ⚠️ Session set but getSession() returns null - this is a problem!');
-      }
-    }
-  }
-  
-  /* IMPORTANTE: Registra questa come sessione attiva nel database DOPO aver impostato la sessione */
-  /* Questo invalida immediatamente tutte le altre sessioni */
+  if (data.session) persistAuthSession(data.session);
   if (data.session?.access_token) {
     try {
-      /* Crea un ID univoco per questa sessione (hash del token) */
       const sessionId = createSessionId(data.session.access_token);
-      
-      console.log('[Auth] Registering new active session:', { userId: data.user.id, sessionId: sessionId.substring(0, 20) + '...' });
-      
-      /* Salva l'ID della sessione nel localStorage per riutilizzarlo */
       saveSessionId(sessionId);
-      console.log('[Auth] Saved session ID to localStorage');
-      
-      /* APPROCCIO SICURO: Usa funzione SQL SECURITY DEFINER per bypassare RLS */
+      await state.supa.rpc('upsert_active_session', { p_user_id: data.user.id, p_session_id: sessionId });
       try {
-        console.log('[Auth] 📝 Registering new active session via SQL function...', {
-          userId: data.user.id,
-          sessionId: sessionId.substring(0, 20) + '...'
-        });
-        
-        /* Chiama la funzione SQL che gestisce tutto lato server */
-        const { data: rpcData, error: sessionError } = await state.supa
-          .rpc('upsert_active_session', {
-            p_user_id: data.user.id,
-            p_session_id: sessionId
-          });
-        
-        if (sessionError) {
-          console.error('[Auth] ❌ ERROR calling upsert_active_session RPC!');
-          console.error('[Auth] ❌ Error object:', sessionError);
-          console.error('[Auth] ❌ Error code:', sessionError.code);
-          console.error('[Auth] ❌ Error message:', sessionError.message);
-          console.error('[Auth] ❌ Error status:', sessionError.status);
-          console.error('[Auth] ❌ Error details (full):', JSON.stringify(sessionError, null, 2));
-          
-          /* Se la funzione non esiste, mostra messaggio chiaro */
-          if (sessionError.code === '42883' || sessionError.message?.includes('function') || sessionError.message?.includes('does not exist')) {
-            console.error('[Auth] 🚨 CRITICAL: SQL function upsert_active_session does not exist!');
-            console.error('[Auth] 🚨 Please run supabase_active_sessions.sql in your Supabase SQL editor!');
-            showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
-          }
-          
-          /* Salva comunque in localStorage come fallback */
-          const sessionData = {
-            userId: data.user.id,
-            sessionId: sessionId,
-            timestamp: Date.now()
-          };
-          localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
-          console.log('[Auth] 💾 Saved to localStorage fallback (RPC failed)');
+        const { broadcastAll } = await import('./broadcast.js');
+        if (state.signalCh && state.signalCh.send) {
+          broadcastAll('session-invalidated', { user_id: data.user.id, userId: data.user.id });
         } else {
-          console.log('[Auth] ✅ SUCCESS! Registered new active session via SQL function');
-          console.log('[Auth] ✅ RPC result:', rpcData);
-          console.log('[Auth] Old sessions are now invalid');
-          
-          /* CRITICO: Notifica tutte le altre sessioni di questo utente che sono state invalidate */
-          /* Questo permette al browser 1 di disconnettersi immediatamente */
-          /* Il broadcast viene inviato anche se il canale non è ancora inizializzato - verrà inviato quando disponibile */
-          try {
-            const { broadcastAll } = await import('./broadcast.js');
-            if (state.signalCh) {
-              broadcastAll('session-invalidated', { user_id: data.user.id, userId: data.user.id });
-              console.log('[Auth] 📢 LOGIN: Broadcasted session-invalidated to all other sessions');
-            } else {
-              /* Canale non ancora inizializzato - salva per inviare dopo */
-              console.log('[Auth] ⏳ LOGIN: Signal channel not ready - will broadcast after connectSupabase()');
-              /* Salva un flag per inviare il broadcast dopo */
-              if (!state.pendingSessionInvalidation) {
-                state.pendingSessionInvalidation = [];
-              }
-              state.pendingSessionInvalidation.push({ user_id: data.user.id, userId: data.user.id });
-            }
-          } catch (broadcastErr) {
-            console.error('[Auth] Error broadcasting session-invalidated:', broadcastErr);
-          }
+          if (!state.pendingSessionInvalidation) state.pendingSessionInvalidation = [];
+          state.pendingSessionInvalidation.push({ user_id: data.user.id, userId: data.user.id });
         }
-      } catch (dbErr) {
-        console.error('[Auth] ❌ Database exception:', dbErr);
-        console.error('[Auth] Exception details:', JSON.stringify(dbErr, null, 2));
-        /* Salva comunque in localStorage come fallback */
-        const sessionData = {
-          userId: data.user.id,
-          sessionId: sessionId,
-          timestamp: Date.now()
-        };
-        localStorage.setItem('nvc_active_session', JSON.stringify(sessionData));
-        console.log('[Auth] Saved to localStorage fallback');
-      }
+      } catch (_) {}
     } catch (err) {
-      console.error('[Auth] Error registering active session:', err);
-      if (err?.message?.includes('function') || err?.code === '42883') {
-        console.error('[Auth] CRITICAL: Database functions not found! Execute supabase_active_sessions.sql!');
-        showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql in Supabase.');
-      }
+      console.warn('[Auth] Error registering active session:', err);
     }
   }
   
@@ -280,64 +166,14 @@ export async function loginUser(nick, password) {
     await verifySessionImmediately(data.user.id, data.session.access_token);
   }
   
-  /* IMPORTANTE: Disconnettere tutte le altre sessioni per permettere solo 1 sessione attiva */
-  /* Usa scope: 'others' per disconnettere solo le altre sessioni, non quella corrente - PIÙ ISTANTANEO! */
-  try {
-    /* Importa le funzioni necessarie */
-    const { markSessionAsNew, markDisconnectingOthers } = await import('./supabase-client.js');
-    
-    /* Marca questa come nuova sessione PRIMA di disconnettere le altre */
-    markSessionAsNew();
-    
-    /* Marca che stiamo disconnettingo le altre sessioni (evita falsi positivi in checkSessionInvalid) */
-    markDisconnectingOthers();
-    
-    /* Prova prima con scope: 'others' (più istantaneo - disconnette solo le altre) */
-    try {
-      await state.supa.auth.signOut({ scope: 'others' });
-      console.log('[Auth] Disconnected all other sessions using scope: others (instant)');
-    } catch (othersErr) {
-      /* Se scope: 'others' non è supportato, usa il metodo fallback */
-      console.warn('[Auth] scope: others not supported, using fallback method');
-      const currentAccessToken = data.session?.access_token;
-      const currentRefreshToken = data.session?.refresh_token;
-      
-      if (currentAccessToken && currentRefreshToken) {
-        /* Fallback: disconnettere tutte le sessioni e ripristinare quella corrente */
-        await state.supa.auth.signOut({ scope: 'global' });
-        await state.supa.auth.setSession({
-          access_token: currentAccessToken,
-          refresh_token: currentRefreshToken,
-        });
-        markSessionAsNew(); /* Marca di nuovo dopo il restore */
-        markDisconnectingOthers(); /* Marca di nuovo che stiamo disconnettingo */
-        console.log('[Auth] Disconnected all other sessions using fallback method');
-      }
-    }
-  } catch (signOutErr) {
-    /* Se fallisce completamente, continua comunque - la sessione corrente è già valida */
-    console.warn('[Auth] Could not disconnect old sessions (this is OK if first login):', signOutErr);
-  }
-
-  /* Invalida le altre sessioni (altri dispositivi) via Edge Function: il vecchio dispositivo riceverà SIGNED_OUT e mostrerà il modal di login */
-  if (data.session?.access_token) {
-    try {
-      const { data: fnResult, error: fnError } = await state.supa.functions.invoke('invalidate-other-sessions', {
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
-      });
-      if (!fnError && fnResult?.invalidated != null) {
-        console.log('[Auth] Invalidated other sessions (other devices):', fnResult.invalidated);
-      }
-      if (fnError) console.warn('[Auth] Edge function invalidate-other-sessions:', fnError.message);
-    } catch (e) {
-      console.warn('[Auth] Could not call invalidate-other-sessions:', e?.message || e);
-    }
-  }
-
+  /* Firebase: altre sessioni vengono invalidate da active_sessions + broadcast session-invalidated */
+  const { markSessionAsNew, markDisconnectingOthers } = await import('./firebase-client.js');
+  markSessionAsNew();
+  markDisconnectingOthers();
   if (data.session) persistAuthSession(data.session);
   
-  /* Marca la sessione come nuova anche dopo il persist */
-  const { markSessionAsNew: markNew } = await import('./supabase-client.js');
+    /* Marca la sessione come nuova anche dopo il persist */
+  const { markSessionAsNew: markNew } = await import('./firebase-client.js');
   markNew();
   const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
   const displayName = profile?.display_name || profile?.username || nick;
@@ -367,205 +203,59 @@ function persistAuthSession(session) {
 function clearAuthSession() { localStorage.removeItem('nvc_auth_session'); }
 
 export async function tryRestoreSession() {
-  if (!state.supa) {
-    console.log('[Auth] tryRestoreSession: Supabase client not initialized');
-    return null;
-  }
-  
-  const stored = JSON.parse(localStorage.getItem('nvc_auth_session') || 'null');
-  console.log('[Auth] tryRestoreSession: Checking for stored session...', {
-    hasStored: !!stored,
-    hasAccessToken: !!stored?.access_token,
-    hasRefreshToken: !!stored?.refresh_token
-  });
-  
-  if (stored?.access_token) {
+  if (!state.supa) return null;
+  const { data } = await state.supa.auth.getSession();
+  if (!data?.user?.id) {
     try {
-      console.log('[Auth] tryRestoreSession: Attempting to restore session from localStorage...');
-      const { data, error } = await state.supa.auth.setSession({
-        access_token: stored.access_token, refresh_token: stored.refresh_token,
-      });
-      
-      console.log('[Auth] tryRestoreSession: setSession result:', {
-        hasError: !!error,
-        error: error,
-        hasData: !!data,
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
-        hasAccessToken: !!data?.session?.access_token
-      });
-      
-      if (!error && data?.user) {
-        if (data.session) persistAuthSession(data.session);
-        
-        /* CRITICO: Verifica che questa sia la sessione attiva - SOLO database, localStorage è per-browser */
-        if (data.session?.access_token) {
-          /* CRITICO: Usa l'UUID esistente se presente, altrimenti genera uno nuovo */
-          /* Ma NON generare un nuovo UUID se la sessione non è valida - usa quello esistente per verificare */
-          let sessionId = localStorage.getItem('nvc_browser_session_id');
-          if (!sessionId) {
-            /* Se non c'è UUID salvato, genera uno nuovo (prima connessione di questo browser) */
-            sessionId = createSessionId(data.session.access_token);
-          } else {
-            console.log('[Auth] Using existing browser session ID for verification:', sessionId.substring(0, 30) + '...');
-          }
-          
-          try {
-            /* CRITICO: Verifica usando funzione SQL - più sicuro */
-            const { data: isValid, error: checkError } = await state.supa
-              .rpc('is_session_valid', {
-                p_user_id: data.user.id,
-                p_session_id: sessionId
-              });
-            
-            if (checkError) {
-              console.error('[Auth] Error calling is_session_valid RPC on restore:', checkError);
-              /* Se la funzione non esiste, permettere il restore (sistema non configurato) */
-              if (checkError.code === '42883' || checkError.message?.includes('function') || checkError.message?.includes('does not exist')) {
-                console.warn('[Auth] SQL function does not exist - allowing restore (system not configured)');
-              } else {
-                console.warn('[Auth] Database check failed - allowing restore (might be first login)');
-              }
-            } else if (isValid === false) {
-              /* La sessione non è valida - è una vecchia sessione da un altro browser */
-              console.warn('[Auth] Restored session is NOT valid - this is an OLD session from another browser - disconnecting');
-              const { showDisconnectedOverlay } = await import('./supabase-client.js');
-              showDisconnectedOverlay();
-              clearAuthSession();
-              /* NON rimuovere nvc_browser_session_id - serve per identificare questo browser */
-              return null;
-            } else {
-              console.log('[Auth] ✅ Restored session is valid - this is the active session');
-              /* Se la sessione è valida ma non c'era UUID salvato, salvalo ora */
-              if (!localStorage.getItem('nvc_browser_session_id')) {
-                localStorage.setItem('nvc_browser_session_id', sessionId);
-                console.log('[Auth] Saved browser session ID for future use');
-              }
-            }
-          } catch (err) {
-            console.error('[Auth] Error checking session on restore:', err);
-            /* In caso di errore, permettere il restore per non bloccare l'utente */
-          }
-          
-          /* CRITICO: Registra questa sessione nel database DOPO averla ripristinata */
-          /* Questo è necessario perché se l'utente ha già una sessione salvata (cookie/localStorage), */
-          /* non passa per loginUser() e quindi la sessione non viene mai registrata nel database */
-          try {
-            console.log('[Auth] 📝 RESTORE: Registering restored session via SQL function...', {
-              userId: data.user.id,
-              sessionId: sessionId.substring(0, 20) + '...'
-            });
-            
-            /* Usa funzione SQL SECURITY DEFINER per bypassare RLS */
-            const { data: rpcData, error: sessionError } = await state.supa
-              .rpc('upsert_active_session', {
-                p_user_id: data.user.id,
-                p_session_id: sessionId
-              });
-            
-            if (sessionError) {
-              console.error('[Auth] ❌ RESTORE: Error calling upsert_active_session RPC!');
-              console.error('[Auth] ❌ Error object:', sessionError);
-              console.error('[Auth] ❌ Error code:', sessionError.code);
-              console.error('[Auth] ❌ Error message:', sessionError.message);
-              console.error('[Auth] ❌ Error status:', sessionError.status);
-              console.error('[Auth] ❌ Error details (full):', JSON.stringify(sessionError, null, 2));
-              
-              if (sessionError.code === '42883' || sessionError.message?.includes('function') || sessionError.message?.includes('does not exist')) {
-                console.error('[Auth] 🚨 RESTORE: SQL function upsert_active_session does not exist!');
-                console.error('[Auth] 🚨 Please run supabase_active_sessions.sql in your Supabase SQL editor!');
-              }
-            } else {
-              console.log('[Auth] ✅ RESTORE: Successfully registered restored session via SQL function');
-              console.log('[Auth] ✅ RPC result:', rpcData);
-              
-              /* CRITICO: Notifica tutte le altre sessioni di questo utente che sono state invalidate */
-              /* Questo permette al browser 1 di disconnettersi immediatamente */
-              /* Il broadcast viene inviato anche se il canale non è ancora inizializzato - verrà inviato quando disponibile */
-              try {
-                const { broadcastAll } = await import('./broadcast.js');
-                if (state.signalCh) {
-                  broadcastAll('session-invalidated', { user_id: data.user.id, userId: data.user.id });
-                  console.log('[Auth] 📢 RESTORE: Broadcasted session-invalidated to all other sessions');
-                } else {
-                  /* Canale non ancora inizializzato - salva per inviare dopo */
-                  console.log('[Auth] ⏳ RESTORE: Signal channel not ready - will broadcast after connectSupabase()');
-                  /* Salva un flag per inviare il broadcast dopo */
-                  if (!state.pendingSessionInvalidation) {
-                    state.pendingSessionInvalidation = [];
-                  }
-                  state.pendingSessionInvalidation.push({ user_id: data.user.id, userId: data.user.id });
-                }
-              } catch (broadcastErr) {
-                console.error('[Auth] Error broadcasting session-invalidated:', broadcastErr);
-              }
-            }
-            
-            /* Salva l'ID della sessione per riferimento locale */
-            saveSessionId(sessionId);
-          } catch (err) {
-            console.error('[Auth] ❌ RESTORE: Exception while registering session:', err);
-            console.error('[Auth] ❌ Exception stack:', err.stack);
-          }
-        }
-        
-        /* CONTROLLO IMMEDIATO: Verifica che questa sia la sessione attiva subito dopo il restore */
-        if (data.session?.access_token) {
-          await verifySessionImmediately(data.user.id, data.session.access_token);
-        }
-        
-        /* Marca la sessione come nuova per evitare che checkSessionInvalid la disconnetta */
-        const { markSessionAsNew } = await import('./supabase-client.js');
-        markSessionAsNew();
-        
-        const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
-        const cachedId    = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
-        const displayName = profile?.display_name || profile?.username || cachedId?.name || `User_${data.user.id.slice(0, 6)}`;
-        const user = { 
-          id: data.user.id, 
-          name: displayName, 
-          username: profile?.username || displayName,
-          avatarUrl: profile?.avatar_url || null, 
-          isGuest: false, 
-          online: true, 
-          hasCamera: false,
-          theme_id: profile?.theme_id || 'dark',
-          language: profile?.language || 'it'
-        };
-        localStorage.setItem('nvc_identity', JSON.stringify(user));
-        return user;
-      }
-      /* Se l'errore è 403, significa che la sessione è stata invalidata da un'altra sessione */
-      if (error?.status === 403 || error?.message?.includes('403')) {
-        console.warn('[Auth] Session invalidated (403) - user was disconnected from another session');
-        const { showDisconnectedOverlay } = await import('./supabase-client.js');
-        showDisconnectedOverlay();
-        clearAuthSession();
+      const cached = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
+      if (cached?.id && cached?.name && cached.isGuest === false) {
+        localStorage.removeItem('nvc_identity');
         return null;
       }
-      clearAuthSession();
-    } catch (netErr) { 
-      console.warn('[Auth] Session restore error:', netErr);
-      /* Se è un errore 403, mostra overlay di disconnessione */
-      if (netErr?.status === 403 || netErr?.message?.includes('403')) {
-        const { showDisconnectedOverlay } = await import('./supabase-client.js');
-        showDisconnectedOverlay();
-      }
-    }
+    } catch (_) {}
+    return null;
   }
-  /* CRITICO: Non permettere a utenti registrati di entrare senza sessione valida */
-  /* Se non c'è sessione, devono fare login */
+  const token = data.session?.access_token;
+  if (!token) return null;
+  let sessionId = getSavedSessionId() || createSessionId(token);
   try {
-    const cached = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
-    if (cached?.id && cached?.name && cached.isGuest === false) {
-      /* Utente registrato senza sessione - rimuovi cache e richiedi login */
-      console.log('[Auth] Registered user without session - clearing cache and requiring login');
-      localStorage.removeItem('nvc_identity');
-      /* NON restituire l'utente - deve fare login */
+    const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
+      p_user_id: data.user.id,
+      p_session_id: sessionId
+    });
+    if (checkError && checkError.message && !String(checkError.message).includes('not exist')) {
+      console.warn('[Auth] Session check error on restore:', checkError);
+    }
+    if (isValid === false) {
+      const { showDisconnectedOverlay } = await import('./firebase-client.js');
+      showDisconnectedOverlay();
+      clearAuthSession();
       return null;
     }
-  } catch {}
-  return null;
+    if (!getSavedSessionId()) localStorage.setItem('nvc_browser_session_id', sessionId);
+    await verifySessionImmediately(data.user.id, token);
+    const { markSessionAsNew } = await import('./firebase-client.js');
+    markSessionAsNew();
+    const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
+    const cachedId = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
+    const displayName = profile?.display_name || profile?.username || cachedId?.name || `User_${data.user.id.slice(0, 6)}`;
+    const user = {
+      id: data.user.id,
+      name: displayName,
+      username: profile?.username || displayName,
+      avatarUrl: profile?.avatar_url || null,
+      isGuest: false,
+      online: true,
+      hasCamera: false,
+      theme_id: profile?.theme_id || 'dark',
+      language: profile?.language || 'it'
+    };
+    localStorage.setItem('nvc_identity', JSON.stringify(user));
+    return user;
+  } catch (err) {
+    console.warn('[Auth] Session restore error:', err);
+    return null;
+  }
 }
 
 export function applyAuthIdentity(id, name, username, avatarUrl, isGuest, themeId = 'dark', language = 'it') {
@@ -764,14 +454,15 @@ async function openProfileModal() {
   dom.profileModal.hidden = false;
 }
 
+const ALLOWED_AVATAR_EXT = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
 async function uploadAvatarFile(file) {
   if (!state.supa) throw new Error('Not connected.');
-  const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
+  let ext = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  if (!ALLOWED_AVATAR_EXT.has(ext)) ext = 'jpg';
   const path = `avatars/${state.currentUser.id}_${Date.now()}.${ext}`;
-  const { error } = await state.supa.storage.from('chat-media').upload(path, file, { upsert: true });
-  if (error) throw error;
-  const { data } = state.supa.storage.from('chat-media').getPublicUrl(path);
-  return data.publicUrl;
+  const res = await state.supa.storage.from('chat-media').upload(path, file, { upsert: true });
+  if (res.error) throw res.error;
+  return res.data?.publicUrl ?? (state.supa._getDownloadURL ? await state.supa._getDownloadURL(path) : '');
 }
 
 async function saveProfile(displayName, avatarUrl) {

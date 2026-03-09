@@ -5,7 +5,7 @@ import { state }              from './state.js';
 import { dom }                from './dom.js';
 import { showToast }          from './utils.js';
 import { loadRejectedCams, loadIgnoredUsers, loadDeviceSettings } from './storage.js';
-import { initSupabaseClient, connectSupabase, connectRoom } from './supabase-client.js';
+import { initFirebaseClient, connectFirebase, connectRoom } from './firebase-client.js';
 import { applyAuthIdentity, getOrCreateGuestIdentity,
          initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
@@ -23,9 +23,9 @@ import { initGames, handleGameCommand } from './games.js';
 /* ── Wire cross-module forward references ── */
 setOpenContextMenu(openContextMenu);   /* users.js → context menu */
 setRenderMessage(renderMessage);       /* rooms.js → chat renderer */
-setLoadRoomMessages(connectRoom);      /* rooms.js → supabase room loader */
+setLoadRoomMessages(connectRoom);      /* rooms.js → Firebase room loader */
 
-const supabaseReady = () => !!state.supa;
+const supabaseReady = () => !!state.supa; /* state.supa = Firebase adapter */
 setChatDeps(openContextMenu, uploadToStorage, supabaseReady, renderRoomTabs, broadcast, handleGameCommand);
 setPChatDeps(supabaseReady);
 setUIDeps(uploadToStorage, supabaseReady);
@@ -91,14 +91,13 @@ async function init() {
     }
   });
 
-  /* Quando perde la connessione di rete (grazia 60s se tab hidden, gestita in showDisconnectedOverlay) */
   window.addEventListener('offline', () => {
     if (!navigator.onLine && state.currentUser) {
-      import('./supabase-client.js').then(({ showDisconnectedOverlay }) => showDisconnectedOverlay());
+      import('./firebase-client.js').then(({ showDisconnectedOverlay }) => showDisconnectedOverlay());
     }
   });
   window.addEventListener('online', () => {
-    import('./supabase-client.js').then(({ clearDisconnectGrace }) => clearDisconnectGrace());
+    import('./firebase-client.js').then(({ clearDisconnectGrace }) => clearDisconnectGrace());
   });
   /* 1. Init UI subsystems */
   initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording();
@@ -108,8 +107,8 @@ async function init() {
   initSearch();
   initAdminPanel();
 
-  /* 2. Create Supabase client (needed for auth) */
-  initSupabaseClient();
+  /* 2. Create Firebase client (auth, Firestore, Realtime DB, Storage) */
+  initFirebaseClient();
 
   /* CRITICO: Imposta finishInit PRIMA che l'utente possa fare login */
   const { setFinishInit } = await import('./auth.js');
@@ -207,13 +206,12 @@ export async function finishInit() {
   /* Reset games panel width CSS variable after rooms are loaded */
   document.documentElement.style.setProperty('--games-panel-width', '0px');
 
-  /* CRITICO: Connetti a Supabase PRIMA di renderizzare utenti e messaggi */
-  /* Questo assicura che i dati siano caricati prima di mostrare l'UI */
+  /* Connetti a Firebase (broadcast, presence, messages) prima di renderizzare */
   try {
-    await connectSupabase();
-    console.log('[Main] ✅ Supabase connected - UI ready');
+    await connectFirebase();
+    console.log('[Main] ✅ Firebase connected - UI ready');
   } catch (err) {
-    console.error('[NVC] Error connecting to Supabase:', err);
+    console.error('[NVC] Error connecting to Firebase:', err);
     showToast('⚠️ Error connecting to server. Some features may not work.');
   }
   

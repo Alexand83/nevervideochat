@@ -548,7 +548,7 @@ async function filterAndRenderUsers() {
       
       item.innerHTML = `
         <div class="admin-item-info">
-          <span class="admin-item-avatar">${user.name.charAt(0).toUpperCase()}</span>
+          <span class="admin-item-avatar">${escHtml((user.name || '?').charAt(0).toUpperCase() || '?')}</span>
           <div>
             <strong>${escHtml(user.name)}</strong>
             <span class="admin-item-id">ID: ${escHtml(user.id)}</span>
@@ -911,7 +911,7 @@ async function unblockIP(ip) {
   
   if (!state.supa) return;
   try {
-    const { error } = await state.supa.from('banned_ips').delete().eq('ip', escHtml(ip));
+    const { error } = await state.supa.from('banned_ips').delete().eq('ip', ip);
     if (error) throw error;
     showToast('✅ IP unblocked.');
     loadBannedIPs();
@@ -950,16 +950,18 @@ async function loadThemes() {
       item.className = 'admin-list-item';
       item.innerHTML = `
         <div class="admin-item-info">
-          <strong>${theme.display_name || theme.name}</strong>
+          <strong>${escHtml(theme.display_name || theme.name)}</strong>
           <div class="admin-item-id">ID: ${theme.id}</div>
           ${theme.is_default ? '<span class="admin-badge admin-badge-success">Default</span>' : ''}
           ${theme.is_custom ? '<span class="admin-badge">Custom</span>' : ''}
         </div>
         <div class="admin-item-actions">
-          ${theme.is_custom ? `<button class="admin-action-btn admin-action-danger" onclick="window.deleteTheme('${theme.id}')">🗑️ Delete</button>` : ''}
+          ${theme.is_custom ? `<button class="admin-action-btn admin-action-danger" data-theme-id="${escHtml(String(theme.id))}" type="button">🗑️ Delete</button>` : ''}
         </div>
       `;
       list.appendChild(item);
+      const delBtn = item.querySelector('button[data-theme-id]');
+      if (delBtn) delBtn.addEventListener('click', () => window.deleteTheme(theme.id));
     });
   } catch (err) {
     console.error('[Admin] Load themes error:', err);
@@ -975,10 +977,17 @@ window.deleteTheme = async function(themeId) {
   }
 };
 
-/* ── Password hashing (simple, should use proper hashing in production) ── */
+/* ── Password hashing (SHA-256, sicuro per confronto lato client o RPC) ── */
 async function hashPassword(password) {
-  // Simple base64 encoding for now - in production use bcrypt or similar
-  return btoa(password);
+  if (!password || typeof password !== 'string') return null;
+  try {
+    const buf = new Uint8Array(new TextEncoder().encode(password));
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    console.error('[Admin] hashPassword failed:', e);
+    return null;
+  }
 }
 
 /* ================================================================
