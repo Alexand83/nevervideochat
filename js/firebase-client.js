@@ -334,6 +334,10 @@ function createPresenceChannel(roomIdStr, key) {
       if (ev === 'presence' && opts?.event === 'leave') leaveListeners.push(fn);
       return this;
     },
+    subscribe(fn) {
+      if (typeof fn === 'function') Promise.resolve().then(() => fn('SUBSCRIBED'));
+      return this;
+    },
     unsubscribe() {
       ref.remove();
       listenRef.off();
