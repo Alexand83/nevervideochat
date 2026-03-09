@@ -1381,10 +1381,11 @@ export async function handleWebRTCSignal(payload) {
           return;
         }
 
-        /* If PC stuck in new/connecting (e.g. stale offer from Firebase replay, or ICE never completed),
-           replace with new offer so the latest signaling wins and ICE can be applied to the new PC. */
+        /* NON sostituire se la PC è ancora in new/connecting: gli ICE stanno arrivando sulla PC
+           corrente. Sostituire creerebbe una PC nuova senza ICE → cam nera. Ignoriamo l'offer duplicata. */
         if (existingPc.connectionState === 'new' || existingPc.connectionState === 'connecting') {
-          console.log('[WebRTC-FLOW] RX offer from', from, '→ REPLACE (existing PC stuck', existingPc.connectionState, ')');
+          console.log('[WebRTC-FLOW] RX offer from', from, '→ IGNORE (existing PC still', existingPc.connectionState, ', keep it so ICE can complete)');
+          return;
         }
 
         /* Otherwise: close stale/dead PC and accept the new offer (keep pendingIncomingICE so new PC can flush it) */
