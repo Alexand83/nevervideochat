@@ -33,7 +33,10 @@ export async function loadUserPermissions() {
       if (roleSnap.exists) customRole = roleSnap.data();
     }
     userRole = role;
-    if (customRole && customRole.permissions) {
+    /* Owner e admin hanno sempre i permessi pieni del ruolo; il custom_role si applica solo a moderator/user */
+    if (role === 'owner' || role === 'admin') {
+      userPermissions = getDefaultPermissions(role);
+    } else if (customRole && customRole.permissions) {
       userPermissions = customRole.permissions;
     } else {
       userPermissions = getDefaultPermissions(userRole);
