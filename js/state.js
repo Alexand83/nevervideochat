@@ -30,6 +30,7 @@ export const state = {
   /* WebRTC */
   outgoingPCs:         {},
   incomingPCs:         {},
+  pendingIncomingICE:   {}, /* { [fromUid]: RTCIceCandidate[] } — ICE (dir out) arrivati prima dell'offer, da flushare quando si crea incoming PC */
   privatePeer:         null,
   activeCallUID:       null,
   streamOpenedForCall: false,

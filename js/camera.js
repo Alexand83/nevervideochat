@@ -414,7 +414,7 @@ export async function closeCameraWindow(uid) {
     
     if (state.incomingPCs[uid]) { 
       state.incomingPCs[uid].close(); 
-      delete state.incomingPCs[uid]; 
+      delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid]; 
     }
   }
 }
@@ -441,7 +441,7 @@ export function resetCameraStateOnDisconnect() {
   }
   for (const uid of Object.keys(state.incomingPCs)) {
     try { state.incomingPCs[uid].close(); } catch (_) {}
-    delete state.incomingPCs[uid];
+    delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid];
   }
   for (const uid of Object.keys(state.cameraWindows)) {
     const cw = state.cameraWindows[uid];
@@ -491,7 +491,7 @@ export async function removeRemoteCameraFromGrid(uid) {
   delete state.cameraWindows[uid];
   if (state.incomingPCs[uid]) {
     try { state.incomingPCs[uid].close(); } catch {}
-    delete state.incomingPCs[uid];
+    delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid];
   }
   for (const room of Object.values(state.rooms)) {
     if (room.users[uid]) room.users[uid].hasCamera = false;
@@ -532,7 +532,7 @@ export async function handleCamClosed(payload) {
     }
     delete state.cameraWindows[uid];
   }
-  if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; }
+  if (state.incomingPCs[uid]) { state.incomingPCs[uid].close(); delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid]; }
 
   /* Clear hasCamera in ALL joined rooms for this user */
   for (const room of Object.values(state.rooms)) {
@@ -1387,7 +1387,7 @@ export async function handleWebRTCSignal(payload) {
         /* Otherwise: close stale/dead PC and accept the new offer */
         console.log('[WebRTC] Closing stale incoming PC for', from, 'to accept new offer. state:', existingPc.signalingState, existingPc.connectionState);
         existingPc.close();
-        delete state.incomingPCs[from];
+        delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
         
         /* Remove old slot from Events grid to avoid stale video */
         if (existingCw?.isEventsGrid && existingCw.el && existingCw.el.parentNode) {
@@ -1489,7 +1489,7 @@ export async function handleWebRTCSignal(payload) {
         if (pc._createdInRoom && String(pc._createdInRoom) !== String(state.activeRoom)) {
           console.log('[WebRTC] PC created in room', pc._createdInRoom, 'but now in room', state.activeRoom, '— discarding stream from', from);
           try { pc.close(); } catch {}
-          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           return;
         }
         
@@ -1520,7 +1520,7 @@ export async function handleWebRTCSignal(payload) {
           if (!isInGuestEventsRoom) {
             console.log('[WebRTC] Discarding stream from', from, '— guest has camera only in Events room', guestEventsRoomId, 'but we are in room', state.activeRoom);
             try { pc.close(); } catch {}
-            if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+            if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
             return;
           }
         }
@@ -1529,7 +1529,7 @@ export async function handleWebRTCSignal(payload) {
         if (state.manuallyClosedCameras[from]) {
           console.log('[WebRTC] Rejecting stream from', from, '— camera was manually closed by user');
           try { pc.close(); } catch {}
-          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           return;
         }
         
@@ -1538,7 +1538,7 @@ export async function handleWebRTCSignal(payload) {
         if (camRoom && String(camRoom) !== String(state.activeRoom)) {
           console.log('[WebRTC] Rejecting stream from', from, '— camera is in room', camRoom, 'but we are in room', state.activeRoom);
           try { pc.close(); } catch {}
-          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from];
+          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           return;
         }
         
@@ -1555,7 +1555,7 @@ export async function handleWebRTCSignal(payload) {
         if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
           console.log('[WebRTC] Connection stuck in', pc.connectionState, 'for 25s for', from, '- removing from grid (no connection)');
           try { pc.close(); } catch {}
-          delete state.incomingPCs[from];
+          delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           removeRemoteCameraFromGrid(from).catch(() => {});
         }
       }, 25000);
@@ -1595,7 +1595,7 @@ export async function handleWebRTCSignal(payload) {
         
         if (pc.connectionState === 'failed') {
           if (state.incomingPCs[from] !== pc) return;
-          delete state.incomingPCs[from];
+          delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
 
           /* Rimuovi slot SUBITO in modo sincrono (così non resta mai schermo nero), poi cleanup completo e eventuale reconnect */
           const cw = state.cameraWindows[from];
@@ -1678,7 +1678,15 @@ export async function handleWebRTCSignal(payload) {
         }
       });
       await pc.setRemoteDescription({ type: 'offer', sdp });
-      /* Flush any buffered ICE candidates that arrived before the offer */
+      /* Flush ICE that arrived before we had an incoming PC (dir 'out' from this peer) */
+      if (state.pendingIncomingICE[from]?.length) {
+        console.log('[WebRTC] Flushing', state.pendingIncomingICE[from].length, 'pre-PC ICE candidates for incoming from', from);
+        for (const c of state.pendingIncomingICE[from]) {
+          await pc.addIceCandidate(c).catch(err => console.warn('[WebRTC] Pre-PC ICE flush error:', err.message));
+        }
+        state.pendingIncomingICE[from] = [];
+      }
+      /* Flush any buffered ICE candidates that arrived before the offer (on this PC) */
       if (pc._pendingCandidates?.length) {
         console.log('[WebRTC] Flushing', pc._pendingCandidates.length, 'buffered ICE candidates for incoming PC from', from);
         for (const c of pc._pendingCandidates) {
@@ -1741,7 +1749,16 @@ export async function handleWebRTCSignal(payload) {
       } else {
         pc = state.outgoingPCs[from] || state.incomingPCs[from]; /* Legacy fallback */
       }
-      if (pc && candidate) {
+      if (!candidate) return;
+      const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidate);
+      /* dir 'out': if we don't have incoming PC yet (offer not processed), buffer so we don't drop owner's ICE */
+      if (dir === 'out' && !pc) {
+        state.pendingIncomingICE[from] = state.pendingIncomingICE[from] || [];
+        state.pendingIncomingICE[from].push(iceCandidate);
+        console.log('[WebRTC] Buffering ICE (dir out) from', from, '(no incoming PC yet) — buffer size:', state.pendingIncomingICE[from].length);
+        return;
+      }
+      if (pc) {
         /* candidate may be deserialized as plain object — reconstruct RTCIceCandidate for logging */
         const candType = candidate.type || (candidate.candidate?.includes(' typ relay ') ? 'relay' : 
                                           candidate.candidate?.includes(' typ srflx ') ? 'srflx' : 
@@ -1750,8 +1767,6 @@ export async function handleWebRTCSignal(payload) {
                                                  candidate.candidate?.includes(' TCP ') ? 'tcp' : 'unknown');
         const pcType = pc === state.outgoingPCs[from] ? 'outgoing' : 'incoming';
         console.log('[WebRTC] Remote ICE candidate type:', candType, 'protocol:', candProto, 'from', from, '→', pcType, 'PC (dir:', dir, ')');
-        /* Reconstruct RTCIceCandidate if needed (WebRTC accepts plain objects too, but safer) */
-        const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidate);
         /* If remote description not set yet, buffer the candidate and apply later */
         if (!pc.remoteDescription) {
           pc._pendingCandidates = pc._pendingCandidates || [];
