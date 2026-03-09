@@ -332,6 +332,11 @@ export async function showDisconnectedOverlay(forceShow) {
   if (appMain) appMain.style.display = '';
   if (appHeader) appHeader.style.display = '';
   state.currentUser = null;
+  state.rooms = {};
+  if (dom.msgsContainer) {
+    dom.msgsContainer.innerHTML = '';
+    if (dom.welcomeBanner && !dom.welcomeBanner.parentNode) dom.msgsContainer.appendChild(dom.welcomeBanner);
+  }
   localStorage.removeItem('nvc_identity');
   localStorage.removeItem('nvc_auth_session');
   localStorage.removeItem('nvc_browser_session_id');
@@ -434,7 +439,7 @@ function startSessionCheckInterval() {
         if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; }
       }
     } catch (_) {}
-  }, 5000);
+  }, 2000);
 }
 
 /* ── connectFirebase: broadcast channel + handlers (same as supabase-client) ── */
