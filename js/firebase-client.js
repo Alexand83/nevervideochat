@@ -192,6 +192,10 @@ function authAdapter() {
 }
 
 /* ── Realtime DB: broadcast channel ── */
+/* Filtra SOLO eventi che aprono UI (cam-req, cam-opened): ignora se troppo vecchi.
+   WebRTC (offer/answer/ICE) NON va mai filtrato: altrimenti la connessione non si stabilisce → cam nera + niente audio. */
+const BROADCAST_UI_MAX_AGE_MS = 25000;
+
 export function createBroadcastChannel() {
   const broadcastRef = rtdb.ref('broadcast');
   const handlers = {};
@@ -199,6 +203,10 @@ export function createBroadcastChannel() {
     const v = snap.val();
     if (!v || !v.event) return;
     const event = v.event;
+    const ts = v.ts || 0;
+    if (event === 'cam-req' || event === 'cam-opened') {
+      if (ts && (Date.now() - ts > BROADCAST_UI_MAX_AGE_MS)) return; /* richieste/annunci vecchi: no popup */
+    }
     const payload = v.payload || {};
     if (handlers[event]) handlers[event].forEach(fn => fn({ payload }));
   });

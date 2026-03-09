@@ -119,12 +119,18 @@ export function createCameraWindow(uid, stream, name, isOwn) {
   const videoEl = $(`cam-vid-${safeUid}`);
   if (videoEl) {
     videoEl.srcObject = null; videoEl.srcObject = stream;
-    videoEl.play().catch(() => {});
     if (!isOwn) {
+      /* Autoplay: i browser bloccano play() con audio se non muted → prima muted, play(), poi unmute */
+      videoEl.muted = true;
       videoEl.volume = 1;
-      initRemoteVolumeControl(uid); /* volume + indicatore "sta parlando" */
-      updateRemoteVideoVisibility(uid); /* applica stato iniziale video off (es. da cam-opened) */
     }
+    videoEl.play().then(() => {
+      if (!isOwn) {
+        videoEl.muted = false; /* abilita audio dopo che play() è partito */
+        initRemoteVolumeControl(uid); /* volume + indicatore "sta parlando" */
+      }
+    }).catch(() => {});
+    if (!isOwn) updateRemoteVideoVisibility(uid); /* applica stato iniziale video off (es. da cam-opened) */
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
     if (!isOwn && stream) {
@@ -1457,8 +1463,12 @@ export async function handleWebRTCSignal(payload) {
           if (cw?.stream) {
             if (track?.kind === 'video' && !cw.stream.getVideoTracks().length) {
               cw.stream.addTrack(track);
-              cw.videoOff = false; /* ha di nuovo video, non mostrare placeholder */
+              cw.videoOff = false;
               updateRemoteVideoVisibility(from);
+              const vid = document.getElementById(`cam-vid-${safeId(from)}`);
+              if (vid && vid.srcObject === cw.stream) {
+                vid.play().then(() => { if (!cw.isOwn) vid.muted = false; }).catch(() => {});
+              }
             } else if (track?.kind === 'audio' && !cw.stream.getAudioTracks().length) {
               cw.stream.addTrack(track);
               closeRemoteVolumeContext(from);
@@ -1713,7 +1723,8 @@ export async function handleWebRTCSignal(payload) {
           }
         }
       } else {
-        console.warn('[WebRTC] Received answer from', from, 'but no outgoing PC found');
+        /* Normale se l'answer è arrivata dopo refresh o è un messaggio replay; non spammare */
+        console.log('[WebRTC] Received answer from', from, 'but no outgoing PC found (ignored)');
       }
     } else if (sigType === 'ice') {
       /* Route ICE candidate to correct PC based on 'dir' field:
