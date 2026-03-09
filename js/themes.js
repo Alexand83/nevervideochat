@@ -28,17 +28,11 @@ export function applyTheme(themeData) {
 
 /* ── Load theme from database ── */
 export async function loadTheme(themeId) {
-  if (!state.supa) return;
-  
+  if (!state.fb) return null;
   try {
-    const { data, error } = await state.supa
-      .from('themes')
-      .select('*')
-      .eq('id', themeId)
-      .maybeSingle();
-    
-    if (error) throw error;
-    if (data) {
+    const snap = await state.fb.firestore.collection('themes').doc(String(themeId)).get();
+    if (snap.exists) {
+      const data = { id: snap.id, ...snap.data() };
       applyTheme(data);
       return data;
     }
@@ -46,7 +40,6 @@ export async function loadTheme(themeId) {
     console.error('[Themes] Load error:', err);
     showToast('⚠️ Failed to load theme.');
   }
-  
   return null;
 }
 
@@ -66,23 +59,11 @@ export async function loadUserTheme() {
 
 /* ── Set user theme ── */
 export async function setUserTheme(themeId) {
-  if (!state.supa || !state.currentUser) return false;
-  
+  if (!state.fb || !state.currentUser) return false;
   try {
-    /* Update user profile */
-    const { error } = await state.supa
-      .from('profiles')
-      .update({ theme_id: themeId })
-      .eq('id', state.currentUser.id);
-    
-    if (error) throw error;
-    
-    /* Update local state */
+    await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).update({ theme_id: themeId });
     state.currentUser.theme_id = themeId;
-    
-    /* Apply theme */
     await loadTheme(themeId);
-    
     showToast('✅ Theme updated.');
     return true;
   } catch (err) {
@@ -94,17 +75,12 @@ export async function setUserTheme(themeId) {
 
 /* ── Get all available themes ── */
 export async function getAllThemes() {
-  if (!state.supa) return [];
-  
+  if (!state.fb) return [];
   try {
-    const { data, error } = await state.supa
-      .from('themes')
-      .select('*')
-      .order('is_default', { ascending: false })
-      .order('name', { ascending: true });
-    
-    if (error) throw error;
-    return data || [];
+    const snap = await state.fb.firestore.collection('themes').get();
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (b.is_default ? 1 : 0) - (a.is_default ? 1 : 0) || (a.name || '').localeCompare(b.name || ''));
+    return list;
   } catch (err) {
     console.error('[Themes] Load all themes error:', err);
     return [];
@@ -113,25 +89,20 @@ export async function getAllThemes() {
 
 /* ── Create custom theme (admin only) ── */
 export async function createCustomTheme(themeData) {
-  if (!state.supa) return false;
-  
+  if (!state.fb || !state.currentUser) return false;
   try {
-    const { data, error } = await state.supa
-      .from('themes')
-      .insert({
-        id: themeData.id,
-        name: themeData.name,
-        display_name: themeData.display_name,
-        colors: themeData.colors,
-        is_custom: true,
-        created_by: state.currentUser.id,
-      })
-      .select()
-      .single();
-    
-    if (error) throw error;
+    const payload = {
+      name: themeData.name,
+      display_name: themeData.display_name,
+      colors: themeData.colors,
+      is_custom: true,
+      created_by: state.currentUser.id,
+    };
+    const ref = state.fb.firestore.collection('themes').doc(String(themeData.id));
+    await ref.set(payload);
+    const snap = await ref.get();
     showToast('✅ Theme created.');
-    return data;
+    return snap.exists ? { id: snap.id, ...snap.data() } : null;
   } catch (err) {
     console.error('[Themes] Create theme error:', err);
     showToast('⚠️ Failed to create theme.');
@@ -141,18 +112,12 @@ export async function createCustomTheme(themeData) {
 
 /* ── Update theme (admin only) ── */
 export async function updateTheme(themeId, updates) {
-  if (!state.supa) return false;
-  
+  if (!state.fb) return false;
   try {
-    const { error } = await state.supa
-      .from('themes')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', themeId);
-    
-    if (error) throw error;
+    await state.fb.firestore.collection('themes').doc(String(themeId)).update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    });
     showToast('✅ Theme updated.');
     return true;
   } catch (err) {
@@ -164,27 +129,14 @@ export async function updateTheme(themeId, updates) {
 
 /* ── Delete custom theme (admin only) ── */
 export async function deleteTheme(themeId) {
-  if (!state.supa) return false;
-  
-  /* Don't allow deleting default themes */
+  if (!state.fb) return false;
   try {
-    const { data: theme } = await state.supa
-      .from('themes')
-      .select('is_custom')
-      .eq('id', themeId)
-      .single();
-    
-    if (!theme?.is_custom) {
+    const snap = await state.fb.firestore.collection('themes').doc(String(themeId)).get();
+    if (!snap.exists || !snap.data()?.is_custom) {
       showToast('⚠️ Cannot delete default themes.');
       return false;
     }
-    
-    const { error } = await state.supa
-      .from('themes')
-      .delete()
-      .eq('id', themeId);
-    
-    if (error) throw error;
+    await state.fb.firestore.collection('themes').doc(String(themeId)).delete();
     showToast('✅ Theme deleted.');
     return true;
   } catch (err) {

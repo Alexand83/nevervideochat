@@ -1155,8 +1155,8 @@ export function requestPublicCamera(targetUid) {
     showToast(`${target?.name || 'User'} is offline.`); 
     return; 
   }
-  if (!state.supa) { 
-    console.warn('[Camera Request] Supabase not connected');
+  if (!state.fb) { 
+    console.warn('[Camera Request] Backend not connected');
     showToast('⚠️ Server connection required.'); 
     return; 
   }

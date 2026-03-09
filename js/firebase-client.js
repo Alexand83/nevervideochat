@@ -1,6 +1,6 @@
 /* ================================================================
-   firebase-client.js — Firebase init + adapter (state.supa API)
-   Replaces Supabase: Auth, Firestore, Realtime DB (presence/broadcast), Storage
+   firebase-client.js — Firebase init (state.fb)
+   Auth, Firestore, Realtime DB (presence/broadcast), Storage
 ================================================================ */
 import { firebaseConfig, FIREBASE_RTDB_URL } from './firebase-config.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
@@ -30,135 +30,7 @@ let graceReconnectInterval = null;
 let broadcastUnsubscribe = null;
 let messageUnsubscribes = {};
 
-/* ── Firestore adapter: state.supa.from(collection) ── */
-function docToRow(docSnap) {
-  if (!docSnap.exists) return null;
-  return { id: docSnap.id, ...docSnap.data() };
-}
-function mapTimestamp(o) {
-  if (!o) return o;
-  const r = { ...o };
-  ['created_at', 'updated_at', 'banned_at', 'kicked_at', 'muted_at', 'expires_at', 'started_at', 'ended_at', 'reviewed_at', 'deleted_at', 'edited_at'].forEach(k => {
-    if (r[k] && typeof r[k].toDate === 'function') r[k] = r[k].toDate().toISOString();
-  });
-  return r;
-}
-
-function from(collection) {
-  const col = firestore.collection(collection);
-  let query = col;
-  const chain = { _col: col, _query: null, _docId: null, _order: null, _limit: null, _updatePayload: null, _delete: false };
-
-  chain.select = function() { return chain; };
-  chain.limit = function(n) { chain._limit = n; return chain; };
-  chain.eq = function(field, value) {
-    if (field === 'id' && ['profiles', 'rooms', 'themes', 'custom_roles', 'active_sessions'].includes(collection)) {
-      chain._docId = value;
-      return chain;
-    }
-    chain._query = (chain._query || col).where(field, '==', value);
-    return chain;
-  };
-  chain.order = function(field, opts) {
-    chain._order = { field, ascending: opts?.ascending !== false };
-    return chain;
-  };
-  chain.single = function() {
-    if (chain._upsertPayload != null) {
-      const payload = chain._upsertPayload;
-      const docId = payload.id != null ? String(payload.id) : (collection === 'active_sessions' && payload.user_id != null ? String(payload.user_id) : null);
-      if (!docId && collection !== 'active_sessions') return Promise.resolve({ data: null, error: { message: 'upsert requires id' } });
-      const ref = firestore.collection(collection).doc(docId);
-      const data = { ...payload };
-      if (payload.updated_at === undefined) data.updated_at = firebase.firestore.FieldValue.serverTimestamp();
-      return ref.set(data, { merge: true })
-        .then(() => ref.get())
-        .then(snap => ({ data: snap.exists ? mapTimestamp(docToRow(snap)) : null, error: null }))
-        .catch(err => ({ data: null, error: err }));
-    }
-    const id = chain._docId;
-    const docRef = id != null ? firestore.collection(collection).doc(String(id)) : null;
-    if (docRef) {
-      return docRef.get().then(snap => {
-        const d = docToRow(snap);
-        return { data: d ? mapTimestamp(d) : null, error: d ? null : { message: 'Not found' } };
-      }).catch(err => ({ data: null, error: err }));
-    }
-    return Promise.resolve({ data: null, error: { message: 'No document id' } });
-  };
-  chain.maybeSingle = function() {
-    if (chain._docId != null) return chain.single().then(r => (r.error && r.error.message === 'Not found' ? { data: null, error: null } : r));
-    let q = chain._query || col;
-    if (chain._order) q = q.orderBy(chain._order.field, chain._order.ascending ? 'asc' : 'desc');
-    const limit = chain._limit != null ? chain._limit : 1;
-    return q.limit(limit).get().then(snap => {
-      const doc = snap.docs[0];
-      const d = doc ? mapTimestamp(docToRow(doc)) : null;
-      return { data: d, error: null };
-    }).catch(err => ({ data: null, error: err }));
-  };
-  chain.then = function(resolve) {
-    if (chain._upsertPayload != null) {
-      return chain._runUpsert().then(resolve);
-    }
-    if (chain._delete && chain._docId != null) {
-      return firestore.collection(collection).doc(String(chain._docId)).delete()
-        .then(() => resolve({ error: null })).catch(err => resolve({ error: err }));
-    }
-    if (chain._updatePayload != null && chain._docId != null) {
-      const ref = firestore.collection(collection).doc(String(chain._docId));
-      const data = { ...chain._updatePayload };
-      if (data.updated_at === undefined) data.updated_at = firebase.firestore.FieldValue.serverTimestamp();
-      return ref.update(data)
-        .then(() => ref.get())
-        .then(snap => resolve({ data: snap.exists ? [mapTimestamp(docToRow(snap))] : [], error: null }))
-        .catch(err => resolve({ error: err }));
-    }
-    if (chain._docId != null) return chain.single().then(resolve);
-    let q = chain._query || col;
-    if (chain._order) q = q.orderBy(chain._order.field, chain._order.ascending ? 'asc' : 'desc');
-    if (chain._limit != null) q = q.limit(chain._limit);
-    return q.get().then(snap => ({ data: snap.docs.map(d => mapTimestamp(docToRow(d))), error: null }))
-      .catch(err => ({ data: null, error: err })).then(resolve);
-  };
-  chain.insert = function(payload) {
-    const data = { ...payload };
-    if (['messages', 'rooms', 'admin_logs', 'announcements', 'reported_messages', 'filtered_words', 'active_games', 'game_scores', 'banned_users', 'banned_ips', 'kicked_users', 'muted_users'].includes(collection)) {
-      data.created_at = firebase.firestore.FieldValue.serverTimestamp();
-      data.updated_at = firebase.firestore.FieldValue.serverTimestamp();
-    }
-    if (collection === 'messages') delete data.updated_at;
-    return col.add(data).then(ref => ({ data: [{ id: ref.id }], error: null })).catch(err => ({ data: null, error: err }));
-  };
-  chain.upsert = function(payload, opts) {
-    chain._upsertPayload = payload;
-    chain._upsertOpts = opts;
-    return chain;
-  };
-  chain._runUpsert = function() {
-    const payload = chain._upsertPayload;
-    if (!payload) return Promise.resolve({ data: null, error: null });
-    const id = payload.id != null ? String(payload.id) : null;
-    if (!id && collection !== 'active_sessions') return Promise.resolve({ error: { message: 'upsert requires id' } });
-    const docId = id || (payload.user_id != null && collection === 'active_sessions' ? String(payload.user_id) : null);
-    if (!docId) return col.add({ ...payload, updated_at: firebase.firestore.FieldValue.serverTimestamp() }).then(() => ({ data: null, error: null })).catch(err => ({ error: err }));
-    const ref = firestore.collection(collection).doc(docId);
-    const data = { ...payload };
-    if (payload.updated_at === undefined) data.updated_at = firebase.firestore.FieldValue.serverTimestamp();
-    return ref.set(data, { merge: true }).then(() => ({ data: [{ id: ref.id }], error: null })).catch(err => ({ error: err }));
-  };
-  chain.update = function(payload) {
-    chain._updatePayload = payload;
-    return chain;
-  };
-  chain.delete = function() {
-    chain._delete = true;
-    return chain;
-  };
-  return chain;
-}
-
-/* ── RPC adapter (Firestore active_sessions) ── */
+/* ── RPC (Firestore active_sessions) ── */
 async function rpc(name, params) {
   if (name === 'is_session_valid') {
     const userId = params.p_user_id;
@@ -180,8 +52,17 @@ async function rpc(name, params) {
   return { data: null, error: { message: 'Unknown RPC' } };
 }
 
+export async function isSessionValid(userId, sessionId) {
+  const r = await rpc('is_session_valid', { p_user_id: userId, p_session_id: sessionId });
+  return r.data === true;
+}
+export async function upsertActiveSession(userId, sessionId) {
+  const r = await rpc('upsert_active_session', { p_user_id: userId, p_session_id: sessionId });
+  return r.error == null;
+}
+
 /* ── Storage adapter: Supabase (se configurato) oppure Firebase ── */
-function storageFrom(bucket) {
+export function storageFrom(bucket) {
   if (bucket !== 'chat-media') return {};
   if (supabaseStorageClient) {
     const supabaseBucket = supabaseStorageClient.storage.from('chat-media');
@@ -217,7 +98,7 @@ function storageFrom(bucket) {
     },
   };
 }
-function getStoragePublicUrl(path) {
+export function getStoragePublicUrl(path) {
   if (supabaseStorageClient) {
     const { data } = supabaseStorageClient.storage.from('chat-media').getPublicUrl(path);
     return Promise.resolve(data?.publicUrl ?? '');
@@ -287,7 +168,7 @@ function authAdapter() {
 }
 
 /* ── Realtime DB: broadcast channel ── */
-function createBroadcastChannel() {
+export function createBroadcastChannel() {
   const broadcastRef = rtdb.ref('broadcast');
   const handlers = {};
   const unsub = broadcastRef.on('child_added', (snap) => {
@@ -326,7 +207,7 @@ function createBroadcastChannel() {
 }
 
 /* ── Presence (Realtime DB per room) ── */
-function createPresenceChannel(roomIdStr, key) {
+export function createPresenceChannel(roomIdStr, key) {
   const path = `presence/room_${roomIdStr.replace(/[.#$/[\]]/g, '_')}/${String(key).replace(/[.#$/[\]]/g, '_')}`;
   const ref = rtdb.ref(path);
   let presenceState = {};
@@ -371,7 +252,7 @@ function createPresenceChannel(roomIdStr, key) {
 }
 
 /* ── Messages subscription (Firestore): only new messages after subscribe ── */
-function subscribeMessages(roomId, onInsert) {
+export function subscribeMessages(roomId, onInsert) {
   if (messageUnsubscribes[roomId]) {
     messageUnsubscribes[roomId]();
     messageUnsubscribes[roomId] = null;
@@ -463,7 +344,7 @@ function stopSessionCheckInterval() {
   if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; }
 }
 export async function checkSessionInvalid() {
-  if (!state.supa || !state.currentUser) return false;
+  if (!state.fb || !state.currentUser) return false;
   if (isDisconnectingOthers) return false;
   if (sessionJustCreated && (Date.now() - sessionCreationTime < 30000)) return false;
   try {
@@ -480,7 +361,7 @@ export async function checkSessionInvalid() {
 
 /* ── connectRoom: Firestore messages + same handlers ── */
 export async function connectRoom(roomId) {
-  if (!state.supa || !state.rooms[roomId]) return;
+  if (!state.fb || !state.rooms[roomId]) return;
   const room = state.rooms[roomId];
   room.messages = [];
   if (roomId === state.activeRoom && dom.msgsContainer) {
@@ -522,7 +403,7 @@ export async function connectRoom(roomId) {
 function startSessionCheckInterval() {
   if (sessionCheckInterval) clearInterval(sessionCheckInterval);
   sessionCheckInterval = setInterval(async () => {
-    if (!state.supa || !state.currentUser) return;
+    if (!state.fb || !state.currentUser) return;
     if (state.currentUser.isGuest) return;
     if (isDisconnectingOthers) return;
     if (sessionJustCreated && (Date.now() - sessionCreationTime < 30000)) return;
@@ -536,7 +417,7 @@ function startSessionCheckInterval() {
       if (!token) return;
       const { getSavedSessionId, createSessionId } = await import('./auth.js');
       const sessionId = getSavedSessionId() || createSessionId(token);
-      const { data: isValid } = await rpc('is_session_valid', { p_user_id: state.currentUser.id, p_session_id: sessionId });
+      const isValid = await isSessionValid(state.currentUser.id, sessionId);
       if (isValid === false) {
         showDisconnectedOverlay();
         if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; }
@@ -547,7 +428,7 @@ function startSessionCheckInterval() {
 
 /* ── connectFirebase: broadcast channel + handlers (same as supabase-client) ── */
 export async function connectFirebase() {
-  if (!state.supa) return;
+  if (!state.fb) return;
   if (reconnectingSupabase) return;
   reconnectingSupabase = true;
   try {
@@ -778,29 +659,6 @@ export function initFirebaseClient() {
     if (!user && !sessionJustCreated && !isDisconnectingOthers) showDisconnectedOverlay();
   });
 
-  state.supa = {
-    auth: authAdapter(),
-    from,
-    rpc,
-    channel(name, opts) {
-      if (name.startsWith('presence:room-')) {
-        const roomIdStr = name.replace('presence:room-', '');
-        return createPresenceChannel(roomIdStr, opts?.config?.presence?.key || state.currentUser?.id);
-      }
-      if (name === 'broadcast:signals-main') return state.signalCh || createBroadcastChannel();
-      const stubCh = {
-        on() { return stubCh; },
-        subscribe(cb) { if (cb) cb('SUBSCRIBED'); return stubCh; },
-        unsubscribe() {},
-      };
-      if (name === 'active-games-updates' || name === 'announcements_broadcast' || name === 'filtered_words_changes') {
-        return stubCh;
-      }
-      return stubCh;
-    },
-    storage: { from: storageFrom },
-    _storageRef: () => storageRef,
-    _getDownloadURL: getStoragePublicUrl,
-  };
+  state.fb = { auth: authAdapter(), firestore, rtdb, storageRef, storage: { from: storageFrom }, getStoragePublicUrl };
   return true;
 }

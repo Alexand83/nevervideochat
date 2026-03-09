@@ -7,6 +7,7 @@ import { dom }     from './dom.js';
 import { avatarColor, initials, showToast, setAvatarDisplay } from './utils.js';
 import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnoredUser } from './storage.js';
 import { renderUsers, updateOwnPresence } from './users.js';
+import { isSessionValid, upsertActiveSession, showDisconnectedOverlay } from './firebase-client.js';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
@@ -52,101 +53,57 @@ export function getSavedSessionId() {
 
 /* ── Verifica immediatamente se la sessione è valida ── */
 export async function verifySessionImmediately(userId, accessToken) {
-  if (!state.supa || !userId || !accessToken) {
-    console.warn('[Auth] IMMEDIATE CHECK: Missing parameters', { hasSupa: !!state.supa, userId, hasToken: !!accessToken });
+  if (!state.fb || !userId || !accessToken) {
+    console.warn('[Auth] IMMEDIATE CHECK: Missing parameters', { hasFb: !!state.fb, userId, hasToken: !!accessToken });
     return false;
   }
-  
   try {
     const sessionId = createSessionId(accessToken);
     const savedSessionId = getSavedSessionId();
-    
-    console.log('[Auth] Immediate session verification:', { 
-      userId, 
-      sessionId: sessionId.substring(0, 20) + '...',
-      savedSessionId: savedSessionId ? savedSessionId.substring(0, 20) + '...' : 'none'
-    });
-    
-    /* CRITICO: Verifica usando funzione SQL - più sicuro e gestisce meglio i casi edge */
+    console.log('[Auth] Immediate session verification:', { userId, sessionId: sessionId.substring(0, 20) + '...', savedSessionId: savedSessionId ? savedSessionId.substring(0, 20) + '...' : 'none' });
     try {
-      console.log('[Auth] 🔍 IMMEDIATE CHECK: Verifying session via SQL function...', {
-        userId: userId,
-        sessionId: sessionId.substring(0, 20) + '...'
-      });
-      
-      const { data: isValid, error: checkError } = await state.supa
-        .rpc('is_session_valid', {
-          p_user_id: userId,
-          p_session_id: sessionId
-        });
-      
-      if (checkError) {
-        console.error('[Auth] ❌ IMMEDIATE CHECK: Error calling is_session_valid RPC:', checkError);
-        console.error('[Auth] ❌ Error code:', checkError.code);
-        console.error('[Auth] ❌ Error message:', checkError.message);
-        console.error('[Auth] ❌ Error status:', checkError.status);
-        console.error('[Auth] ❌ Full error:', JSON.stringify(checkError, null, 2));
-        
-        /* Se la funzione non esiste, permettere (sistema non configurato) */
-        if (checkError.code === '42883' || checkError.message?.includes('function') || checkError.message?.includes('does not exist')) {
-          console.warn('[Auth] ⚠️ IMMEDIATE CHECK: SQL function does not exist - allowing (system not configured)');
-          return true; /* Permetti se il sistema non è configurato */
-        }
-        
-        /* Se c'è un altro errore, blocca per sicurezza */
-        console.warn('[Auth] ⚠️ IMMEDIATE CHECK: Cannot verify session - blocking for security');
-        return false;
-      }
-      
+      console.log('[Auth] 🔍 IMMEDIATE CHECK: Verifying session via SQL function...', { userId, sessionId: sessionId.substring(0, 20) + '...' });
+      const isValid = await isSessionValid(userId, sessionId);
       console.log('[Auth] 🔍 IMMEDIATE CHECK: SQL function returned:', isValid);
-      
-      /* La funzione restituisce TRUE se la sessione è valida, FALSE altrimenti */
       if (!isValid) {
         console.warn('[Auth] 🚨 IMMEDIATE CHECK: Session is NOT valid - this is an OLD session from another browser - disconnecting NOW');
-        const { showDisconnectedOverlay } = await import('./firebase-client.js');
         showDisconnectedOverlay();
         clearAuthSession();
         return false;
       }
-      
       console.log('[Auth] ✅ IMMEDIATE CHECK: Session is valid - this is the active session');
     } catch (err) {
       console.error('[Auth] ❌ IMMEDIATE CHECK: Exception:', err);
-      console.error('[Auth] ❌ Exception stack:', err.stack);
-      /* In caso di errore, blocca per sicurezza */
       return false;
     }
-    
     console.log('[Auth] IMMEDIATE CHECK: ✅ Session is valid');
     return true;
   } catch (err) {
     console.error('[Auth] IMMEDIATE CHECK: Exception:', err);
-    /* In caso di errore, blocca per sicurezza */
     return false;
   }
 }
 
 export async function registerUser(nick, password) {
-  const { data, error } = await state.supa.auth.signUp({ email: nickToEmail(nick), password });
+  const { data, error } = await state.fb.auth.signUp({ email: nickToEmail(nick), password });
   if (error) throw error;
   const userId = data.user.id;
-  await state.supa.from('profiles').upsert(
-    { id: userId, username: nick, display_name: nick, is_guest: false, role: 'user', custom_role_id: 'user' },
-    { onConflict: 'id' }
-  );
+  await state.fb.firestore.collection('profiles').doc(String(userId)).set({
+    id: userId, username: nick, display_name: nick, is_guest: false, role: 'user', custom_role_id: 'user', updated_at: new Date().toISOString(),
+  }, { merge: true });
   if (data.session) persistAuthSession(data.session);
   return { userId, nick, avatarUrl: null };
 }
 
 export async function loginUser(nick, password) {
-  const { data, error } = await state.supa.auth.signInWithPassword({ email: nickToEmail(nick), password });
+  const { data, error } = await state.fb.auth.signInWithPassword({ email: nickToEmail(nick), password });
   if (error) throw error;
   if (data.session) persistAuthSession(data.session);
   if (data.session?.access_token) {
     try {
       const sessionId = createSessionId(data.session.access_token);
       saveSessionId(sessionId);
-      await state.supa.rpc('upsert_active_session', { p_user_id: data.user.id, p_session_id: sessionId });
+      await upsertActiveSession(data.user.id, sessionId);
       try {
         const { broadcastAll } = await import('./broadcast.js');
         if (state.signalCh && state.signalCh.send) {
@@ -160,37 +117,29 @@ export async function loginUser(nick, password) {
       console.warn('[Auth] Error registering active session:', err);
     }
   }
-  
-  /* CONTROLLO IMMEDIATO: Verifica che questa sia la sessione attiva subito dopo il login */
-  if (data.session?.access_token && state.supa) {
-    await verifySessionImmediately(data.user.id, data.session.access_token);
-  }
-  
-  /* Firebase: altre sessioni vengono invalidate da active_sessions + broadcast session-invalidated */
+  if (data.session?.access_token && state.fb) await verifySessionImmediately(data.user.id, data.session.access_token);
   const { markSessionAsNew, markDisconnectingOthers } = await import('./firebase-client.js');
   markSessionAsNew();
   markDisconnectingOthers();
   if (data.session) persistAuthSession(data.session);
-  
-    /* Marca la sessione come nuova anche dopo il persist */
-  const { markSessionAsNew: markNew } = await import('./firebase-client.js');
-  markNew();
-  const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
+  markSessionAsNew();
+  const profileSnap = await state.fb.firestore.collection('profiles').doc(String(data.user.id)).get();
+  const profile = profileSnap.exists ? profileSnap.data() : null;
   const displayName = profile?.display_name || profile?.username || nick;
-  return { 
-    userId: data.user.id, 
-    nick: displayName, 
-    username: profile?.username || nick, 
+  return {
+    userId: data.user.id,
+    nick: displayName,
+    username: profile?.username || nick,
     avatarUrl: profile?.avatar_url || null,
     theme_id: profile?.theme_id || 'dark',
-    language: profile?.language || 'it'
+    language: profile?.language || 'it',
   };
 }
 
 export async function logoutUser() {
   clearAuthSession();
   localStorage.removeItem('nvc_identity');
-  try { await state.supa?.auth.signOut(); } catch {}
+  try { await state.fb?.auth.signOut(); } catch {}
   location.reload();
 }
 
@@ -203,8 +152,8 @@ function persistAuthSession(session) {
 function clearAuthSession() { localStorage.removeItem('nvc_auth_session'); }
 
 export async function tryRestoreSession() {
-  if (!state.supa) return null;
-  const { data } = await state.supa.auth.getSession();
+  if (!state.fb) return null;
+  const { data } = await state.fb.auth.getSession();
   if (!data?.user?.id) {
     try {
       const cached = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
@@ -219,15 +168,8 @@ export async function tryRestoreSession() {
   if (!token) return null;
   let sessionId = getSavedSessionId() || createSessionId(token);
   try {
-    const { data: isValid, error: checkError } = await state.supa.rpc('is_session_valid', {
-      p_user_id: data.user.id,
-      p_session_id: sessionId
-    });
-    if (checkError && checkError.message && !String(checkError.message).includes('not exist')) {
-      console.warn('[Auth] Session check error on restore:', checkError);
-    }
+    const isValid = await isSessionValid(data.user.id, sessionId);
     if (isValid === false) {
-      const { showDisconnectedOverlay } = await import('./firebase-client.js');
       showDisconnectedOverlay();
       clearAuthSession();
       return null;
@@ -236,7 +178,8 @@ export async function tryRestoreSession() {
     await verifySessionImmediately(data.user.id, token);
     const { markSessionAsNew } = await import('./firebase-client.js');
     markSessionAsNew();
-    const { data: profile } = await state.supa.from('profiles').select('*').eq('id', data.user.id).single();
+    const profileSnap = await state.fb.firestore.collection('profiles').doc(String(data.user.id)).get();
+    const profile = profileSnap.exists ? profileSnap.data() : null;
     const cachedId = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
     const displayName = profile?.display_name || profile?.username || cachedId?.name || `User_${data.user.id.slice(0, 6)}`;
     const user = {
@@ -456,52 +399,37 @@ async function openProfileModal() {
 
 const ALLOWED_AVATAR_EXT = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp']);
 async function uploadAvatarFile(file) {
-  if (!state.supa) throw new Error('Not connected.');
+  if (!state.fb) throw new Error('Not connected.');
+  const bucket = state.fb.storage?.from('chat-media');
+  if (!bucket?.upload) throw new Error('Storage not available.');
   let ext = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
   if (!ALLOWED_AVATAR_EXT.has(ext)) ext = 'jpg';
   const path = `avatars/${state.currentUser.id}_${Date.now()}.${ext}`;
-  const res = await state.supa.storage.from('chat-media').upload(path, file, { upsert: true });
+  const res = await bucket.upload(path, file, { upsert: true });
   if (res.error) throw res.error;
-  return res.data?.publicUrl ?? (state.supa._getDownloadURL ? await state.supa._getDownloadURL(path) : '');
+  return res.data?.publicUrl ?? (state.fb.getStoragePublicUrl ? await state.fb.getStoragePublicUrl(path) : '');
 }
 
 async function saveProfile(displayName, avatarUrl) {
-  /* Aggiorna il display_name in state.currentUser.name */
   state.currentUser.name = displayName;
   if (avatarUrl) state.currentUser.avatarUrl = avatarUrl;
   localStorage.setItem('nvc_identity', JSON.stringify(state.currentUser));
-  if (state.supa) {
-    const profileData = {
-      id: state.currentUser.id,
+  if (state.fb) {
+    const ref = state.fb.firestore.collection('profiles').doc(String(state.currentUser.id));
+    const existingSnap = await ref.get();
+    const existing = existingSnap.exists ? existingSnap.data() : null;
+    const payload = {
       username: state.currentUser.username || state.currentUser.name,
       display_name: displayName,
       avatar_url: avatarUrl || null,
       is_guest: state.currentUser.isGuest || false,
+      updated_at: new Date().toISOString(),
     };
-    
-    /* IMPORTANTE: NON sovrascrivere mai i ruoli esistenti! */
-    /* Controlla se esiste già un profilo con ruoli */
-    const { data: existing } = await state.supa
-      .from('profiles')
-      .select('role, custom_role_id')
-      .eq('id', String(state.currentUser.id))
-      .maybeSingle();
-    
-    if (existing) {
-      /* Se esiste già, NON toccare i ruoli - solo aggiornare nome/avatar */
-      /* Non aggiungere role o custom_role_id al profileData */
-    } else {
-      /* Solo se NON esiste, assegna ruoli di default */
-      if (state.currentUser.isGuest) {
-        profileData.custom_role_id = 'guest';
-      } else {
-        /* Per nuovi utenti registrati, assegna 'user' di default */
-        profileData.role = 'user';
-        profileData.custom_role_id = 'user';
-      }
+    if (!existing) {
+      payload.role = state.currentUser.isGuest ? undefined : 'user';
+      payload.custom_role_id = state.currentUser.isGuest ? 'guest' : 'user';
     }
-    
-    await state.supa.from('profiles').upsert(profileData, { onConflict: 'id' });
+    await ref.set(payload, { merge: true });
     
     /* Ricarica permessi dopo il salvataggio per assicurarsi che siano aggiornati */
     const { refreshPermissions } = await import('./permissions.js');
@@ -559,13 +487,9 @@ export function initSettingsModal() {
     const { setLanguage } = await import('./i18n.js');
     setLanguage(lang);
     
-    /* Update user profile */
-    if (state.supa) {
+    if (state.fb) {
       try {
-        await state.supa
-          .from('profiles')
-          .update({ language: lang })
-          .eq('id', state.currentUser.id);
+        await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).update({ language: lang });
         state.currentUser.language = lang;
       } catch (err) {
         console.error('[Auth] Update language error:', err);

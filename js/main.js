@@ -25,7 +25,7 @@ setOpenContextMenu(openContextMenu);   /* users.js → context menu */
 setRenderMessage(renderMessage);       /* rooms.js → chat renderer */
 setLoadRoomMessages(connectRoom);      /* rooms.js → Firebase room loader */
 
-const supabaseReady = () => !!state.supa; /* state.supa = Firebase adapter */
+const supabaseReady = () => !!state.fb;
 setChatDeps(openContextMenu, uploadToStorage, supabaseReady, renderRoomTabs, broadcast, handleGameCommand);
 setPChatDeps(supabaseReady);
 setUIDeps(uploadToStorage, supabaseReady);
@@ -128,9 +128,9 @@ async function init() {
 export async function finishInit() {
   console.log('[Main] 🚀 finishInit called', { hasCurrentUser: !!state.currentUser, userId: state.currentUser?.id });
   /* CONTROLLO IMMEDIATO: Verifica la sessione all'entrata iniziale (solo per utenti registrati) */
-  if (state.currentUser && !state.currentUser.isGuest && state.supa) {
+  if (state.currentUser && !state.currentUser.isGuest && state.fb) {
     try {
-      const session = await state.supa.auth.getSession();
+      const session = await state.fb.auth.getSession();
       if (session?.data?.session?.access_token) {
         const { verifySessionImmediately } = await import('./auth.js');
         const isValid = await verifySessionImmediately(state.currentUser.id, session.data.session.access_token);
@@ -179,7 +179,7 @@ export async function finishInit() {
   }
 
   /* Load mute/kick/ban status for current user */
-  if (state.supa && state.currentUser) {
+  if (state.fb && state.currentUser) {
     /* Crea/aggiorna profilo nel database con ruoli di default */
     await ensureUserProfile(state.currentUser);
     /* Carica nome e colore del ruolo (custom_roles) per presenza e lista utenti */
@@ -236,24 +236,23 @@ export async function finishInit() {
 
 /* ── Carica nome e colore del ruolo (custom_roles) per l'utente corrente ── */
 async function loadCurrentUserRole() {
-  if (!state.supa || !state.currentUser) return;
+  if (!state.fb || !state.currentUser) return;
   if (state.currentUser.isGuest) {
     state.currentUser.roleName = 'Guest';
     state.currentUser.roleColor = '#8b949e';
     return;
   }
   try {
-    const { data, error } = await state.supa
-      .from('profiles')
-      .select('custom_role_id, custom_roles(name, color)')
-      .eq('id', String(state.currentUser.id))
-      .maybeSingle();
-    if (error || !data) {
+    const profileSnap = await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).get();
+    const data = profileSnap.exists ? profileSnap.data() : null;
+    const customRoleId = data?.custom_role_id;
+    if (!customRoleId) {
       state.currentUser.roleName = 'User';
       state.currentUser.roleColor = '#8b949e';
       return;
     }
-    const role = data.custom_roles;
+    const roleSnap = await state.fb.firestore.collection('custom_roles').doc(String(customRoleId)).get();
+    const role = roleSnap.exists ? roleSnap.data() : null;
     state.currentUser.roleName = role?.name || 'User';
     state.currentUser.roleColor = role?.color || '#8b949e';
   } catch (_) {
@@ -264,53 +263,28 @@ async function loadCurrentUserRole() {
 
 /* ── Assicura che l'utente abbia un profilo nel database con ruoli di default ── */
 async function ensureUserProfile(user) {
-  if (!state.supa || !user) return;
-  
+  if (!state.fb || !user) return;
   try {
-    const profileData = {
-      id: String(user.id),
+    const ref = state.fb.firestore.collection('profiles').doc(String(user.id));
+    const existingSnap = await ref.get();
+    const existing = existingSnap.exists ? existingSnap.data() : null;
+    const payload = {
       username: user.username || user.name,
       display_name: user.name,
       avatar_url: user.avatarUrl || null,
       is_guest: user.isGuest || false,
+      updated_at: new Date().toISOString(),
     };
-    
-    /* Assegna ruoli di default */
-    if (user.isGuest) {
-      profileData.custom_role_id = 'guest';
+    if (!existing) {
+      payload.role = user.isGuest ? undefined : 'user';
+      payload.custom_role_id = user.isGuest ? 'guest' : 'user';
     } else {
-      /* Per utenti registrati, assicura che abbiano ruolo 'user' di default */
-      profileData.role = 'user';
-      profileData.custom_role_id = 'user';
+      if (existing.role) delete payload.role;
+      else if (!user.isGuest) payload.role = 'user';
+      if (existing.custom_role_id) delete payload.custom_role_id;
+      else payload.custom_role_id = user.isGuest ? 'guest' : 'user';
     }
-    
-    /* Usa upsert per creare o aggiornare, ma non sovrascrivere ruoli esistenti */
-    const { data: existing } = await state.supa
-      .from('profiles')
-      .select('role, custom_role_id')
-      .eq('id', String(user.id))
-      .maybeSingle();
-    
-    if (existing) {
-      /* Se esiste già, NON sovrascrivere ruoli esistenti */
-      if (existing.role) {
-        /* L'utente ha già un ruolo (owner, admin, moderator, user) - non sovrascriverlo */
-        delete profileData.role;
-      } else if (!user.isGuest) {
-        /* Solo se non ha ruolo e non è guest, assegna 'user' di default */
-        profileData.role = 'user';
-      }
-      
-      if (existing.custom_role_id) {
-        /* L'utente ha già un custom_role_id - non sovrascriverlo */
-        delete profileData.custom_role_id;
-      } else {
-        /* Solo se non ha custom_role_id, assegna quello di default */
-        profileData.custom_role_id = user.isGuest ? 'guest' : 'user';
-      }
-    }
-    
-    await state.supa.from('profiles').upsert(profileData, { onConflict: 'id' });
+    await ref.set(payload, { merge: true });
   } catch (err) {
     console.error('[Main] Error ensuring user profile:', err);
   }
@@ -318,43 +292,24 @@ async function ensureUserProfile(user) {
 
 /* ── Load mute/kick/ban status for current user ── */
 async function loadUserRestrictions(userId) {
-  if (!state.supa) return;
+  if (!state.fb) return;
   try {
-    /* Load muted users */
-    const { data: muted, error: muteErr } = await state.supa
-      .from('muted_users')
-      .select('*')
-      .eq('user_id', userId);
-    if (!muteErr && muted) {
-      muted.forEach(m => {
-        if (!state.mutedUsers[userId]) state.mutedUsers[userId] = {};
-        state.mutedUsers[userId] = { room_id: m.room_id, expires_at: m.expires_at };
-      });
-    }
-    
-    /* Load kicked users */
-    const { data: kicked, error: kickErr } = await state.supa
-      .from('kicked_users')
-      .select('*')
-      .eq('user_id', userId);
-    if (!kickErr && kicked) {
-      state.kickedUsers[userId] = {};
-      kicked.forEach(k => {
-        state.kickedUsers[userId][k.room_id] = k.expires_at;
-      });
-    }
-    
-    /* Load banned users */
-    const { data: banned, error: banErr } = await state.supa
-      .from('banned_users')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (!banErr && banned) {
-      state.bannedUsers[userId] = { 
-        expires_at: banned.expires_at,
-        reason: banned.reason 
-      };
+    const mutedSnap = await state.fb.firestore.collection('muted_users').where('user_id', '==', userId).get();
+    mutedSnap.docs.forEach(d => {
+      const m = d.data();
+      if (!state.mutedUsers[userId]) state.mutedUsers[userId] = {};
+      state.mutedUsers[userId] = { room_id: m.room_id, expires_at: m.expires_at };
+    });
+    const kickedSnap = await state.fb.firestore.collection('kicked_users').where('user_id', '==', userId).get();
+    state.kickedUsers[userId] = {};
+    kickedSnap.docs.forEach(d => {
+      const k = d.data();
+      state.kickedUsers[userId][k.room_id] = k.expires_at;
+    });
+    const bannedSnap = await state.fb.firestore.collection('banned_users').where('user_id', '==', userId).limit(1).get();
+    if (!bannedSnap.empty) {
+      const banned = bannedSnap.docs[0].data();
+      state.bannedUsers[userId] = { expires_at: banned.expires_at, reason: banned.reason };
     }
   } catch (err) {
     console.error('[Main] Load restrictions error:', err);

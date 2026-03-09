@@ -73,45 +73,24 @@ export function initGames() {
   checkActiveGame();
   
   /* Subscribe to active_games changes for real-time updates */
-  if (state.supa) {
+  if (state.fb) {
     let lastUpdateTime = 0;
-    const UPDATE_THROTTLE = 500; /* Minimo 500ms tra aggiornamenti */
-    
-    const gamesChannel = state.supa.channel('active-games-updates');
-    gamesChannel
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'active_games' },
-        async (payload) => {
-          /* Throttle: evita aggiornamenti troppo frequenti */
-          const now = Date.now();
-          if (now - lastUpdateTime < UPDATE_THROTTLE) {
-            console.log('[Games] Update throttled, skipping...');
-            return;
-          }
-          lastUpdateTime = now;
-          
-          /* Aggiorna solo se il cambiamento riguarda la stanza attiva */
-          if (payload.new && String(payload.new.room_id) === String(state.activeRoom)) {
-            /* Evita di ricaricare se è solo un aggiornamento di stato (non un nuovo gioco) */
-            if (payload.eventType === 'INSERT' || (payload.eventType === 'UPDATE' && payload.new.game_state)) {
-              console.log('[Games] Active game changed in current room, reloading...');
-              await checkActiveGame();
-              /* Forza aggiornamento UI */
-              setTimeout(() => {
-                updateGamesPanel();
-              }, 100);
-            }
-          } else if (payload.old && String(payload.old.room_id) === String(state.activeRoom) && !payload.new) {
-            /* Gioco terminato nella stanza attiva */
-            console.log('[Games] Active game ended in current room');
-            await checkActiveGame();
-            setTimeout(() => {
-              updateGamesPanel();
-            }, 100);
-          }
-        }
-      )
-      .subscribe();
+    const UPDATE_THROTTLE = 500;
+    state.fb.firestore.collection('active_games').onSnapshot(snap => {
+      const now = Date.now();
+      if (now - lastUpdateTime < UPDATE_THROTTLE) return;
+      let relevant = false;
+      snap.docChanges().forEach(change => {
+        const doc = change.doc;
+        const rid = doc.id;
+        if (String(rid) !== String(state.activeRoom)) return;
+        relevant = true;
+      });
+      if (relevant) {
+        lastUpdateTime = now;
+        checkActiveGame().then(() => setTimeout(() => updateGamesPanel(), 100));
+      }
+    });
   }
   
   /* Show/hide games panel based on room type and device */
@@ -253,9 +232,8 @@ export function initGames() {
 /* ── Controlla se c'è un gioco attivo nella stanza ───────────── */
 let checkingGame = false; /* Flag per evitare chiamate multiple simultanee */
 export async function checkActiveGame() {
-  if (!state.supa || !state.activeRoom) return;
+  if (!state.fb || !state.activeRoom) return;
   
-  /* Evita chiamate multiple simultanee */
   if (checkingGame) {
     console.log('[Games] checkActiveGame already in progress, skipping...');
     return;
@@ -263,22 +241,14 @@ export async function checkActiveGame() {
   
   checkingGame = true;
   try {
-    const { data, error } = await state.supa
-      .from('active_games')
-      .select('*')
-      .eq('room_id', state.activeRoom)
-      .eq('is_active', true)
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    if (error) throw error;
-    if (data) {
+    const snap = await state.fb.firestore.collection('active_games').doc(String(state.activeRoom)).get();
+    const data = snap.exists ? { id: snap.id, ...snap.data() } : null;
+    if (data && data.is_active) {
       activeGame = {
         id: data.id,
         game_type: data.game_type,
         host_id: data.host_id,
-        room_id: data.room_id,
+        room_id: data.room_id || data.id,
         game_state: data.game_state,
       };
       
@@ -1191,12 +1161,9 @@ async function endQuizGame() {
   }
   
   /* Salva nel DB che il gioco è finito */
-  if (state.supa) {
+  if (state.fb && activeGame) {
     try {
-      await state.supa
-        .from('active_games')
-        .update({ is_active: false, ended_at: new Date().toISOString() })
-        .eq('id', activeGame.id);
+      await state.fb.firestore.collection('active_games').doc(String(activeGame.room_id || activeGame.id)).update({ is_active: false, ended_at: new Date() });
     } catch (err) {
       console.error('[Games] Error ending quiz game:', err);
     }
@@ -1239,12 +1206,9 @@ async function stopGame() {
     gameTimer = null;
   }
   
-  if (state.supa) {
+  if (state.fb && activeGame) {
     try {
-      await state.supa
-        .from('active_games')
-        .update({ is_active: false, ended_at: new Date().toISOString() })
-        .eq('id', activeGame.id);
+      await state.fb.firestore.collection('active_games').doc(String(activeGame.room_id || activeGame.id)).update({ is_active: false, ended_at: new Date() });
     } catch (err) {
       console.error('[Games] Error stopping game:', err);
     }
@@ -1279,10 +1243,9 @@ async function stopGame() {
 
 /* ── Salva gioco attivo ──────────────────────────────────────── */
 async function saveActiveGame() {
-  if (!state.supa || !activeGame) return;
+  if (!state.fb || !activeGame) return;
   
   try {
-    /* Prendi lo stato corrente dal gameData */
     let gameState = {};
     if (activeGame.game_type === 'song') {
       gameState = {
@@ -1310,22 +1273,16 @@ async function saveActiveGame() {
       };
     }
     
-    const { data, error } = await state.supa
-      .from('active_games')
-      .upsert({
-        room_id: activeGame.room_id,
-        game_type: activeGame.game_type,
-        game_state: gameState,
-        host_id: activeGame.host_id,
-        is_active: true,
-      }, {
-        onConflict: 'room_id',
-      })
-      .select()
-      .single();
-    
-    if (error) throw error;
-    if (data) activeGame.id = data.id;
+    const roomId = String(activeGame.room_id);
+    await state.fb.firestore.collection('active_games').doc(roomId).set({
+      room_id: roomId,
+      game_type: activeGame.game_type,
+      game_state: gameState,
+      host_id: activeGame.host_id,
+      is_active: true,
+      started_at: new Date(),
+    }, { merge: true });
+    activeGame.id = roomId;
   } catch (err) {
     console.error('[Games] Error saving active game:', err);
   }
@@ -1333,19 +1290,16 @@ async function saveActiveGame() {
 
 /* ── Aggiorna punteggio ────────────────────────────────────────── */
 async function updateScore(userId, gameType, points) {
-  if (!state.supa) return;
+  if (!state.fb) return;
   
-  /* Security: Validate inputs */
   if (!userId || typeof userId !== 'string') {
     console.error('[Games] Invalid userId in updateScore');
     return;
   }
-  
   if (!gameType || typeof gameType !== 'string' || !['song', 'truthLie', 'quiz'].includes(gameType)) {
     console.error('[Games] Invalid gameType in updateScore');
     return;
   }
-  
   if (typeof points !== 'number' || isNaN(points) || points < 0 || points > 1000) {
     console.error('[Games] Invalid points value in updateScore');
     return;
@@ -1353,40 +1307,30 @@ async function updateScore(userId, gameType, points) {
   
   try {
     const user = findUser(userId);
-    const username = (user?.name || 'Guest').substring(0, 50); /* Security: Limit username length */
+    const username = (user?.name || 'Guest').substring(0, 50);
+    const docId = `${String(userId)}_${String(state.activeRoom)}_${String(gameType)}`;
+    const ref = state.fb.firestore.collection('game_scores').doc(docId);
+    const snap = await ref.get();
     
-    const { data: existing, error: fetchError } = await state.supa
-      .from('game_scores')
-      .select('*')
-      .eq('user_id', String(userId)) /* Security: Ensure string */
-      .eq('room_id', String(state.activeRoom)) /* Security: Ensure string */
-      .eq('game_type', String(gameType)) /* Security: Ensure string */
-      .maybeSingle();
-    
-    if (fetchError) throw fetchError;
-    
-    if (existing) {
-      await state.supa
-        .from('game_scores')
-        .update({
-          score: existing.score + points,
-          games_played: existing.games_played + 1,
-          wins: existing.wins + (points > 0 ? 1 : 0),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id);
+    if (snap.exists) {
+      const existing = snap.data();
+      await ref.update({
+        score: (existing.score || 0) + points,
+        games_played: (existing.games_played || 0) + 1,
+        wins: (existing.wins || 0) + (points > 0 ? 1 : 0),
+        updated_at: new Date(),
+      });
     } else {
-      await state.supa
-        .from('game_scores')
-        .insert({
-          user_id: String(userId), /* Security: Ensure string */
-          username: username,
-          room_id: String(state.activeRoom), /* Security: Ensure string */
-          game_type: String(gameType), /* Security: Ensure string */
-          score: Math.max(0, Math.min(1000000, points)), /* Security: Clamp score */
-          games_played: 1,
-          wins: points > 0 ? 1 : 0,
-        });
+      await ref.set({
+        user_id: String(userId),
+        username,
+        room_id: String(state.activeRoom),
+        game_type: String(gameType),
+        score: Math.max(0, Math.min(1000000, points)),
+        games_played: 1,
+        wins: points > 0 ? 1 : 0,
+        updated_at: new Date(),
+      });
     }
   } catch (err) {
     console.error('[Games] Error updating score:', err);
@@ -1396,18 +1340,16 @@ async function updateScore(userId, gameType, points) {
 /* ── Render classifica finale nel pannello ───────────────────── */
 async function renderFinalLeaderboard(gameType) {
   const container = getGameContainer();
-  if (!state.supa || !container) return;
+  if (!state.fb || !container) return;
   
   try {
-    const { data, error } = await state.supa
-      .from('game_scores')
-      .select('*')
-      .eq('room_id', state.activeRoom)
-      .eq('game_type', gameType)
-      .order('score', { ascending: false })
-      .limit(10);
-    
-    if (error) throw error;
+    const snap = await state.fb.firestore.collection('game_scores')
+      .where('room_id', '==', state.activeRoom)
+      .where('game_type', '==', gameType)
+      .orderBy('score', 'desc')
+      .limit(10)
+      .get();
+    const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     
     let leaderboardHtml = '<div class="games-panel-content"><div class="game-leaderboard-final">';
     leaderboardHtml += '<div class="game-leaderboard-title">🏆 Classifica Finale</div>';
@@ -1446,17 +1388,15 @@ async function renderFinalLeaderboard(gameType) {
 
 /* ── Mostra classifica ────────────────────────────────────────── */
 async function showScores() {
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
-    const { data, error } = await state.supa
-      .from('game_scores')
-      .select('*')
-      .eq('room_id', state.activeRoom)
-      .order('score', { ascending: false })
-      .limit(10);
-    
-    if (error) throw error;
+    const snap = await state.fb.firestore.collection('game_scores')
+      .where('room_id', '==', state.activeRoom)
+      .orderBy('score', 'desc')
+      .limit(10)
+      .get();
+    const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     
     if (!data || data.length === 0) {
       showToast('📊 Nessun punteggio ancora! Sii il primo a giocare!');

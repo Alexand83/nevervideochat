@@ -9,7 +9,7 @@ let customRole = null;
 
 /* ── Carica permessi utente ──────────────────────────────────── */
 export async function loadUserPermissions() {
-  if (!state.supa || !state.currentUser) {
+  if (!state.fb || !state.currentUser) {
     userPermissions = null;
     userRole = null;
     customRole = null;
@@ -17,27 +17,25 @@ export async function loadUserPermissions() {
   }
 
   try {
-    const { data, error } = await state.supa
-      .from('profiles')
-      .select('role, custom_role_id, custom_roles(*)')
-      .eq('id', state.currentUser.id)
-      .single();
-
-    if (error || !data) {
+    const profileSnap = await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).get();
+    if (!profileSnap.exists) {
       userPermissions = getDefaultPermissions('user');
       userRole = 'user';
       customRole = null;
       return;
     }
-
-    userRole = data.role || 'user';
-    customRole = data.custom_roles;
-
-    /* Se ha un custom_role, usa i permessi del custom_role */
+    const data = profileSnap.data();
+    const role = data.role || 'user';
+    const customRoleId = data.custom_role_id || null;
+    let customRole = null;
+    if (customRoleId) {
+      const roleSnap = await state.fb.firestore.collection('custom_roles').doc(String(customRoleId)).get();
+      if (roleSnap.exists) customRole = roleSnap.data();
+    }
+    userRole = role;
     if (customRole && customRole.permissions) {
       userPermissions = customRole.permissions;
     } else {
-      /* Altrimenti usa i permessi del ruolo base */
       userPermissions = getDefaultPermissions(userRole);
     }
   } catch (err) {

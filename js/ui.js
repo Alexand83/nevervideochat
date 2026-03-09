@@ -96,7 +96,7 @@ function loadImageFile(file) {
 const SAFE_FOLDER = /^[a-z0-9_-]+$/i;
 const SAFE_EXT    = /^[a-z0-9]+$/i;
 export async function uploadToStorage(input, folder, ext) {
-  if (!_supabaseReady?.()) return null;
+  if (!state.fb) return null;
   try {
     const safeFolder = SAFE_FOLDER.test(String(folder || '')) ? String(folder) : 'uploads';
     const rawExt = (ext || 'bin').toString().toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
@@ -105,7 +105,7 @@ export async function uploadToStorage(input, folder, ext) {
     if (typeof input === 'string') { const res = await fetch(input); blob = await res.blob(); }
     else blob = input;
     const name = `${safeFolder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${safeExt}`;
-    const res = await state.supa.storage.from('chat-media').upload(name, blob, { cacheControl: '3600', upsert: false });
+    const res = await state.fb.storage.from('chat-media').upload(name, blob, { cacheControl: '3600', upsert: false });
     if (res.error) throw res.error;
     return res.data?.publicUrl ?? null;
   } catch (err) { console.warn('Storage upload error:', err); return null; }
@@ -180,7 +180,7 @@ function startRecording() {
         const actualMime = state.mediaRecorder.mimeType || 'audio/webm';
         const ext  = mimeToExt(actualMime);
         const blob = new Blob(state.recordingChunks, { type: actualMime });
-        if (!_supabaseReady?.()) { showToast('⚠️ Not connected — voice messages require Supabase.'); dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer); dom.recTimer.textContent = '0:00'; return; }
+        if (!state.fb) { showToast('⚠️ Not connected — voice messages require backend.'); dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer); dom.recTimer.textContent = '0:00'; return; }
         showToast('⏳ Uploading voice message…');
         const url = await uploadToStorage(blob, 'voices', ext);
         if (!url) { showToast('⚠️ Voice upload failed.'); dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer); dom.recTimer.textContent = '0:00'; return; }
@@ -188,9 +188,9 @@ function startRecording() {
         const { addMessage } = await import('./chat.js');
         const html = `<div class="voice-msg-wrap">🎙️ Voice message<audio controls src="${url}" preload="metadata"></audio></div>`;
         addMessage({ userId: 'me', html, ts: Date.now() });
-        state.supa.from('messages').insert({
-          user_id: state.currentUser.id, username: state.currentUser.name, content: html, room_id: state.activeRoom,
-        }).then(({ error }) => { if (error) console.warn('voice msg insert:', error); });
+        state.fb.firestore.collection('messages').add({
+          user_id: state.currentUser.id, username: state.currentUser.name, content: html, room_id: state.activeRoom, reactions: {}, created_at: new Date(),
+        }).then(() => {}).catch(err => console.warn('voice msg insert:', err));
         dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer); dom.recTimer.textContent = '0:00';
       };
       state.mediaRecorder.start(250); dom.voiceRecStrip.hidden = false;
@@ -284,28 +284,21 @@ export function openContextMenu(uid, anchor) {
 
 /* ── Check if current user has admin/mod permissions ── */
 async function checkAndShowAdminActions(targetUid) {
-  if (!state.supa || !state.currentUser) return false;
+  if (!state.fb || !state.currentUser) return false;
   if (String(targetUid) === String(state.currentUser?.id)) return false; /* Can't admin yourself */
   
   try {
-    const { data, error } = await state.supa
-      .from('profiles')
-      .select('role, custom_role_id')
-      .eq('id', state.currentUser.id)
-      .single();
-    if (error || !data) return false;
+    const profileSnap = await state.fb.firestore.collection('profiles').doc(state.currentUser.id).get();
+    const data = profileSnap?.data();
+    if (!data) return false;
     
     const role = data.role;
     if (role === 'owner' || role === 'admin') return true;
     if (role === 'moderator') return true;
     
-    /* Check custom role permissions */
     if (data.custom_role_id) {
-      const { data: customRole } = await state.supa
-        .from('custom_roles')
-        .select('permissions')
-        .eq('id', data.custom_role_id)
-        .single();
+      const roleSnap = await state.fb.firestore.collection('custom_roles').doc(data.custom_role_id).get();
+      const customRole = roleSnap?.data();
       if (customRole?.permissions) {
         return customRole.permissions.can_kick || customRole.permissions.can_ban || customRole.permissions.can_mute;
       }
@@ -512,35 +505,22 @@ function closeBanModal() {
 
 /* ── Admin action handlers ── */
 async function handleKickUser(userId, userName, minutes, isGlobal) {
-  if (!state.supa) return false;
+  if (!state.fb) return false;
   const mins = minutes || 5;
   
   try {
     const expiresAt = new Date(Date.now() + mins * 60 * 1000).toISOString();
     const roomId = isGlobal ? null : state.activeRoom;
+    const col = state.fb.firestore.collection('kicked_users');
+    const payload = { user_id: userId, kicked_by: state.currentUser.id, expires_at: expiresAt };
     
     if (isGlobal) {
-      /* Global kick: kick from all rooms */
-      const { data: rooms } = await state.supa.from('rooms').select('id');
-      if (rooms) {
-        for (const room of rooms) {
-          await state.supa.from('kicked_users').upsert({
-            user_id: userId,
-            room_id: String(room.id),
-            kicked_by: state.currentUser.id,
-            expires_at: expiresAt,
-          }, { onConflict: 'user_id,room_id' });
-        }
+      const roomsSnap = await state.fb.firestore.collection('rooms').get();
+      for (const doc of roomsSnap.docs) {
+        await col.doc(`${userId}_${doc.id}`).set({ ...payload, room_id: doc.id }, { merge: true });
       }
     } else {
-      /* Room-specific kick */
-      const { error } = await state.supa.from('kicked_users').upsert({
-        user_id: userId,
-        room_id: state.activeRoom,
-        kicked_by: state.currentUser.id,
-        expires_at: expiresAt,
-      }, { onConflict: 'user_id,room_id' });
-      if (error) throw error;
+      await col.doc(`${userId}_${state.activeRoom}`).set({ ...payload, room_id: state.activeRoom }, { merge: true });
     }
     
     /* Close all cameras for the user */
@@ -580,18 +560,18 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
 }
 
 async function handleMuteUser(userId, userName, minutes, isGlobal) {
-  if (!state.supa) return false;
+  if (!state.fb) return false;
   const roomId = isGlobal ? null : state.activeRoom;
   
   try {
     const expiresAt = minutes > 0 ? new Date(Date.now() + minutes * 60 * 1000).toISOString() : null;
-    const { error } = await state.supa.from('muted_users').upsert({
+    const docId = `${userId}_${roomId ?? 'global'}`;
+    await state.fb.firestore.collection('muted_users').doc(docId).set({
       user_id: userId,
-      room_id: roomId,  /* NULL = global, TEXT = room-specific */
+      room_id: roomId,
       muted_by: state.currentUser.id,
       expires_at: expiresAt,
-    }, { onConflict: 'user_id,room_id' });
-    if (error) throw error;
+    }, { merge: true });
     
     /* Update local state */
     state.mutedUsers[String(userId)] = { room_id: roomId, expires_at: expiresAt };
@@ -618,21 +598,13 @@ async function handleMuteUser(userId, userName, minutes, isGlobal) {
 }
 
 async function handleUnmuteUser(userId, userName, muteInfo) {
-  if (!state.supa) return false;
+  if (!state.fb) return false;
   
   try {
     const roomId = muteInfo.global ? null : muteInfo.room_id;
-    
-    /* Delete mute from database */
-    let query = state.supa.from('muted_users').delete().eq('user_id', userId);
-    if (roomId === null) {
-      query = query.is('room_id', null);
-    } else {
-      query = query.eq('room_id', roomId);
-    }
-    
-    const { error } = await query;
-    if (error) throw error;
+    const col = state.fb.firestore.collection('muted_users');
+    const docId = `${userId}_${roomId ?? 'global'}`;
+    await col.doc(docId).delete();
     
     /* Update local state */
     if (muteInfo.global || muteInfo.room_id === state.activeRoom) {
@@ -660,17 +632,16 @@ async function handleUnmuteUser(userId, userName, muteInfo) {
 }
 
 async function handleBanUser(userId, userName, reason, expiresAt) {
-  if (!state.supa) return false;
+  if (!state.fb) return false;
   
   try {
-    const { error } = await state.supa.from('banned_users').upsert({
+    await state.fb.firestore.collection('banned_users').doc(String(userId)).set({
       user_id: userId,
       username: userName,
       reason: reason || 'Banned by admin/mod',
       banned_by: state.currentUser.id,
       expires_at: expiresAt,
-    }, { onConflict: 'user_id' });
-    if (error) throw error;
+    }, { merge: true });
     
     /* Close all cameras for the user */
     await closeAllCamerasForUser(userId);

@@ -3,7 +3,7 @@
 ================================================================ */
 import { state } from './state.js';
 
-export function supabaseReady() { return !!state.supa; }
+export function supabaseReady() { return !!state.fb; }
 
 /** Send a broadcast to a specific user via the global signal channel */
 export function broadcast(event, toUid, extra = {}) {

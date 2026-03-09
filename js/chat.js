@@ -228,81 +228,37 @@ export async function sendMessage() {
   
   /* CRITICO: Verifica che questa sia la sessione attiva - solo la nuova sessione può scrivere */
   /* Solo per utenti registrati (non guest) */
-  if (state.supa && state.currentUser.id && !state.currentUser.isGuest) {
+  if (state.fb && state.currentUser.id && !state.currentUser.isGuest) {
     try {
-      /* Prova prima con getSession() */
-      let session = await state.supa.auth.getSession();
-      
-      /* Se getSession() non trova la sessione, prova a recuperarla da localStorage */
+      let session = await state.fb.auth.getSession();
       if (!session?.data?.session?.access_token) {
         const stored = JSON.parse(localStorage.getItem('nvc_auth_session') || 'null');
         if (stored?.access_token) {
-          console.log('[Chat] getSession() returned null, trying to restore from localStorage...');
-          const { error: restoreError } = await state.supa.auth.setSession({
-            access_token: stored.access_token,
-            refresh_token: stored.refresh_token
-          });
-          if (!restoreError) {
-            session = await state.supa.auth.getSession();
-            console.log('[Chat] Session restored from localStorage');
-          }
+          await state.fb.auth.setSession({ access_token: stored.access_token, refresh_token: stored.refresh_token });
+          session = await state.fb.auth.getSession();
         }
       }
-      
       if (!session?.data?.session?.access_token) {
-        console.warn('[Chat] No session found - cannot verify. Blocking message.');
         showToast('⚠️ Session expired. Please refresh the page.');
         return;
       }
-      
-      /* CRITICO: Usa lo stesso sessionId salvato in localStorage, non generarne uno nuovo */
       const { createSessionId, getSavedSessionId } = await import('./auth.js');
       const savedSessionId = getSavedSessionId();
       const sessionId = savedSessionId || createSessionId(session.data.session.access_token);
-      console.log('[Chat] Session check:', { 
-        hasSavedSessionId: !!savedSessionId, 
-        sessionId: sessionId?.substring(0, 20) + '...',
-        userId: state.currentUser.id 
-      });
-      
-      /* CRITICO: Verifica usando funzione SQL - più sicuro */
       try {
-        const { data: isValid, error: checkError } = await state.supa
-          .rpc('is_session_valid', {
-            p_user_id: state.currentUser.id,
-            p_session_id: sessionId
-          });
-        
-        if (checkError) {
-          console.error('[Chat] Error calling is_session_valid RPC:', checkError);
-          /* Se la funzione non esiste, blocca per sicurezza */
-          if (checkError.code === '42883' || checkError.message?.includes('function') || checkError.message?.includes('does not exist')) {
-            console.warn('[Chat] SQL function does not exist - blocking message for security');
-            showToast('⚠️ Session management not configured. Please run supabase_active_sessions.sql');
-          } else {
-            showToast('⚠️ Cannot verify session. Message blocked.');
-          }
-          return;
-        }
-        
-        /* La funzione restituisce TRUE se la sessione è valida, FALSE altrimenti */
+        const { isSessionValid, showDisconnectedOverlay } = await import('./firebase-client.js');
+        const isValid = await isSessionValid(state.currentUser.id, sessionId);
         if (!isValid) {
-          console.warn('[Chat] Session is NOT valid - this is an OLD session from another browser - disconnecting');
-          const { showDisconnectedOverlay } = await import('./firebase-client.js');
           showDisconnectedOverlay();
           return;
         }
-        
-        console.log('[Chat] ✅ Session verified - is valid');
       } catch (err) {
         console.error('[Chat] Error checking session:', err);
-        /* In caso di errore, blocca per sicurezza */
         showToast('⚠️ Error verifying session. Message blocked.');
         return;
       }
     } catch (err) {
       console.error('[Chat] Error verifying session:', err);
-      /* In caso di errore, blocca il messaggio per sicurezza */
       showToast('⚠️ Error verifying session. Message blocked.');
       return;
     }
@@ -419,40 +375,32 @@ export async function sendMessage() {
     ? `<div data-quote-name="${quoteName || ''}" data-quote-html="${encodeURIComponent(quoteHtml)}" class="msg-quote-meta"></div>${html}`
     : html;
 
-  if (_supabaseReady?.()) {
-    state.supa.from('messages').insert({
-      user_id:  state.currentUser.id,
+  if (_supabaseReady?.() && state.fb) {
+    state.fb.firestore.collection('messages').add({
+      user_id: state.currentUser.id,
       username: state.currentUser.name,
-      content:  fullContent,
-      room_id:  state.activeRoom,
+      content: fullContent,
+      room_id: state.activeRoom,
       reactions: {},
-    }).then(async ({ data, error }) => {
-      if (error) {
-        /* Se è un errore 403, la sessione è stata invalidata */
-        if (error?.status === 403 || error?.message?.includes('403') || error?.code === 'PGRST301') {
-          const { checkSessionInvalid } = await import('./firebase-client.js');
-          await checkSessionInvalid();
-          return;
+      created_at: new Date(),
+    }).then(async (ref) => {
+      const dbId = ref.id;
+      const room = state.rooms[state.activeRoom];
+      if (room) {
+        const localMsg = room.messages.find(m => m.id === tempId);
+        if (localMsg) {
+          localMsg.id = dbId;
+          const group = dom.msgsContainer?.querySelector(`[data-msg-id="${tempId}"]`);
+          if (group) group.dataset.msgId = dbId;
         }
-        console.warn('[NVC] msg insert:', error);
+      }
+    }).catch(async (err) => {
+      if (err?.code === 'permission-denied' || err?.message?.includes('403')) {
+        const { checkSessionInvalid } = await import('./firebase-client.js');
+        await checkSessionInvalid();
         return;
       }
-      /* Update local message with DB UUID */
-      if (data && data[0]) {
-        const dbId = data[0].id;
-        const room = state.rooms[state.activeRoom];
-        if (room) {
-          const localMsg = room.messages.find(m => m.id === tempId);
-          if (localMsg) {
-            localMsg.id = dbId;
-            /* Update DOM if message is rendered */
-            const group = dom.msgsContainer.querySelector(`[data-msg-id="${tempId}"]`);
-            if (group) {
-              group.dataset.msgId = dbId;
-            }
-          }
-        }
-      }
+      console.warn('[NVC] msg insert:', err);
     });
   }
 }
@@ -498,8 +446,8 @@ function openReactionPicker(e, msgId) {
 }
 
 async function toggleReaction(msgId, emoji) {
-  if (!_supabaseReady?.() || !msgId) {
-    console.warn('[NVC] toggleReaction: missing supabase or msgId', { msgId, ready: !!_supabaseReady?.() });
+  if (!state.fb || !msgId) {
+    console.warn('[NVC] toggleReaction: missing fb or msgId', { msgId, ready: !!state.fb });
     return;
   }
   
@@ -534,17 +482,15 @@ async function toggleReaction(msgId, emoji) {
   /* Update local state */
   msg.reactions = reactions;
   
-  /* Update DB - only if msgId is a real UUID (from DB), not a temp client-side ID.
-     Temp IDs look like "m1772539177000.0233..." — a UUID is 8-4-4-4-12 hex chars. */
-  const isRealUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msgId);
-  if (!isRealUUID) {
+  /* Update DB only for persisted IDs (Firestore doc id or UUID). Temp IDs are "m" + timestamp + random. */
+  const isTempId = /^m\d+\.?\d*$/.test(msgId);
+  if (isTempId) {
     console.warn('[NVC] toggleReaction: skipping DB update for temp ID', { msgId });
   } else {
-    const { error } = await state.supa.from('messages')
-      .update({ reactions })
-      .eq('id', msgId);
-    if (error) {
-      console.error('[NVC] toggleReaction: DB update failed', { error, msgId });
+    try {
+      await state.fb.firestore.collection('messages').doc(msgId).update({ reactions });
+    } catch (err) {
+      console.error('[NVC] toggleReaction: DB update failed', { error: err, msgId });
     }
   }
   

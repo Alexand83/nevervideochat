@@ -13,17 +13,10 @@ function escapeRegex(s) {
 
 /* ── Carica parole filtrate ──────────────────────────────────── */
 export async function loadFilteredWords() {
-  if (!state.supa) return [];
-  
+  if (!state.fb) return [];
   try {
-    const { data, error } = await state.supa
-      .from('filtered_words')
-      .select('*')
-      .order('word');
-    
-    if (error) throw error;
-    
-    filteredWordsCache = data || [];
+    const snap = await state.fb.firestore.collection('filtered_words').orderBy('word').get();
+    filteredWordsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     return filteredWordsCache;
   } catch (err) {
     console.error('[WordFilter] Error loading filtered words:', err);
@@ -63,22 +56,14 @@ export async function refreshFilteredWords() {
   await loadFilteredWords();
 }
 
+let wordFilterUnsubscribe = null;
+
 /* ── Inizializza listener realtime ────────────────────────────── */
 export async function initWordFilterListener() {
-  if (!state.supa) return;
-  
-  /* Subscribe to changes */
-  state.supa
-    .channel('filtered_words_changes')
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'filtered_words'
-    }, async () => {
-      await refreshFilteredWords();
-    })
-    .subscribe();
-  
-  /* Load initial data */
+  if (!state.fb) return;
+  if (wordFilterUnsubscribe) wordFilterUnsubscribe();
+  wordFilterUnsubscribe = state.fb.firestore.collection('filtered_words').onSnapshot(async () => {
+    await refreshFilteredWords();
+  });
   await refreshFilteredWords();
 }

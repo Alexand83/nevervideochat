@@ -10,10 +10,10 @@ import { hasPermission, loadUserPermissions } from './permissions.js';
 
 /* ── Log azione admin ─────────────────────────────────────────── */
 export async function logAdminAction(action, targetType, targetId, targetName, details = {}) {
-  if (!state.supa || !state.currentUser) return;
+  if (!state.fb || !state.currentUser) return;
   
   try {
-    await state.supa.from('admin_logs').insert({
+    await state.fb.firestore.collection('admin_logs').add({
       admin_id: String(state.currentUser.id),
       admin_name: state.currentUser.name || state.currentUser.username || 'Unknown',
       action,
@@ -22,6 +22,7 @@ export async function logAdminAction(action, targetType, targetId, targetName, d
       target_name: targetName || null,
       details,
       ip_address: null,
+      created_at: new Date(),
     });
   } catch (err) {
     console.error('[Admin] Error logging action:', err);
@@ -30,9 +31,8 @@ export async function logAdminAction(action, targetType, targetId, targetName, d
 
 /* ── Gestione Ruoli ──────────────────────────────────────────── */
 export async function loadCustomRoles() {
-  if (!dom.adminRolesList || !state.supa) return;
+  if (!dom.adminRolesList || !state.fb) return;
   
-  /* Check permissions */
   await loadUserPermissions();
   if (!hasPermission('can_manage_roles')) {
     dom.adminRolesList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to manage roles.</p>';
@@ -40,11 +40,8 @@ export async function loadCustomRoles() {
   }
   
   try {
-    const { data, error } = await state.supa
-      .from('custom_roles')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
+    const snap = await state.fb.firestore.collection('custom_roles').orderBy('name').get();
+    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     dom.adminRolesList.innerHTML = '';
     if (!data || data.length === 0) {
@@ -128,7 +125,7 @@ export function openRoleEditModal(role = null) {
 let isSavingRole = false;
 
 export async function saveRole() {
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   /* Prevenire doppi salvataggi */
   if (isSavingRole) {
@@ -207,8 +204,8 @@ export async function saveRole() {
       return;
     }
     
-    /* Verifica autenticazione Supabase */
-    const { data: { user: authUser }, error: authError } = await state.supa.auth.getUser();
+    /* Verifica autenticazione */
+    const { data: { user: authUser }, error: authError } = await state.fb.auth.getUser();
     console.log('[Admin] Auth user:', JSON.stringify(authUser, null, 2));
     console.log('[Admin] Current user ID:', state.currentUser.id);
     console.log('[Admin] Auth error:', authError);
@@ -224,15 +221,12 @@ export async function saveRole() {
       return;
     }
     
-    /* Verifica aggiuntiva: controlla il ruolo nel database */
-    const { data: profile, error: profileError } = await state.supa
-      .from('profiles')
-      .select('id, role')
-      .eq('id', String(state.currentUser.id))
-      .single();
+    /* Verifica ruolo nel database */
+    const profileSnap = await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).get();
+    const profile = profileSnap?.data();
     
-    if (profileError) {
-      console.error('[Admin] Error checking profile:', JSON.stringify(profileError, null, 2));
+    if (!profileSnap?.exists) {
+      console.error('[Admin] Error checking profile: profile not found');
       showToast('⚠️ Could not verify your role. Please try again.');
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -302,64 +296,14 @@ export async function saveRole() {
     console.log('[Admin] Role data to save:', JSON.stringify(roleData, null, 2));
     
     if (!isNewRole && id) {
-      roleData.id = id;
-      console.log('[Admin] Updating role:', JSON.stringify({ id, roleData }, null, 2));
-      console.log('[Admin] About to execute UPDATE query...');
-      const { data, error, status, statusText } = await state.supa
-        .from('custom_roles')
-        .update(roleData)
-        .eq('id', id)
-        .select();
-      
-      console.log('[Admin] Update response:', { 
-        hasData: !!data, 
-        dataLength: data?.length, 
-        error: error ? JSON.stringify(error, null, 2) : null,
-        status,
-        statusText
-      });
-      
-      if (error) {
-        console.error('[Admin] Update role error:', JSON.stringify(error, null, 2));
-        throw error;
-      }
-      
-      if (!data || data.length === 0) {
-        console.warn('[Admin] No rows updated - possible RLS policy issue');
-        throw new Error('No rows updated. Check database permissions.');
-      }
-      
-      console.log('[Admin] Role updated successfully:', JSON.stringify(data, null, 2));
+      console.log('[Admin] Updating role:', id);
+      await state.fb.firestore.collection('custom_roles').doc(id).set(roleData, { merge: true });
       await logAdminAction('update_role', 'role', id, name);
     } else {
       const roleId = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      roleData.id = roleId;
-      console.log('[Admin] Creating role:', JSON.stringify({ roleId, roleData }, null, 2));
-      console.log('[Admin] About to execute INSERT query...');
-      const { data, error, status, statusText } = await state.supa
-        .from('custom_roles')
-        .insert(roleData)
-        .select();
-      
-      console.log('[Admin] Insert response:', { 
-        hasData: !!data, 
-        dataLength: data?.length, 
-        error: error ? JSON.stringify(error, null, 2) : null,
-        status,
-        statusText
-      });
-      
-      if (error) {
-        console.error('[Admin] Insert role error:', JSON.stringify(error, null, 2));
-        throw error;
-      }
-      
-      if (!data || data.length === 0) {
-        console.warn('[Admin] No rows inserted - possible RLS policy issue');
-        throw new Error('No rows inserted. Check database permissions.');
-      }
-      
-      console.log('[Admin] Role created successfully:', JSON.stringify(data, null, 2));
+      roleData.created_at = new Date();
+      console.log('[Admin] Creating role:', roleId);
+      await state.fb.firestore.collection('custom_roles').doc(roleId).set(roleData, { merge: true });
       await logAdminAction('create_role', 'role', roleId, name);
     }
     
@@ -419,14 +363,10 @@ export async function deleteRole(roleId) {
   }
   
   if (!confirm(`Delete role "${roleId}"? Users with this role will lose it.`)) return;
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
-    const { error } = await state.supa
-      .from('custom_roles')
-      .delete()
-      .eq('id', roleId);
-    if (error) throw error;
+    await state.fb.firestore.collection('custom_roles').doc(roleId).delete();
     
     await logAdminAction('delete_role', 'role', roleId, roleId);
     showToast('✅ Role deleted.');
@@ -439,8 +379,8 @@ export async function deleteRole(roleId) {
 
 /* ── Assegna ruolo a utente ──────────────────────────────────── */
 export async function assignRoleToUser(userId, roleId) {
-  if (!state.supa) {
-    console.error('[Admin] Supabase not available');
+  if (!state.fb) {
+    console.error('[Admin] Firebase not available');
     return false;
   }
   
@@ -452,119 +392,51 @@ export async function assignRoleToUser(userId, roleId) {
       return false;
     }
     
-    /* If roleId is empty string or null, set to null */
     const finalRoleId = roleId && roleId.trim() !== '' ? roleId.trim() : null;
-    
     console.log('[Admin] Assigning role:', { userId, roleId, finalRoleId });
     
-    /* First verify the role exists if not null */
     if (finalRoleId) {
-      const { data: roleCheck, error: roleError } = await state.supa
-        .from('custom_roles')
-        .select('id')
-        .eq('id', finalRoleId)
-        .single();
-      
-      if (roleError || !roleCheck) {
+      const roleSnap = await state.fb.firestore.collection('custom_roles').doc(finalRoleId).get();
+      if (!roleSnap.exists) {
         console.error('[Admin] Role not found:', finalRoleId);
         showToast('⚠️ Role not found.');
         return false;
       }
     }
     
-    /* Find user in state first (before DB operations) */
     const user = state.users?.[userId] || Object.values(state.users || {}).find(u => u.id === userId);
     const userName = user?.name || userId;
-    
-    /* Determine if user is guest */
     const isGuest = String(userId).startsWith('guest_');
     
-    /* For guests, assign default "guest" role if no role specified */
     let roleToAssign = finalRoleId;
     if (isGuest && !finalRoleId) {
-      /* Check if "guest" role exists */
-      const { data: guestRole } = await state.supa
-        .from('custom_roles')
-        .select('id')
-        .eq('id', 'guest')
-        .maybeSingle();
-      
-      if (guestRole) {
-        roleToAssign = 'guest';
-      }
+      const guestSnap = await state.fb.firestore.collection('custom_roles').doc('guest').get();
+      if (guestSnap.exists) roleToAssign = 'guest';
     }
     
-    /* First, check if profile exists */
-    const { data: existingProfile, error: checkError } = await state.supa
-      .from('profiles')
-      .select('id, role')
-      .eq('id', String(userId))
-      .maybeSingle();
-    
-    if (checkError && checkError.code !== 'PGRST116') { /* PGRST116 = not found, which is OK */
-      console.error('[Admin] Error checking profile:', checkError);
-      showToast('⚠️ Failed to check user profile: ' + (checkError.message || 'Unknown error'));
-      return false;
-    }
+    const profileRef = state.fb.firestore.collection('profiles').doc(String(userId));
+    const profileSnap = await profileRef.get();
+    const existingProfile = profileSnap.exists ? profileSnap.data() : null;
     
     if (existingProfile) {
-      /* Profile exists, update it */
-      console.log('[Admin] Updating existing profile:', userId);
-      const { error: updateError } = await state.supa
-        .from('profiles')
-        .update({ custom_role_id: roleToAssign })
-        .eq('id', String(userId));
-      
-      if (updateError) {
-        console.error('[Admin] Failed to update profile:', updateError);
-        showToast('⚠️ Failed to assign role: ' + (updateError.message || 'Unknown error'));
-        return false;
-      }
+      await profileRef.set({ custom_role_id: roleToAssign }, { merge: true });
       console.log('[Admin] Role assigned successfully');
     } else {
-      /* Profile doesn't exist, create it */
-      console.log('[Admin] User not found in profiles table, creating profile:', userId);
-      
       const profileData = {
-        id: String(userId),
         username: userName || (isGuest ? `Guest_${userId.slice(6, 12)}` : 'Unknown'),
         display_name: userName || (isGuest ? `Guest_${userId.slice(6, 12)}` : 'Unknown'),
         is_guest: isGuest,
-        custom_role_id: roleToAssign || (isGuest ? 'guest' : null)
+        custom_role_id: roleToAssign || (isGuest ? 'guest' : null),
       };
-      
-      /* Only add role field for registered users (don't override if they're owner/admin) */
-      if (!isGuest && !existingProfile?.role) {
-        profileData.role = 'user';
+      if (!isGuest) profileData.role = 'user';
+      try {
+        await profileRef.set(profileData, { merge: true });
+      } catch (err) {
+        if (err?.code === 'permission-denied' || err?.message?.includes('already exists')) {
+          await profileRef.set({ custom_role_id: roleToAssign }, { merge: true });
+        } else throw err;
       }
-      
-      const { error: insertError } = await state.supa
-        .from('profiles')
-        .insert(profileData);
-      
-      if (insertError) {
-        /* If profile was created between check and insert (race condition), try update */
-        if (insertError.code === '23505' || insertError.message?.includes('duplicate') || insertError.message?.includes('409')) {
-          console.log('[Admin] Profile created by another process, updating instead:', userId);
-          const { error: retryUpdateError } = await state.supa
-            .from('profiles')
-            .update({ custom_role_id: roleToAssign })
-            .eq('id', String(userId));
-          
-          if (retryUpdateError) {
-            console.error('[Admin] Failed to update existing profile:', retryUpdateError);
-            showToast('⚠️ Failed to assign role: ' + (retryUpdateError.message || 'Unknown error'));
-            return false;
-          }
-          console.log('[Admin] Profile updated and role assigned');
-        } else {
-          console.error('[Admin] Failed to create profile:', insertError);
-          showToast('⚠️ Failed to create profile: ' + (insertError.message || 'Unknown error'));
-          return false;
-        }
-      } else {
-        console.log('[Admin] Profile created and role assigned');
-      }
+      console.log('[Admin] Profile created and role assigned');
     }
     
     await logAdminAction('assign_role', 'user', userId, userName, { role_id: finalRoleId });
@@ -586,9 +458,8 @@ export async function assignRoleToUser(userId, roleId) {
 
 /* ── Moderazione Messaggi ─────────────────────────────────────── */
 export async function loadMessages() {
-  if (!dom.adminMessagesList || !state.supa) return;
+  if (!dom.adminMessagesList || !state.fb) return;
   
-  /* Check permissions */
   await loadUserPermissions();
   if (!hasPermission('can_delete_messages')) {
     dom.adminMessagesList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to view messages.</p>';
@@ -600,49 +471,34 @@ export async function loadMessages() {
     const statusFilter = document.getElementById('adminMessagesStatusFilter')?.value || 'all';
     const searchQuery = document.getElementById('adminMessagesSearch')?.value.toLowerCase() || '';
     
-    let query = state.supa
-      .from('messages')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100);
-    
-    if (roomFilter) {
-      query = query.eq('room_id', roomFilter);
-    }
+    let col = state.fb.firestore.collection('messages').orderBy('created_at', 'desc').limit(100);
+    if (roomFilter) col = state.fb.firestore.collection('messages').where('room_id', '==', roomFilter).orderBy('created_at', 'desc').limit(100);
+    const snap = await col.get();
+    let data = snap.docs.map(d => ({ id: d.id, ...d.data(), created_at: d.data().created_at?.toDate?.() || d.data().created_at }));
     
     if (statusFilter === 'deleted') {
-      query = query.not('deleted_at', 'is', null);
+      data = data.filter(m => m.deleted_at);
     } else if (statusFilter === 'reported') {
-      /* Load reported messages separately */
-      const { data: reported } = await state.supa
-        .from('reported_messages')
-        .select('message_id')
-        .eq('status', 'pending');
-      const reportedIds = reported?.map(r => r.message_id) || [];
-      if (reportedIds.length > 0) {
-        query = query.in('id', reportedIds);
-      } else {
+      const reportedSnap = await state.fb.firestore.collection('reported_messages').where('status', '==', 'pending').get();
+      const reportedIds = new Set(reportedSnap.docs.map(d => d.data().message_id));
+      if (reportedIds.size === 0) {
         dom.adminMessagesList.innerHTML = '<p class="admin-empty">No reported messages.</p>';
         return;
       }
+      data = data.filter(m => reportedIds.has(m.id));
     }
     
-    const { data, error } = await query;
-    if (error) throw error;
-    
     dom.adminMessagesList.innerHTML = '';
-    if (!data || data.length === 0) {
+    const filtered = searchQuery
+      ? data.filter(msg =>
+          (msg.username || '').toLowerCase().includes(searchQuery) ||
+          (msg.content || '').toLowerCase().includes(searchQuery)
+        )
+      : data;
+    if (filtered.length === 0) {
       dom.adminMessagesList.innerHTML = '<p class="admin-empty">No messages found.</p>';
       return;
     }
-    
-    /* Filter by search query */
-    const filtered = searchQuery
-      ? data.filter(msg => 
-          msg.username.toLowerCase().includes(searchQuery) ||
-          msg.content.toLowerCase().includes(searchQuery)
-        )
-      : data;
     
     filtered.forEach(msg => {
       const item = document.createElement('div');
@@ -658,7 +514,7 @@ export async function loadMessages() {
             ${isDeleted ? '<span class="admin-badge admin-badge-danger">Deleted</span>' : ''}
           </div>
           <div style="margin-top: 8px; color: var(--tx2); font-size: var(--fz-sm);">
-            ${contentPreview}${msg.content.length > 100 ? '...' : ''}
+            ${contentPreview}${contentStr.length > 100 ? '...' : ''}
           </div>
         </div>
         <div class="admin-item-actions">
@@ -693,18 +549,13 @@ export async function deleteMessage(messageId, username) {
   }
   
   if (!confirm(`Delete message from ${escHtml(username)}?`)) return;
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
-    const { error } = await state.supa
-      .from('messages')
-      .update({
-        deleted_at: new Date().toISOString(),
-        deleted_by: String(state.currentUser.id),
-      })
-      .eq('id', messageId);
-    
-    if (error) throw error;
+    await state.fb.firestore.collection('messages').doc(messageId).update({
+      deleted_at: new Date(),
+      deleted_by: String(state.currentUser.id),
+    });
     
     await logAdminAction('delete_message', 'message', messageId, username);
     broadcast('message-deleted', messageId, {});
@@ -722,24 +573,19 @@ export async function editMessage(msg) {
     return;
   }
   
-  const newContent = prompt('Edit message:', sanitiseHtml(msg.content).replace(/<[^>]*>/g, ''));
-  if (newContent === null || newContent.trim() === msg.content) return;
+  const newContent = prompt('Edit message:', sanitiseHtml((msg.content || '').toString()).replace(/<[^>]*>/g, ''));
+  if (newContent === null || newContent.trim() === (msg.content || '')) return;
   
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
     const sanitized = sanitiseHtml(newContent.trim());
-    const { error } = await state.supa
-      .from('messages')
-      .update({
-        content: sanitized,
-        original_content: msg.original_content || msg.content,
-        edited_at: new Date().toISOString(),
-        edited_by: String(state.currentUser.id),
-      })
-      .eq('id', msg.id);
-    
-    if (error) throw error;
+    await state.fb.firestore.collection('messages').doc(msg.id).update({
+      content: sanitized,
+      original_content: msg.original_content || msg.content,
+      edited_at: new Date(),
+      edited_by: String(state.currentUser.id),
+    });
     
     await logAdminAction('edit_message', 'message', msg.id, msg.username, { original: msg.content });
     broadcast('message-edited', msg.id, { content: sanitized });
@@ -757,18 +603,13 @@ export async function restoreMessage(messageId) {
     return;
   }
   
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
-    const { error } = await state.supa
-      .from('messages')
-      .update({
-        deleted_at: null,
-        deleted_by: null,
-      })
-      .eq('id', messageId);
-    
-    if (error) throw error;
+    await state.fb.firestore.collection('messages').doc(messageId).update({
+      deleted_at: null,
+      deleted_by: null,
+    });
     
     await logAdminAction('restore_message', 'message', messageId, null);
     showToast('✅ Message restored.');
@@ -781,7 +622,7 @@ export async function restoreMessage(messageId) {
 
 /* ── Statistiche ──────────────────────────────────────────────── */
 export async function loadStatistics() {
-  if (!dom.adminStatisticsContent || !state.supa) return;
+  if (!dom.adminStatisticsContent || !state.fb) return;
   
   const { checkAdminAccess } = await import('./admin.js');
   const hasAccess = await checkAdminAccess();
@@ -791,31 +632,20 @@ export async function loadStatistics() {
   }
   
   try {
-    /* Get user count */
-    const { count: userCount } = await state.supa
-      .from('profiles')
-      .select('*', { count: 'exact', head: true });
-    
-    /* Get message count */
-    const { count: messageCount } = await state.supa
-      .from('messages')
-      .select('*', { count: 'exact', head: true });
-    
-    /* Get room count */
-    const { count: roomCount } = await state.supa
-      .from('rooms')
-      .select('*', { count: 'exact', head: true });
-    
-    /* Get online users (from presence) */
+    const [profilesSnap, messagesSnap, roomsSnap] = await Promise.all([
+      state.fb.firestore.collection('profiles').get(),
+      state.fb.firestore.collection('messages').get(),
+      state.fb.firestore.collection('rooms').get(),
+    ]);
+    const userCount = profilesSnap.size;
+    const messageCount = messagesSnap.size;
+    const roomCount = roomsSnap.size;
     const onlineUsers = Object.keys(state.users || {}).length;
     
-    /* Get messages today */
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const { count: messagesToday } = await state.supa
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', today.toISOString());
+    const todaySnap = await state.fb.firestore.collection('messages').where('created_at', '>=', today).get();
+    const messagesToday = todaySnap.size;
     
     dom.adminStatisticsContent.innerHTML = `
       <div class="admin-stat-card">
@@ -847,7 +677,7 @@ export async function loadStatistics() {
 
 /* ── Log Admin ────────────────────────────────────────────────── */
 export async function loadAdminLogs() {
-  if (!dom.adminLogsList || !state.supa) return;
+  if (!dom.adminLogsList || !state.fb) return;
   
   if (!hasPermission('can_view_logs')) {
     dom.adminLogsList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to view logs.</p>';
@@ -858,23 +688,14 @@ export async function loadAdminLogs() {
     const actionFilter = document.getElementById('adminLogsActionFilter')?.value || '';
     const searchQuery = document.getElementById('adminLogsSearch')?.value.toLowerCase() || '';
     
-    let query = state.supa
-      .from('admin_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
+    let col = state.fb.firestore.collection('admin_logs').orderBy('created_at', 'desc').limit(200);
+    if (actionFilter) col = state.fb.firestore.collection('admin_logs').where('action', '==', actionFilter).orderBy('created_at', 'desc').limit(200);
+    const snap = await col.get();
+    const data = snap.docs.map(d => ({ ...d.data(), id: d.id, created_at: d.data().created_at?.toDate?.() || d.data().created_at }));
     
-    if (actionFilter) {
-      query = query.eq('action', actionFilter);
-    }
-    
-    const { data, error } = await query;
-    if (error) throw error;
-    
-    /* Filter by search */
     const filtered = searchQuery
       ? data.filter(log =>
-          log.admin_name.toLowerCase().includes(searchQuery) ||
+          (log.admin_name || '').toLowerCase().includes(searchQuery) ||
           (log.target_name && log.target_name.toLowerCase().includes(searchQuery))
         )
       : data;
@@ -888,11 +709,12 @@ export async function loadAdminLogs() {
     filtered.forEach(log => {
       const item = document.createElement('div');
       item.className = 'admin-list-item';
+      const logTime = log.created_at?.toDate?.() || log.created_at;
       item.innerHTML = `
         <div class="admin-item-info">
           <div>
             <strong>${escHtml(log.action)}</strong>
-            <span class="admin-item-id">by ${escHtml(log.admin_name)} | ${fmtTime(new Date(log.created_at))}</span>
+            <span class="admin-item-id">by ${escHtml(log.admin_name || '')} | ${fmtTime(logTime ? new Date(logTime) : new Date())}</span>
           </div>
           ${log.target_name ? `<div style="margin-top: 4px; color: var(--tx2);">Target: ${escHtml(log.target_name)}</div>` : ''}
         </div>
@@ -907,9 +729,8 @@ export async function loadAdminLogs() {
 
 /* ── Annunci ──────────────────────────────────────────────────── */
 export async function loadAnnouncements() {
-  if (!dom.adminAnnouncementsList || !state.supa) return;
+  if (!dom.adminAnnouncementsList || !state.fb) return;
   
-  /* Check permissions */
   await loadUserPermissions();
   if (!hasPermission('can_manage_announcements')) {
     dom.adminAnnouncementsList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to manage announcements.</p>';
@@ -917,12 +738,8 @@ export async function loadAnnouncements() {
   }
   
   try {
-    const { data, error } = await state.supa
-      .from('announcements')
-      .select('*')
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: false });
-    if (error) throw error;
+    const snap = await state.fb.firestore.collection('announcements').orderBy('priority', 'desc').orderBy('created_at', 'desc').get();
+    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     dom.adminAnnouncementsList.innerHTML = '';
     if (!data || data.length === 0) {
@@ -969,9 +786,8 @@ export async function loadAnnouncements() {
 /* ── Word Filter Management ───────────────────────────────────── */
 export async function loadWordFilter() {
   const adminWordFilterList = document.getElementById('adminWordFilterList');
-  if (!adminWordFilterList || !state.supa) return;
+  if (!adminWordFilterList || !state.fb) return;
   
-  /* Check permissions - solo admin/moderator possono gestire word filter */
   await loadUserPermissions();
   const { checkAdminAccess } = await import('./admin.js');
   const hasAccess = await checkAdminAccess();
@@ -982,13 +798,8 @@ export async function loadWordFilter() {
   }
   
   try {
-    const { data, error } = await state.supa
-      .from('filtered_words')
-      .select('*')
-      .order('word');
-    
-    if (error) throw error;
-    
+    const snap = await state.fb.firestore.collection('filtered_words').orderBy('word').get();
+    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     const searchTerm = (document.getElementById('adminWordFilterSearch')?.value || '').toLowerCase().trim();
     let filteredWords = data || [];
     
@@ -1045,7 +856,7 @@ export async function loadWordFilter() {
 }
 
 export async function saveWordFilter(wordId = null) {
-  if (!state.supa || !state.currentUser) return;
+  if (!state.fb || !state.currentUser) return;
   
   const wordInput = document.getElementById('wordFilterWordInput');
   const actionSelect = document.getElementById('wordFilterActionSelect');
@@ -1076,28 +887,13 @@ export async function saveWordFilter(wordId = null) {
     };
     
     if (wordId) {
-      wordData.updated_at = new Date().toISOString();
-      const { error } = await state.supa
-        .from('filtered_words')
-        .update(wordData)
-        .eq('id', wordId);
-      
-      if (error) throw error;
+      wordData.updated_at = new Date();
+      await state.fb.firestore.collection('filtered_words').doc(wordId).update(wordData);
       await logAdminAction('update_word_filter', 'word_filter', wordId, word);
       showToast('✅ Word filter updated.');
     } else {
-      const { error } = await state.supa
-        .from('filtered_words')
-        .insert(wordData);
-      
-      if (error) {
-        if (error.code === '23505') { // Unique constraint violation
-          showToast('⚠️ This word is already filtered.');
-          return;
-        }
-        throw error;
-      }
-      await logAdminAction('create_word_filter', 'word_filter', null, word);
+      const ref = await state.fb.firestore.collection('filtered_words').add(wordData);
+      await logAdminAction('create_word_filter', 'word_filter', ref.id, word);
       showToast('✅ Word filter added.');
     }
     
@@ -1115,17 +911,12 @@ export async function saveWordFilter(wordId = null) {
 }
 
 export async function deleteWordFilter(wordId, word) {
-  if (!state.supa || !state.currentUser) return;
+  if (!state.fb || !state.currentUser) return;
   
   if (!confirm(`Delete word filter "${word}"?`)) return;
   
   try {
-    const { error } = await state.supa
-      .from('filtered_words')
-      .delete()
-      .eq('id', wordId);
-    
-    if (error) throw error;
+    await state.fb.firestore.collection('filtered_words').doc(wordId).delete();
     
     await logAdminAction('delete_word_filter', 'word_filter', wordId, word);
     showToast('✅ Word filter deleted.');
@@ -1274,7 +1065,7 @@ function updateAnnouncementPreview() {
 }
 
 export async function saveAnnouncement() {
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   const { checkAdminAccess } = await import('./admin.js');
   const hasAccess = await checkAdminAccess();
@@ -1308,18 +1099,11 @@ export async function saveAnnouncement() {
     };
     
     if (id) {
-      const { error } = await state.supa
-        .from('announcements')
-        .update(annData)
-        .eq('id', id);
-      if (error) throw error;
+      await state.fb.firestore.collection('announcements').doc(id).update(annData);
       await logAdminAction('update_announcement', 'announcement', id, title);
     } else {
-      const { error } = await state.supa
-        .from('announcements')
-        .insert(annData);
-      if (error) throw error;
-      await logAdminAction('create_announcement', 'announcement', null, title);
+      const ref = await state.fb.firestore.collection('announcements').add({ ...annData, created_at: new Date() });
+      await logAdminAction('create_announcement', 'announcement', ref.id, title);
     }
     
     showToast('✅ Announcement saved!');
@@ -1333,14 +1117,10 @@ export async function saveAnnouncement() {
 }
 
 export async function toggleAnnouncement(annId, isActive) {
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
-    const { error } = await state.supa
-      .from('announcements')
-      .update({ is_active: isActive })
-      .eq('id', annId);
-    if (error) throw error;
+    await state.fb.firestore.collection('announcements').doc(annId).update({ is_active: isActive });
     
     await logAdminAction(isActive ? 'activate_announcement' : 'deactivate_announcement', 'announcement', annId, null);
     showToast(`✅ Announcement ${isActive ? 'activated' : 'deactivated'}.`);
@@ -1354,14 +1134,10 @@ export async function toggleAnnouncement(annId, isActive) {
 
 export async function deleteAnnouncement(annId) {
   if (!confirm('Delete this announcement?')) return;
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
-    const { error } = await state.supa
-      .from('announcements')
-      .delete()
-      .eq('id', annId);
-    if (error) throw error;
+    await state.fb.firestore.collection('announcements').doc(annId).delete();
     
     await logAdminAction('delete_announcement', 'announcement', annId, null);
     showToast('✅ Announcement deleted.');

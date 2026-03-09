@@ -11,14 +11,11 @@ let currentUserRole = null;
 
 /* ── Check if user is Owner or Admin ── */
 export async function checkAdminAccess() {
-  if (!state.supa || !state.currentUser) return false;
+  if (!state.fb || !state.currentUser) return false;
   try {
-    const { data, error } = await state.supa
-      .from('profiles')
-      .select('role')
-      .eq('id', state.currentUser.id)
-      .single();
-    if (error || !data) return false;
+    const snap = await state.fb.firestore.collection('profiles').doc(state.currentUser.id).get();
+    const data = snap?.data();
+    if (!data) return false;
     currentUserRole = data.role || 'user';
     return currentUserRole === 'owner' || currentUserRole === 'admin';
   } catch {
@@ -221,7 +218,7 @@ async function openAdminPanel() {
 
 /* ── Rooms Management ── */
 async function loadRooms() {
-  if (!dom.adminRoomsList || !state.supa) return;
+  if (!dom.adminRoomsList || !state.fb) return;
   
   /* Check permissions */
   await loadUserPermissions();
@@ -231,8 +228,8 @@ async function loadRooms() {
   }
   
   try {
-    const { data, error } = await state.supa.from('rooms').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
+    const snap = await state.fb.firestore.collection('rooms').orderBy('created_at', 'desc').get();
+    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     dom.adminRoomsList.innerHTML = '';
     if (!data || data.length === 0) {
@@ -329,10 +326,10 @@ function openRoomEditModal(room = null) {
 }
 
 async function saveRoom() {
-  if (!state.supa) return;
+  if (!state.fb) return;
   const form = dom.roomEditForm;
   const idInput = document.getElementById('roomEditId');
-  const id = idInput ? parseInt(idInput.value.trim()) : null;
+  const id = idInput ? idInput.value.trim() || null : null;
   const name = document.getElementById('roomEditName').value.trim();
   const icon = document.getElementById('roomEditIcon').value.trim() || '💬';
   const isOpen = document.getElementById('roomEditIsOpen').checked;
@@ -364,7 +361,6 @@ async function saveRoom() {
   const sanitizedName = escHtml(name);
   
   try {
-    /* Security: Verify admin access before saving */
     const hasAccess = await checkAdminAccess();
     if (!hasAccess) {
       showToast('🚫 Admin access required.');
@@ -373,33 +369,29 @@ async function saveRoom() {
     
     const roomData = {
       name: sanitizedName,
-      icon: icon.substring(0, 10), /* Limit icon length */
+      icon: icon.substring(0, 10),
       is_open: isOpen,
-      created_by: String(state.currentUser.id), /* Security: Ensure string */
+      created_by: String(state.currentUser.id),
       password: password ? await hashPassword(password) : null,
       max_cams: (isEventsRoom && maxCams && maxCams >= 1 && maxCams <= 8) ? maxCams : null,
       is_games_room: isGamesRoom,
     };
     
-    // Se è un edit, aggiungi l'ID
-    if (id && !isNaN(id)) {
-      roomData.id = id;
+    const col = state.fb.firestore.collection('rooms');
+    let savedId;
+    if (id) {
+      await col.doc(id).set(roomData, { merge: true });
+      savedId = id;
+    } else {
+      const ref = await col.add({ ...roomData, created_at: new Date() });
+      savedId = ref.id;
     }
     
-    const { data, error } = await state.supa
-      .from('rooms')
-      .upsert(roomData, { onConflict: id ? 'id' : undefined })
-      .select()
-      .single();
-    
-    if (error) throw error;
-    
-    await logAdminActionLocal(id ? 'update_room' : 'create_room', 'room', id || data.id, sanitizedName);
+    await logAdminActionLocal(id ? 'update_room' : 'create_room', 'room', savedId, sanitizedName);
     showToast('✅ Room saved!');
     dom.roomEditModal.hidden = true;
     loadRooms();
     
-    // Ricarica le stanze disponibili e aggiorna i tab
     const { loadRoomsFromDB, renderRoomTabs } = await import('./rooms.js');
     await loadRoomsFromDB();
     renderRoomTabs();
@@ -423,11 +415,10 @@ async function deleteRoom(roomId) {
   }
   
   if (!confirm(`Delete room "${escHtml(String(roomId))}"? This cannot be undone.`)) return;
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
-    const { error } = await state.supa.from('rooms').delete().eq('id', roomId);
-    if (error) throw error;
+    await state.fb.firestore.collection('rooms').doc(String(roomId)).delete();
     await logAdminActionLocal('delete_room', 'room', String(roomId), String(roomId));
     showToast('✅ Room deleted.');
     loadRooms();
@@ -441,7 +432,7 @@ async function deleteRoom(roomId) {
 let allUsersCache = []; // Cache per filtri
 
 async function loadUsers() {
-  if (!dom.adminUsersList || !state.supa) return;
+  if (!dom.adminUsersList || !state.fb) return;
   
   /* Check permissions */
   await loadUserPermissions();
@@ -451,27 +442,21 @@ async function loadUsers() {
   }
   
   try {
-    /* Get all registered users from database */
-    const { data: allProfiles, error: profilesError } = await state.supa
-      .from('profiles')
-      .select('id, username, display_name, is_guest, custom_role_id, custom_roles(name, color)')
-      .eq('is_guest', false)
-      .order('display_name');
+    const profilesSnap = await state.fb.firestore.collection('profiles').where('is_guest', '==', false).orderBy('display_name').get();
+    const rolesSnap = await state.fb.firestore.collection('custom_roles').get();
+    const roleMap = {};
+    rolesSnap.docs.forEach(d => { roleMap[d.id] = d.data(); });
     
-    if (profilesError) {
-      console.error('[Admin] Error loading profiles:', profilesError);
-      showToast('⚠️ Failed to load users.');
-      return;
-    }
+    const allProfiles = profilesSnap.docs.map(d => {
+      const data = d.data();
+      return { id: d.id, ...data, custom_roles: data.custom_role_id ? roleMap[data.custom_role_id] : null };
+    });
     
-    /* Also get online users from current room */
     const onlineUsers = Object.values(state.rooms[state.activeRoom]?.users || {});
     const onlineUserIds = new Set(onlineUsers.map(u => u.id));
     
-    /* Combine: show all registered users, mark which are online */
-    allUsersCache = (allProfiles || []).map(profile => {
+    allUsersCache = allProfiles.map(profile => {
       const isOnline = onlineUserIds.has(profile.id);
-      const onlineUser = onlineUsers.find(u => u.id === profile.id);
       return {
         id: profile.id,
         name: profile.display_name || profile.username || profile.id,
@@ -600,27 +585,16 @@ async function filterAndRenderUsers() {
 /* ── Populate role filter dropdown ── */
 async function populateUsersRoleFilter() {
   const roleFilter = document.getElementById('adminUsersRoleFilter');
-  if (!roleFilter || !state.supa) return;
+  if (!roleFilter || !state.fb) return;
   
   try {
-    /* Get all custom roles */
-    const { data: roles, error } = await state.supa
-      .from('custom_roles')
-      .select('id, name')
-      .order('name');
+    const snap = await state.fb.firestore.collection('custom_roles').orderBy('name').get();
+    const roles = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
     
-    if (error) {
-      console.error('[Admin] Error loading roles for filter:', error);
-      return;
-    }
-    
-    /* Save current selection */
     const currentValue = roleFilter.value;
-    
-    /* Clear and populate */
     roleFilter.innerHTML = '<option value="">All Roles</option>';
     
-    if (roles && roles.length > 0) {
+    if (roles.length > 0) {
       roles.forEach(role => {
         const option = document.createElement('option');
         option.value = role.id;
@@ -653,7 +627,7 @@ async function kickUser(userId, userName) {
   }
   
   if (!confirm(`Kick ${escHtml(userName)}?`)) return;
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   /* Broadcast kick event */
   broadcast('user-kicked', String(userId), { reason: 'Kicked by admin' });
@@ -677,17 +651,16 @@ async function muteUser(userId, userName) {
   const duration = prompt(`Mute ${escHtml(userName)} for how many minutes? (0 = permanent)`);
   if (duration === null) return;
   const mins = Math.max(0, Math.min(10080, parseInt(duration) || 0)); /* Max 1 week */
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
     const expiresAt = mins > 0 ? new Date(Date.now() + mins * 60 * 1000).toISOString() : null;
-    const { error } = await state.supa.from('muted_users').upsert({
-      user_id: String(userId), /* Security: Ensure string */
-      muted_by: String(state.currentUser.id), /* Security: Ensure string */
+    await state.fb.firestore.collection('muted_users').doc(`${String(userId)}_global`).set({
+      user_id: String(userId),
+      room_id: null,
+      muted_by: String(state.currentUser.id),
       expires_at: expiresAt,
-    }, { onConflict: 'user_id' });
-    
-    if (error) throw error;
+    }, { merge: true });
     
     /* Broadcast mute event */
     broadcast('user-muted', userId, { duration: mins });
@@ -715,18 +688,17 @@ async function banUser(userId, userName) {
   
   const reason = prompt(`Ban ${escHtml(userName)}. Reason:`);
   if (reason === null) return;
-  const sanitizedReason = (reason || 'Banned by admin').substring(0, 500); /* Limit reason length */
-  if (!state.supa) return;
+  const sanitizedReason = (reason || 'Banned by admin').substring(0, 500);
+  if (!state.fb) return;
   
   try {
-    const { error } = await state.supa.from('banned_users').upsert({
-      user_id: String(userId), /* Security: Ensure string */
-      username: escHtml(userName).substring(0, 50), /* Security: Sanitize and limit */
-      reason: escHtml(sanitizedReason), /* Security: Sanitize reason */
-      banned_by: String(state.currentUser.id), /* Security: Ensure string */
-    }, { onConflict: 'user_id' });
-    
-    if (error) throw error;
+    await state.fb.firestore.collection('banned_users').doc(String(userId)).set({
+      user_id: String(userId),
+      username: escHtml(userName).substring(0, 50),
+      reason: escHtml(sanitizedReason),
+      banned_by: String(state.currentUser.id),
+      banned_at: new Date(),
+    }, { merge: true });
     
     /* Broadcast ban event */
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin' });
@@ -741,9 +713,8 @@ async function banUser(userId, userName) {
 
 /* ── Banned Users ── */
 async function loadBannedUsers() {
-  if (!dom.adminBannedList || !state.supa) return;
+  if (!dom.adminBannedList || !state.fb) return;
   
-  /* Check permissions */
   await loadUserPermissions();
   if (!hasPermission('can_ban')) {
     dom.adminBannedList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to view banned users.</p>';
@@ -751,11 +722,8 @@ async function loadBannedUsers() {
   }
   
   try {
-    const { data, error } = await state.supa
-      .from('banned_users')
-      .select('*')
-      .order('banned_at', { ascending: false });
-    if (error) throw error;
+    const snap = await state.fb.firestore.collection('banned_users').orderBy('banned_at', 'desc').get();
+    const data = snap.docs.map(d => ({ user_id: d.id, ...d.data() }));
     
     dom.adminBannedList.innerHTML = '';
     if (!data || data.length === 0) {
@@ -799,10 +767,9 @@ async function unbanUser(userId) {
     return;
   }
   
-  if (!state.supa) return;
+  if (!state.fb) return;
   try {
-    const { error } = await state.supa.from('banned_users').delete().eq('user_id', String(userId));
-    if (error) throw error;
+    await state.fb.firestore.collection('banned_users').doc(String(userId)).delete();
     showToast('✅ User unbanned.');
     loadBannedUsers();
   } catch (err) {
@@ -813,9 +780,8 @@ async function unbanUser(userId) {
 
 /* ── Banned IPs ── */
 async function loadBannedIPs() {
-  if (!dom.adminIpsList || !state.supa) return;
+  if (!dom.adminIpsList || !state.fb) return;
   
-  /* Check permissions */
   await loadUserPermissions();
   if (!hasPermission('can_ban')) {
     dom.adminIpsList.innerHTML = '<p class="admin-empty">🚫 You do not have permission to view IP blocks.</p>';
@@ -823,11 +789,8 @@ async function loadBannedIPs() {
   }
   
   try {
-    const { data, error } = await state.supa
-      .from('banned_ips')
-      .select('*')
-      .order('banned_at', { ascending: false });
-    if (error) throw error;
+    const snap = await state.fb.firestore.collection('banned_ips').orderBy('banned_at', 'desc').get();
+    const data = snap.docs.map(d => ({ ...d.data(), ip: d.data().ip ?? d.id }));
     
     dom.adminIpsList.innerHTML = '';
     if (!data || data.length === 0) {
@@ -878,15 +841,16 @@ async function blockIP(ip, reason) {
     return;
   }
   
-  if (!state.supa) return;
+  if (!state.fb) return;
   try {
-    const sanitizedReason = (reason || 'Blocked by admin').substring(0, 500); /* Limit reason length */
-    const { error } = await state.supa.from('banned_ips').insert({
-      ip: escHtml(ip).substring(0, 45), /* Security: Sanitize and limit IP */
-      reason: escHtml(sanitizedReason), /* Security: Sanitize reason */
-      banned_by: String(state.currentUser.id), /* Security: Ensure string */
-    });
-    if (error) throw error;
+    const sanitizedReason = (reason || 'Blocked by admin').substring(0, 500);
+    const safeIp = escHtml(ip).substring(0, 45).replace(/[/]/g, '_');
+    await state.fb.firestore.collection('banned_ips').doc(safeIp).set({
+      ip: escHtml(ip).substring(0, 45),
+      reason: escHtml(sanitizedReason),
+      banned_by: String(state.currentUser.id),
+      banned_at: new Date(),
+    }, { merge: true });
     showToast('✅ IP blocked.');
     loadBannedIPs();
   } catch (err) {
@@ -909,10 +873,10 @@ async function unblockIP(ip) {
     return;
   }
   
-  if (!state.supa) return;
+  if (!state.fb) return;
   try {
-    const { error } = await state.supa.from('banned_ips').delete().eq('ip', ip);
-    if (error) throw error;
+    const safeIp = String(ip).replace(/[/]/g, '_').substring(0, 45);
+    await state.fb.firestore.collection('banned_ips').doc(safeIp).delete();
     showToast('✅ IP unblocked.');
     loadBannedIPs();
   } catch (err) {
@@ -924,7 +888,7 @@ async function unblockIP(ip) {
 /* ── Themes Management ── */
 async function loadThemes() {
   const list = document.getElementById('adminThemesList');
-  if (!list || !state.supa) return;
+  if (!list || !state.fb) return;
   
   /* Check permissions - solo owner/admin possono gestire temi */
   await loadUserPermissions();
@@ -1017,38 +981,29 @@ import {
 
 /* ── Popola select ruoli ─────────────────────────────────────── */
 async function populateRoleSelect(select, currentRoleId = null) {
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   try {
-    const { data, error } = await state.supa
-      .from('custom_roles')
-      .select('id, name')
-      .order('name');
-    if (error) throw error;
+    const snap = await state.fb.firestore.collection('custom_roles').orderBy('name').get();
+    const data = snap.docs.map(d => ({ id: d.id, name: d.data().name }));
     
-    /* Clear all existing options */
     select.innerHTML = '';
-    
-    /* Add "No Role" option first */
     const noRoleOption = document.createElement('option');
     noRoleOption.value = '';
     noRoleOption.textContent = currentRoleId ? '— Remove Role —' : '— No Role —';
     if (!currentRoleId) noRoleOption.selected = true;
     select.appendChild(noRoleOption);
     
-    /* Add roles */
-    if (data) {
-      data.forEach(role => {
-        const option = document.createElement('option');
-        option.value = role.id;
-        option.textContent = role.name;
-        if (role.id === currentRoleId) {
-          option.selected = true;
-          option.textContent = `✓ ${role.name}`; /* Mark current role */
-        }
-        select.appendChild(option);
-      });
-    }
+    data.forEach(role => {
+      const option = document.createElement('option');
+      option.value = role.id;
+      option.textContent = role.name;
+      if (role.id === currentRoleId) {
+        option.selected = true;
+        option.textContent = `✓ ${role.name}`;
+      }
+      select.appendChild(option);
+    });
   } catch (err) {
     console.error('[Admin] Error populating role select:', err);
   }

@@ -6,6 +6,7 @@ import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast, escHtml } from './utils.js';
 import { syncPresence, updateOwnPresence, renderUsers, findUser } from './users.js';
+import { createPresenceChannel } from './firebase-client.js';
 
 /* Forward refs set by main.js */
 let _loadRoomMessages = null;  // (roomId) => Promise<void>
@@ -16,15 +17,17 @@ let availableRoomsCache = [];
 
 /* ── Load rooms from database ── */
 export async function loadRoomsFromDB() {
-  if (!state.supa) return;
+  if (!state.fb) return;
   try {
-    const { data, error } = await state.supa
-      .from('rooms')
-      .select('*')
-      .eq('is_open', true)
-      .order('created_at', { ascending: true });
-    if (error) throw error;
-    availableRoomsCache = data || [];
+    const snap = await state.fb.firestore.collection('rooms')
+      .where('is_open', '==', true)
+      .orderBy('created_at', 'asc')
+      .get();
+    availableRoomsCache = snap.docs.map(d => {
+      const o = { id: d.id, ...d.data() };
+      if (o.created_at && typeof o.created_at.toDate === 'function') o.created_at = o.created_at.toDate().toISOString();
+      return o;
+    });
   } catch (err) {
     console.error('[Rooms] Load error:', err);
     availableRoomsCache = [];
@@ -53,7 +56,7 @@ export async function joinRoom(roomId) {
     switchRoom(roomIdStr);
     return;
   }
-  if (!state.supa) return;
+  if (!state.fb) return;
   
   /* Check if user is banned */
   const { checkIsBanned } = await import('./users.js');
@@ -74,9 +77,7 @@ export async function joinRoom(roomId) {
   state.rooms[roomIdStr] = mkRoom(roomIdStr, roomInfo?.name, roomInfo?.icon, roomInfo?.max_cams);
 
   /* Presence channel for this room */
-  const presenceCh = state.supa.channel(`presence:room-${roomIdStr}`, {
-    config: { presence: { key: state.currentUser.id } },
-  });
+  const presenceCh = createPresenceChannel(roomIdStr, state.currentUser?.id);
 
   presenceCh
     .on('presence', { event: 'sync' }, () => {

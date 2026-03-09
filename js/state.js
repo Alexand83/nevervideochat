@@ -71,8 +71,9 @@ export const state = {
   /* Stato "video off" ricevuto via broadcast (cam-video-off / cam-opened) per finestre remote */
   remoteVideoOffState: {},  /* { [remoteUid]: true|false } */
 
-  /* Backend (Firebase adapter exposed as state.supa) */
-  supa:     null,
+  /* Backend: Firebase nativo (state.fb). state.supa solo se si usa supabase-client.js */
+  fb:       null,   /* { auth, firestore, rtdb, storageRef } dopo init */
+  supa:     null,   /* impostato solo da supabase-client.js (backend alternativo) */
   signalCh: null,   /* global broadcast channel for WebRTC/PM */
   pendingSessionInvalidation: null, /* queue session-invalidated to send after connect */
 

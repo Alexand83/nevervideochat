@@ -9,26 +9,27 @@ let announcementsListener = null;
 let activeAnnouncements = [];
 let expirationCheckInterval = null;
 
+function mapAnnouncement(d) {
+  const data = d.data ? d.data() : d;
+  const id = d.id || data.id;
+  const o = { id, ...data };
+  if (o.created_at && typeof o.created_at.toDate === 'function') o.created_at = o.created_at.toDate().toISOString();
+  if (o.expires_at && typeof o.expires_at.toDate === 'function') o.expires_at = o.expires_at.toDate().toISOString();
+  return o;
+}
+
 /* ── Carica e visualizza annunci ─────────────────────────────── */
 export async function loadAndDisplayAnnouncements() {
-  if (!state.supa || !dom.announcementsBanner) return;
-  
+  if (!state.fb || !dom.announcementsBanner) return;
   try {
-    const { data, error } = await state.supa
-      .from('announcements')
-      .select('*')
-      .eq('is_active', true)
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    
-    /* Filter expired announcements */
+    const snap = await state.fb.firestore.collection('announcements')
+      .where('is_active', '==', true)
+      .orderBy('priority', 'desc')
+      .orderBy('created_at', 'desc')
+      .get();
+    const data = snap.docs.map(mapAnnouncement);
     const now = new Date();
-    const valid = (data || []).filter(ann => 
-      !ann.expires_at || new Date(ann.expires_at) > now
-    );
-    
+    const valid = data.filter(ann => !ann.expires_at || new Date(ann.expires_at) > now);
     activeAnnouncements = valid;
     renderAnnouncements();
     startExpirationChecker();
@@ -112,32 +113,12 @@ function renderAnnouncements() {
 
 /* ── Inizializza listener per annunci ────────────────────────── */
 export async function initAnnouncementsListener() {
-  if (!state.supa) return;
-  
-  /* Cleanup existing listener */
-  if (announcementsListener) {
-    announcementsListener.unsubscribe();
-  }
-  
-  /* Subscribe to announcements changes */
-  announcementsListener = state.supa
-    .channel('announcements_changes')
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'announcements',
-    }, (payload) => {
-      console.log('[Announcements] Change detected:', payload);
-      loadAndDisplayAnnouncements();
-    })
-    .subscribe();
-  
-  /* Also listen to broadcast events via Supabase Realtime */
-  const channel = state.supa.channel('announcements_broadcast');
-  channel.on('broadcast', { event: 'announcement-updated' }, () => {
+  if (!state.fb) return;
+  if (announcementsListener) announcementsListener();
+  announcementsListener = state.fb.firestore.collection('announcements').onSnapshot(() => {
     loadAndDisplayAnnouncements();
   });
-  channel.subscribe();
+  await loadAndDisplayAnnouncements();
 }
 
 /* ── Aggiorna altezza app-main quando banner appare/scompare ─── */
@@ -190,7 +171,7 @@ function startExpirationChecker() {
 /* ── Cleanup ─────────────────────────────────────────────────── */
 export function cleanupAnnouncements() {
   if (announcementsListener) {
-    announcementsListener.unsubscribe();
+    announcementsListener();
     announcementsListener = null;
   }
   if (expirationCheckInterval) {
