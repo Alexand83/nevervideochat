@@ -29,6 +29,7 @@ const GRACE_AFTER_HIDDEN_MS = 120000;
 let graceReconnectInterval = null;
 let broadcastUnsubscribe = null;
 let messageUnsubscribes = {};
+let activeSessionUnsubscribe = null;
 
 function mapTimestamp(o) {
   if (!o) return o;
@@ -316,6 +317,7 @@ export async function showDisconnectedOverlay(forceShow) {
   }
   clearDisconnectGrace();
   if (sessionCheckInterval) { clearInterval(sessionCheckInterval); sessionCheckInterval = null; }
+  if (activeSessionUnsubscribe) { activeSessionUnsubscribe(); activeSessionUnsubscribe = null; }
   if (broadcastUnsubscribe) { broadcastUnsubscribe(); broadcastUnsubscribe = null; }
   Object.keys(messageUnsubscribes).forEach(roomId => {
     if (messageUnsubscribes[roomId]) messageUnsubscribes[roomId]();
@@ -611,6 +613,22 @@ export async function connectFirebase() {
     clearDisconnectGrace();
     showToast('🟢 Connected to NeverVideoChat');
     startSessionCheckInterval();
+    /* Listener su active_sessions: se session_id cambia (login altrove), disconetti subito */
+    const uid = state.currentUser?.id;
+    if (uid && state.currentUser && !state.currentUser.isGuest) {
+      activeSessionUnsubscribe = firestore.collection('active_sessions').doc(String(uid)).onSnapshot(snap => {
+        if (!snap.exists || isDisconnectingOthers) return;
+        const data = snap.data();
+        const docSessionId = data?.session_id ?? null;
+        import('./auth.js').then(({ getSavedSessionId }) => {
+          const myId = getSavedSessionId();
+          if (myId != null && docSessionId != null && docSessionId !== myId) {
+            showDisconnectedOverlay();
+            if (activeSessionUnsubscribe) { activeSessionUnsubscribe(); activeSessionUnsubscribe = null; }
+          }
+        });
+      });
+    }
   } catch (err) {
     console.error('[Firebase] Connection error:', err);
     showToast('⚠️ Could not connect.');

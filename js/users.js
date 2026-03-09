@@ -365,6 +365,7 @@ export function sendTypingEvent() {
   handleTyping(payload);
   clearTimeout(state.typingTimer);
   state.typingTimer = setTimeout(() => {
+    if (!state.currentUser) return;
     const stopPayload = { from: state.currentUser.id, name: state.currentUser.name, isTyping: false, roomId };
     state.signalCh?.send({ type: 'broadcast', event: 'typing', payload: stopPayload });
     handleTyping(stopPayload); /* nasconde "Stai scrivendo..." anche per te */
