@@ -31,6 +31,7 @@ export const state = {
   outgoingPCs:         {},
   incomingPCs:         {},
   pendingIncomingICE:   {}, /* { [fromUid]: RTCIceCandidate[] } — ICE (dir out) arrivati prima dell'offer, da flushare quando si crea incoming PC */
+  _incomingOfferLock:   {}, /* { [fromUid]: Promise } — serializza gestione offerte per peer (evita PC duplicate) */
   privatePeer:         null,
   activeCallUID:       null,
   streamOpenedForCall: false,

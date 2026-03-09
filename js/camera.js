@@ -1356,6 +1356,9 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPublic) {
       if (sigType === 'offer') {
+        /* Serializza per peer: così la seconda/terza offer (replay Firebase) aspetta la prima e vede già state.incomingPCs[from] → IGNORE, niente PC duplicate. */
+        const fromKey = String(from);
+        const runOffer = async () => {
         /* Accetta offerte in Eventi e in stanze normali. Il controllo sotto (guestHasCamInEventsOnly) rifiuta solo se siamo in General e la cam dell'altro è solo in Eventi. */
 
         /* CRITICO: Non accettare offerte se l'utente ha chiuso manualmente questa camera */
@@ -1705,6 +1708,10 @@ export async function handleWebRTCSignal(payload) {
       await pc.setLocalDescription(answer);
       console.log('[WebRTC-FLOW] INCOMING: send answer to', from, 'sdpLen=', answer.sdp?.length);
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
+        }; /* end runOffer */
+        state._incomingOfferLock[fromKey] = (state._incomingOfferLock[fromKey] || Promise.resolve()).then(runOffer, () => {});
+        await state._incomingOfferLock[fromKey];
+        return;
     } else if (sigType === 'answer') {
       const pc = state.outgoingPCs[from];
       console.log('[WebRTC-FLOW] RX answer from', from, '| hasOutgoingPC=', !!pc, pc ? 'signaling=' + pc.signalingState + ' conn=' + pc.connectionState : '');
