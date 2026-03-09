@@ -390,11 +390,10 @@ async function saveRoom() {
     await logAdminActionLocal(id ? 'update_room' : 'create_room', 'room', savedId, sanitizedName);
     showToast('✅ Room saved!');
     dom.roomEditModal.hidden = true;
-    loadRooms();
-    
     const { loadRoomsFromDB, renderRoomTabs } = await import('./rooms.js');
     await loadRoomsFromDB();
     renderRoomTabs();
+    await loadRooms();
   } catch (err) {
     console.error('[Admin] Save room error:', err);
     showToast('⚠️ Failed to save room.');
@@ -421,7 +420,21 @@ async function deleteRoom(roomId) {
     await state.fb.firestore.collection('rooms').doc(String(roomId)).delete();
     await logAdminActionLocal('delete_room', 'room', String(roomId), String(roomId));
     showToast('✅ Room deleted.');
-    loadRooms();
+    const { loadRoomsFromDB, renderRoomTabs, switchRoom } = await import('./rooms.js');
+    await loadRoomsFromDB();
+    /* Se la stanza cancellata era in state.rooms, rimuovila e passa a un'altra */
+    const roomIdStr = String(roomId);
+    if (state.rooms[roomIdStr]) {
+      state.rooms[roomIdStr].presenceCh?.unsubscribe?.();
+      state.rooms[roomIdStr].dbSub?.unsubscribe?.();
+      delete state.rooms[roomIdStr];
+      if (state.activeRoom === roomIdStr) {
+        const remaining = Object.keys(state.rooms);
+        if (remaining.length) switchRoom(remaining[0]);
+      }
+    }
+    renderRoomTabs();
+    await loadRooms();
   } catch (err) {
     console.error('[Admin] Delete room error:', err);
     showToast('⚠️ Failed to delete room.');

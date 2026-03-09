@@ -30,6 +30,15 @@ let graceReconnectInterval = null;
 let broadcastUnsubscribe = null;
 let messageUnsubscribes = {};
 
+function mapTimestamp(o) {
+  if (!o) return o;
+  const r = { ...o };
+  ['created_at', 'updated_at', 'edited_at', 'deleted_at'].forEach(k => {
+    if (r[k] && typeof r[k].toDate === 'function') r[k] = r[k].toDate().toISOString();
+  });
+  return r;
+}
+
 /* ── RPC (Firestore active_sessions) ── */
 async function rpc(name, params) {
   if (name === 'is_session_valid') {
