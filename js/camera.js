@@ -1419,8 +1419,12 @@ export async function handleWebRTCSignal(payload) {
               cw.stream.addTrack(track);
               cw.videoOff = false;
               updateRemoteVideoVisibility(from);
-              const vid = document.getElementById(`cam-vid-${safeId(from)}`);
-              if (vid && vid.srcObject === cw.stream) {
+              const vid = cw.el?.querySelector?.('video') || document.getElementById(`cam-vid-${safeId(from)}`);
+              if (vid) {
+                /* Forza reattach: alcuni browser non aggiornano il video quando si addTrack sullo stesso stream */
+                vid.srcObject = null;
+                vid.srcObject = cw.stream;
+                vid.muted = true;
                 vid.play().then(() => { if (!cw.isOwn) vid.muted = false; }).catch(() => {});
               }
             } else if (track?.kind === 'audio' && !cw.stream.getAudioTracks().length) {
@@ -1766,6 +1770,10 @@ export async function handleWebRTCSignal(payload) {
 }
 
 function openRemoteCamWindow(uid, stream, userName = null) {
+  /* CRITICO: Non aprire mai una finestra "remota" per se stessi (replay/race possono mandare offer con from=me) */
+  if (String(uid) === String(state.currentUser?.id)) return;
+  /* CRITICO: Lo stream remoto non deve essere il nostro localStream (evita cam "mia" nella finestra sbagliata) */
+  if (stream === state.localStream) return;
   console.log('[WebRTC-FLOW] openRemoteCamWindow', (uid || '').slice(0, 8) + '…', 'tracks=', stream?.getTracks?.()?.length);
   clearPendingCamRequest(String(uid));
   const user = findUser(uid);
