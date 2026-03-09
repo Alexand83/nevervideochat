@@ -1401,8 +1401,7 @@ export async function handleWebRTCSignal(payload) {
         if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public', dir: 'in' });
       };
       
-      /* Accumula lo stream remoto: apriamo la finestra SOLO quando c'è almeno un track video (evita cam nera) */
-      pc._pendingRemoteStream = null;
+      /* Apri finestra al primo ontrack (così la cam si apre subito quando si accetta la richiesta); al secondo track (video) reattach per evitare nero */
       let streamOpened = false;
       
       pc.ontrack = ({ streams, track }) => {
@@ -1410,7 +1409,7 @@ export async function handleWebRTCSignal(payload) {
         const stream = streams[0];
         ensureUser(from, payload.fromName);
         
-        /* Già aperta: aggiungi il nuovo track allo stream della finestra */
+        /* Secondo track: aggiungi allo stream della finestra e reattach video per evitare nero */
         const cw = state.cameraWindows[from];
         if (streamOpened && cw?.stream) {
           if (track?.kind === 'video' && !cw.stream.getVideoTracks().length) {
@@ -1431,21 +1430,9 @@ export async function handleWebRTCSignal(payload) {
           }
           return;
         }
-        
-        /* Primo track: accumula su uno stream unico (stesso stream o merge) */
-        if (!pc._pendingRemoteStream) {
-          pc._pendingRemoteStream = stream;
-        } else if (stream !== pc._pendingRemoteStream && !pc._pendingRemoteStream.getTracks().some(t => t.id === track?.id)) {
-          pc._pendingRemoteStream.addTrack(track);
-        }
-        const hasVideo = (s) => s && s.getVideoTracks().length > 0;
-        if (!hasVideo(pc._pendingRemoteStream)) {
-          streamOpened = true;
-          return; /* Aspetta il track video prima di aprire */
-        }
         streamOpened = true;
         
-        /* Guard room / manually closed / camRoom (stesso blocco di prima) */
+        /* Guard: stanza / manually closed / camRoom */
         if (pc._createdInRoom && String(pc._createdInRoom) !== String(state.activeRoom)) {
           try { pc.close(); } catch {}
           if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
@@ -1481,7 +1468,8 @@ export async function handleWebRTCSignal(payload) {
         const camRoom = pc._camRoom || payload.room_id || null;
         if (camRoom && String(camRoom) !== String(state.activeRoom)) return;
         
-        openRemoteCamWindow(from, pc._pendingRemoteStream, payload.fromName);
+        /* Apri subito al primo track (audio o video): la finestra compare quando accetti; il video si aggiorna al secondo ontrack con reattach */
+        openRemoteCamWindow(from, stream, payload.fromName);
       };
       
       /* Monitor incoming connection — auto-reconnect if it fails */
