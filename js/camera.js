@@ -1401,58 +1401,56 @@ export async function handleWebRTCSignal(payload) {
         if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public', dir: 'in' });
       };
       
-      /* Flag to prevent openRemoteCamWindow from being called multiple times
-         (ontrack fires once per track: audio + video = 2 times for the same stream) */
+      /* Accumula lo stream remoto: apriamo la finestra SOLO quando c'è almeno un track video (evita cam nera) */
+      pc._pendingRemoteStream = null;
       let streamOpened = false;
       
       pc.ontrack = ({ streams, track }) => {
         if (!streams || !streams[0]) return;
+        const stream = streams[0];
+        ensureUser(from, payload.fromName);
         
-        /* Only open the camera window ONCE per peer connection regardless of track type.
-           DO NOT check for video tracks here — on some browsers/PCs, audio track arrives first
-           and streams[0] may not yet include video. Using streamOpened flag is sufficient. */
-        if (streamOpened) {
-          /* Secondo track (video o audio): aggiungi allo stream della finestra così il video non resta nero */
-          const cw = state.cameraWindows[from];
-          if (cw?.stream) {
-            if (track?.kind === 'video' && !cw.stream.getVideoTracks().length) {
-              cw.stream.addTrack(track);
-              cw.videoOff = false;
-              updateRemoteVideoVisibility(from);
-              const vid = cw.el?.querySelector?.('video') || document.getElementById(`cam-vid-${safeId(from)}`);
-              if (vid) {
-                /* Forza reattach: alcuni browser non aggiornano il video quando si addTrack sullo stesso stream */
-                vid.srcObject = null;
-                vid.srcObject = cw.stream;
-                vid.muted = true;
-                vid.play().then(() => { if (!cw.isOwn) vid.muted = false; }).catch(() => {});
-              }
-            } else if (track?.kind === 'audio' && !cw.stream.getAudioTracks().length) {
-              cw.stream.addTrack(track);
-              closeRemoteVolumeContext(from);
-              initRemoteVolumeControl(from);
+        /* Già aperta: aggiungi il nuovo track allo stream della finestra */
+        const cw = state.cameraWindows[from];
+        if (streamOpened && cw?.stream) {
+          if (track?.kind === 'video' && !cw.stream.getVideoTracks().length) {
+            cw.stream.addTrack(track);
+            cw.videoOff = false;
+            updateRemoteVideoVisibility(from);
+            const vid = cw.el?.querySelector?.('video') || document.getElementById(`cam-vid-${safeId(from)}`);
+            if (vid) {
+              vid.srcObject = null;
+              vid.srcObject = cw.stream;
+              vid.muted = true;
+              vid.play().then(() => { if (!cw.isOwn) vid.muted = false; }).catch(() => {});
             }
+          } else if (track?.kind === 'audio' && !cw.stream.getAudioTracks().length) {
+            cw.stream.addTrack(track);
+            closeRemoteVolumeContext(from);
+            initRemoteVolumeControl(from);
           }
           return;
         }
+        
+        /* Primo track: accumula su uno stream unico (stesso stream o merge) */
+        if (!pc._pendingRemoteStream) {
+          pc._pendingRemoteStream = stream;
+        } else if (stream !== pc._pendingRemoteStream && !pc._pendingRemoteStream.getTracks().some(t => t.id === track?.id)) {
+          pc._pendingRemoteStream.addTrack(track);
+        }
+        const hasVideo = (s) => s && s.getVideoTracks().length > 0;
+        if (!hasVideo(pc._pendingRemoteStream)) {
+          streamOpened = true;
+          return; /* Aspetta il track video prima di aprire */
+        }
         streamOpened = true;
         
-        ensureUser(from, payload.fromName);
-        
-        const stream = streams[0];
-        console.log('[WebRTC] Opening window for', from, 'stream tracks:', stream.getTracks().map(t => t.kind + ':' + t.readyState));
-        
-        /* Guard: if user has switched away from the room where this PC was created,
-           discard the stream — don't open a floating window in the wrong room */
+        /* Guard room / manually closed / camRoom (stesso blocco di prima) */
         if (pc._createdInRoom && String(pc._createdInRoom) !== String(state.activeRoom)) {
-          console.log('[WebRTC] PC created in room', pc._createdInRoom, 'but now in room', state.activeRoom, '— discarding stream from', from);
           try { pc.close(); } catch {}
           if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           return;
         }
-        
-        /* Guard: if guest's camera is only active in an Events room, and we're not in that Events room,
-           discard the stream — don't open a floating window in the wrong room */
         const availableRooms = getAvailableRooms();
         const eventsRooms = availableRooms.filter(r => r.max_cams && r.max_cams >= 1 && r.max_cams <= 8);
         const guestHasCamInEventsOnly = eventsRooms.some(eventsRoom => {
@@ -1463,9 +1461,8 @@ export async function handleWebRTCSignal(payload) {
         }) && !Object.values(state.rooms).some(room => {
           const guestInRoom = room.users[from];
           const isEventsRoom = eventsRooms.some(er => String(er.id) === String(room.id));
-          return guestInRoom?.hasCamera === true && !isEventsRoom; /* has cam in non-Events room */
+          return guestInRoom?.hasCamera === true && !isEventsRoom;
         });
-        
         if (guestHasCamInEventsOnly) {
           const guestEventsRoom = eventsRooms.find(eventsRoom => {
             const roomIdStr = String(eventsRoom.id);
@@ -1474,34 +1471,17 @@ export async function handleWebRTCSignal(payload) {
           });
           const guestEventsRoomId = guestEventsRoom ? String(guestEventsRoom.id) : null;
           const isInGuestEventsRoom = guestEventsRoomId && String(state.activeRoom) === guestEventsRoomId;
-          
           if (!isInGuestEventsRoom) {
-            console.log('[WebRTC] Discarding stream from', from, '— guest has camera only in Events room', guestEventsRoomId, 'but we are in room', state.activeRoom);
             try { pc.close(); } catch {}
             if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
             return;
           }
         }
-        
-        /* CRITICO: Non aprire la finestra se l'utente ha chiuso manualmente questa camera */
-        if (state.manuallyClosedCameras[from]) {
-          console.log('[WebRTC] Rejecting stream from', from, '— camera was manually closed by user');
-          try { pc.close(); } catch {}
-          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
-          return;
-        }
-        
-        /* CRITICO: La cam va mostrata SOLO nella stanza dove è stata aperta (stessa regola di cam-opened) */
+        if (state.manuallyClosedCameras[from]) return;
         const camRoom = pc._camRoom || payload.room_id || null;
-        if (camRoom && String(camRoom) !== String(state.activeRoom)) {
-          console.log('[WebRTC] Rejecting stream from', from, '— camera is in room', camRoom, 'but we are in room', state.activeRoom);
-          try { pc.close(); } catch {}
-          if (state.incomingPCs[from] === pc) delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
-          return;
-        }
+        if (camRoom && String(camRoom) !== String(state.activeRoom)) return;
         
-        /* Open window immediately — insertCameraIntoEventsGrid handles stream readiness */
-        openRemoteCamWindow(from, stream, payload.fromName);
+        openRemoteCamWindow(from, pc._pendingRemoteStream, payload.fromName);
       };
       
       /* Monitor incoming connection — auto-reconnect if it fails */
