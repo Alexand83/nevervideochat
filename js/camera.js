@@ -1345,11 +1345,17 @@ export async function sharePublicCameraTo(toUid) {
   } catch (err) { showToast('⚠️ Could not share camera: ' + err.message); }
 }
 
+/* Filtro anti-replay Firebase: child_added consegna tutti i messaggi passati al subscribe → scarta webrtc pubblici troppo vecchi */
+const WEBRTC_MAX_AGE_MS = 60000;
+
 /* ── All incoming WebRTC signals ──────────────────────────────── */
 export async function handleWebRTCSignal(payload) {
   if (payload.to !== state.currentUser?.id) return;
   const { sigType, from, sdp, candidate, dir } = payload;
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
+
+  /* Firebase replay: ignora offer/answer/ICE pubblici più vecchi di 60s (evita finestre cam all'avvio da messaggi vecchi) */
+  if (isPublic && payload._ts != null && (Date.now() - payload._ts > WEBRTC_MAX_AGE_MS)) return;
 
   if (isPublic) {
       if (sigType === 'offer') {

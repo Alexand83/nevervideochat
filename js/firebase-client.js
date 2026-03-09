@@ -208,7 +208,9 @@ export function createBroadcastChannel() {
       if (ts && (Date.now() - ts > BROADCAST_UI_MAX_AGE_MS)) return; /* richieste/annunci vecchi: no popup */
     }
     const payload = v.payload || {};
-    if (handlers[event]) handlers[event].forEach(fn => fn({ payload }));
+    /* Per webrtc passiamo _ts così handleWebRTCSignal può scartare replay vecchi (child_added su Firebase consegna tutti i messaggi passati al subscribe) */
+    const payloadWithTs = event === 'webrtc' ? { ...payload, _ts: ts } : payload;
+    if (handlers[event]) handlers[event].forEach(fn => fn({ payload: payloadWithTs }));
   });
   return {
     on(ev, opts, fn) {
