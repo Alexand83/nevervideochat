@@ -138,7 +138,7 @@ function clearAuthSession() { localStorage.removeItem('nvc_auth_session'); }
 
 export async function tryRestoreSession() {
   if (!state.fb) return null;
-  const { data } = await state.fb.auth.getSession();
+  let { data } = await state.fb.auth.getSession();
   if (!data?.user?.id) {
     try {
       const cached = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
@@ -146,8 +146,26 @@ export async function tryRestoreSession() {
         localStorage.removeItem('nvc_identity');
         return null;
       }
+      if (cached?.isGuest && state.fb.auth.signInAnonymously) {
+        const { data: anonData, error } = await state.fb.auth.signInAnonymously();
+        if (!error && anonData?.user?.id) {
+          const uid = anonData.user.id;
+          const name = cached.name || `Guest_${uid.slice(-6)}`;
+          const user = { id: uid, name, username: null, avatarUrl: null, isGuest: true, online: true, hasCamera: false };
+          localStorage.setItem('nvc_identity', JSON.stringify(user));
+          return user;
+        }
+      }
     } catch (_) {}
     return null;
+  }
+  if (data.user.isAnonymous) {
+    const uid = data.user.id;
+    const cached = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
+    const name = (cached?.id === uid && cached?.name) ? cached.name : `Guest_${uid.slice(-6)}`;
+    const user = { id: uid, name, username: null, avatarUrl: null, isGuest: true, online: true, hasCamera: false };
+    localStorage.setItem('nvc_identity', JSON.stringify(user));
+    return user;
   }
   const token = data.session?.access_token;
   if (!token) return null;
@@ -257,10 +275,32 @@ export function initAuthModal() {
     } finally { setAuthBtnLoading(dom.registerSubmitBtn, false, 'Create Account'); }
   });
 
-  dom.guestContinueBtn?.addEventListener('click', () => {
-    state.currentUser = getOrCreateGuestIdentity();
-    dom.authModal.hidden = true;
-    _finishInit?.();
+  dom.guestContinueBtn?.addEventListener('click', async () => {
+    if (!state.fb?.auth?.signInAnonymously) {
+      state.currentUser = getOrCreateGuestIdentity();
+      dom.authModal.hidden = true;
+      _finishInit?.();
+      return;
+    }
+    const btn = dom.guestContinueBtn;
+    if (btn) { btn.disabled = true; btn.dataset.origText = btn.textContent; btn.textContent = '…'; }
+    try {
+      const { data, error } = await state.fb.auth.signInAnonymously();
+      if (error) throw error;
+      const uid = data?.user?.id;
+      if (!uid) throw new Error('Anonymous sign-in failed');
+      const name = `Guest_${uid.slice(-6)}`;
+      applyAuthIdentity(uid, name, null, null, true);
+      dom.authModal.hidden = true;
+      _finishInit?.();
+    } catch (err) {
+      console.warn('[Auth] Guest sign-in failed, using local identity:', err);
+      state.currentUser = getOrCreateGuestIdentity();
+      dom.authModal.hidden = true;
+      _finishInit?.();
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Continue as Guest'; }
+    }
   });
 }
 

@@ -126,11 +126,24 @@ function authAdapter() {
     return {
       data: {
         session: token ? { access_token: token, refresh_token: '' } : null,
-        user: { id: user.uid },
+        user: { id: user.uid, isAnonymous: user.isAnonymous === true },
       },
     };
   };
   return {
+    /* Guest users: enable "Anonymous" sign-in in Firebase Console → Authentication → Sign-in method */
+    async signInAnonymously() {
+      try {
+        const cr = await firebase.auth().signInAnonymously();
+        const token = await cr.user.getIdToken().catch(() => null);
+        return {
+          data: { user: { id: cr.user.uid }, session: token ? { access_token: token, refresh_token: '' } : null },
+          error: null,
+        };
+      } catch (e) {
+        return { data: null, error: e };
+      }
+    },
     async signUp({ email, password }) {
       const cr = await firebase.auth().createUserWithEmailAndPassword(email, password);
       const token = await cr.user.getIdToken();
@@ -162,7 +175,7 @@ function authAdapter() {
     },
     async getUser() {
       const user = auth.currentUser;
-      return { data: { user: user ? { id: user.uid } : null }, error: null };
+      return { data: { user: user ? { id: user.uid, isAnonymous: user.isAnonymous === true } : null }, error: null };
     },
     signOut() {
       return auth.signOut();
