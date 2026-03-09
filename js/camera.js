@@ -1556,16 +1556,17 @@ export async function handleWebRTCSignal(payload) {
       /* Monitor incoming connection — auto-reconnect if it fails */
       let reconnectAttempts = 0;
       const MAX_RECONNECT = 3;
-      /* Se resta "connecting" (es. nessuna connessione) per 25s, togli dalla grid come su refresh */
+      /* Se resta "connecting" o "new" per 45s, togli dalla grid (prima 25s: troppo poco con replay Firebase / rete lenta) */
+      const CONNECTING_TIMEOUT_MS = 45000;
       let connectingTimeout = setTimeout(() => {
         if (state.incomingPCs[from] !== pc) return;
         if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
-          console.warn('[WebRTC-FLOW] INCOMING TIMEOUT 25s for', from, '| connectionState=', pc.connectionState, 'iceState=', pc.iceConnectionState, '→ remove from grid');
+          console.warn('[WebRTC-FLOW] INCOMING TIMEOUT', CONNECTING_TIMEOUT_MS / 1000, 's for', from, '| connectionState=', pc.connectionState, 'iceState=', pc.iceConnectionState, '→ remove from grid');
           try { pc.close(); } catch {}
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           removeRemoteCameraFromGrid(from).catch(() => {});
         }
-      }, 25000);
+      }, CONNECTING_TIMEOUT_MS);
 
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
@@ -1686,7 +1687,7 @@ export async function handleWebRTCSignal(payload) {
       });
       console.log('[WebRTC-FLOW] INCOMING: setRemoteDescription(offer) for', from);
       await pc.setRemoteDescription({ type: 'offer', sdp });
-      /* Flush ICE that arrived before we had an incoming PC (dir 'out' from this peer) */
+      /* Flush ICE arrivati prima dell'offer (dir 'out' da questo peer). Se sono di una vecchia sessione addIceCandidate può fallire → catch e ignora. */
       const prePcCount = state.pendingIncomingICE[from]?.length || 0;
       if (prePcCount) {
         console.log('[WebRTC-FLOW] INCOMING: flush pre-PC ICE', prePcCount, 'for', from);
