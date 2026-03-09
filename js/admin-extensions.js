@@ -504,12 +504,13 @@ export async function loadMessages() {
       const item = document.createElement('div');
       item.className = 'admin-list-item';
       const isDeleted = !!msg.deleted_at;
-      const contentPreview = sanitiseHtml(msg.content).substring(0, 100);
+      const contentStr = (msg.content || '').toString();
+      const contentPreview = sanitiseHtml(contentStr).substring(0, 100);
       
       item.innerHTML = `
         <div class="admin-item-info">
           <div>
-            <strong>${escHtml(msg.username)}</strong>
+            <strong>${escHtml(msg.username || '')}</strong>
             <span class="admin-item-id">${msg.room_id} | ${fmtTime(new Date(msg.created_at))}</span>
             ${isDeleted ? '<span class="admin-badge admin-badge-danger">Deleted</span>' : ''}
           </div>
