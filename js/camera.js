@@ -1353,9 +1353,16 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPublic) {
       if (sigType === 'offer') {
-        /* ─── Regola unica: una sola incoming PC per peer. Se esiste già, ignora (replay Firebase / offerte duplicate). ─── */
-        if (state.manuallyClosedCameras[from]) return;
-        if (state.incomingPCs[from]) return;
+        /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
+        const prev = state._incomingOfferDone[from] || Promise.resolve();
+        let doneResolve;
+        state._incomingOfferDone[from] = new Promise(r => { doneResolve = r; });
+        try {
+          await prev;
+        } catch (_) {}
+        try {
+          if (state.manuallyClosedCameras[from]) return;
+          if (state.incomingPCs[from]) return;
 
       /* Guard: camera solo in stanza Eventi e noi non siamo in quella stanza → rifiuta */
       const availableRooms = getAvailableRooms();
@@ -1648,6 +1655,9 @@ export async function handleWebRTCSignal(payload) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
+        } finally {
+          if (typeof doneResolve === 'function') doneResolve();
+        }
       return;
     }
     if (sigType === 'answer') {

@@ -31,6 +31,7 @@ export const state = {
   outgoingPCs:         {},
   incomingPCs:         {},
   pendingIncomingICE:   {}, /* { [fromUid]: RTCIceCandidate[] } — ICE (dir out) arrivati prima dell'offer, da flushare quando si crea incoming PC */
+  _incomingOfferDone:   {}, /* { [fromUid]: Promise } — serializza gestione offer per peer (Firebase replay) */
   privatePeer:         null,
   activeCallUID:       null,
   streamOpenedForCall: false,
