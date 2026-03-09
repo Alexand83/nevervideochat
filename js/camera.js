@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260308 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260309 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -1378,16 +1378,16 @@ export async function handleWebRTCSignal(payload) {
           return;
         }
 
-        /* Se il PC è ancora in connecting/new, non sostituirlo con una nuova offerta (evita "compare e sparisce" in Eventi) */
+        /* If PC stuck in new/connecting (e.g. stale offer from Firebase replay, or ICE never completed),
+           replace with new offer so the latest signaling wins and ICE can be applied to the new PC. */
         if (existingPc.connectionState === 'new' || existingPc.connectionState === 'connecting') {
-          console.log('[WebRTC] Ignoring new offer from', from, '— existing PC still connecting');
-          return;
+          console.log('[WebRTC] Replacing incoming PC for', from, '(stuck in', existingPc.connectionState, ') with new offer');
         }
 
-        /* Otherwise: close stale/dead PC and accept the new offer */
+        /* Otherwise: close stale/dead PC and accept the new offer (keep pendingIncomingICE so new PC can flush it) */
         console.log('[WebRTC] Closing stale incoming PC for', from, 'to accept new offer. state:', existingPc.signalingState, existingPc.connectionState);
         existingPc.close();
-        delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
+        delete state.incomingPCs[from];
         
         /* Remove old slot from Events grid to avoid stale video */
         if (existingCw?.isEventsGrid && existingCw.el && existingCw.el.parentNode) {
