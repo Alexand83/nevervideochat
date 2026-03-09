@@ -30,6 +30,7 @@ let graceReconnectInterval = null;
 let broadcastUnsubscribe = null;
 let messageUnsubscribes = {};
 let activeSessionUnsubscribe = null;
+let disconnectOverlayShown = false;
 
 function mapTimestamp(o) {
   if (!o) return o;
@@ -306,11 +307,14 @@ export function clearDisconnectGrace() {
   if (graceReconnectInterval) { clearInterval(graceReconnectInterval); graceReconnectInterval = null; }
 }
 export async function showDisconnectedOverlay(forceShow) {
+  if (disconnectOverlayShown) return;
   if (!state.currentUser) return;
-  if (!forceShow && disconnectGraceTimer) return;
+  disconnectOverlayShown = true;
+  if (!forceShow && disconnectGraceTimer) { disconnectOverlayShown = false; return; }
   if (!forceShow) {
     const recentlyHidden = lastHiddenAt && (Date.now() - lastHiddenAt < GRACE_AFTER_HIDDEN_MS);
     if (document.hidden || recentlyHidden) {
+      disconnectOverlayShown = false;
       scheduleDisconnectedOverlay(90000);
       return;
     }
@@ -343,9 +347,22 @@ export async function showDisconnectedOverlay(forceShow) {
   localStorage.removeItem('nvc_session_id');
   try { auth.signOut(); } catch (_) {}
   const authModal = document.getElementById('authModal');
-  if (authModal) { authModal.hidden = false; authModal.style.zIndex = '9999'; authModal.style.pointerEvents = 'auto'; }
+  if (authModal) { authModal.hidden = false; authModal.style.zIndex = '9999'; authModal.style.pointerEvents = 'auto'; authModal.classList.add('modal-visible'); }
   const adminPanel = document.getElementById('adminPanel');
   if (adminPanel) adminPanel.hidden = true;
+  const chatInputArea = document.getElementById('chatInputArea') || document.querySelector('.chat-input-area');
+  if (chatInputArea) { chatInputArea.style.display = 'none'; chatInputArea.setAttribute('aria-hidden', 'true'); }
+  if (dom.msgInput) { dom.msgInput.disabled = true; dom.msgInput.setAttribute('aria-hidden', 'true'); dom.msgInput.style.display = 'none'; }
+  if (dom.sendBtn) { dom.sendBtn.disabled = true; dom.sendBtn.style.display = 'none'; }
+}
+export function restoreChatInputAfterLogin() {
+  const chatInputArea = document.getElementById('chatInputArea') || document.querySelector('.chat-input-area');
+  if (chatInputArea) { chatInputArea.style.display = ''; chatInputArea.removeAttribute('aria-hidden'); }
+  if (dom.msgInput) { dom.msgInput.disabled = false; dom.msgInput.removeAttribute('aria-hidden'); dom.msgInput.style.display = ''; }
+  if (dom.sendBtn) { dom.sendBtn.disabled = false; dom.sendBtn.style.display = ''; }
+}
+export function resetDisconnectOverlayFlag() {
+  disconnectOverlayShown = false;
 }
 export function markSessionAsNew() {
   sessionJustCreated = true;
@@ -605,13 +622,12 @@ export async function connectFirebase() {
         }
       })
       .on('broadcast', { event: 'session-invalidated' }, async ({ payload }) => {
-        if (!state.currentUser || String(payload.user_id || payload.userId) !== String(state.currentUser.id)) return;
+        if (disconnectOverlayShown || !state.currentUser || String(payload.user_id || payload.userId) !== String(state.currentUser.id)) return;
         const { verifySessionImmediately } = await import('./auth.js');
         const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
-        if (token) {
-          const isValid = await verifySessionImmediately(state.currentUser.id, token);
-          if (!isValid) showDisconnectedOverlay();
-        }
+        if (!token) return;
+        const isValid = await verifySessionImmediately(state.currentUser.id, token);
+        if (!isValid) showDisconnectedOverlay();
       })
       .subscribe();
 
@@ -622,10 +638,11 @@ export async function connectFirebase() {
     const uid = state.currentUser?.id;
     if (uid && state.currentUser && !state.currentUser.isGuest) {
       activeSessionUnsubscribe = firestore.collection('active_sessions').doc(String(uid)).onSnapshot(snap => {
-        if (!snap.exists || isDisconnectingOthers) return;
+        if (disconnectOverlayShown || !snap.exists || isDisconnectingOthers) return;
         const data = snap.data();
         const docSessionId = data?.session_id ?? null;
         import('./auth.js').then(({ getSavedSessionId }) => {
+          if (disconnectOverlayShown) return;
           const myId = getSavedSessionId();
           if (myId != null && docSessionId != null && docSessionId !== myId) {
             showDisconnectedOverlay();

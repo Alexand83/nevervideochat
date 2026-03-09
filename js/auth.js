@@ -7,7 +7,7 @@ import { dom }     from './dom.js';
 import { avatarColor, initials, showToast, setAvatarDisplay } from './utils.js';
 import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnoredUser } from './storage.js';
 import { renderUsers, updateOwnPresence } from './users.js';
-import { isSessionValid, upsertActiveSession, showDisconnectedOverlay } from './firebase-client.js';
+import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
@@ -53,33 +53,18 @@ export function getSavedSessionId() {
 
 /* ── Verifica immediatamente se la sessione è valida ── */
 export async function verifySessionImmediately(userId, accessToken) {
-  if (!state.fb || !userId || !accessToken) {
-    console.warn('[Auth] IMMEDIATE CHECK: Missing parameters', { hasFb: !!state.fb, userId, hasToken: !!accessToken });
-    return false;
-  }
+  if (!state.fb || !userId || !accessToken) return false;
   try {
     const sessionId = createSessionId(accessToken);
     const savedSessionId = getSavedSessionId();
-    console.log('[Auth] Immediate session verification:', { userId, sessionId: sessionId.substring(0, 20) + '...', savedSessionId: savedSessionId ? savedSessionId.substring(0, 20) + '...' : 'none' });
-    try {
-      console.log('[Auth] 🔍 IMMEDIATE CHECK: Verifying session via SQL function...', { userId, sessionId: sessionId.substring(0, 20) + '...' });
-      const isValid = await isSessionValid(userId, sessionId);
-      console.log('[Auth] 🔍 IMMEDIATE CHECK: SQL function returned:', isValid);
-      if (!isValid) {
-        console.warn('[Auth] 🚨 IMMEDIATE CHECK: Session is NOT valid - this is an OLD session from another browser - disconnecting NOW');
-        showDisconnectedOverlay();
-        clearAuthSession();
-        return false;
-      }
-      console.log('[Auth] ✅ IMMEDIATE CHECK: Session is valid - this is the active session');
-    } catch (err) {
-      console.error('[Auth] ❌ IMMEDIATE CHECK: Exception:', err);
+    const isValid = await isSessionValid(userId, sessionId);
+    if (!isValid) {
+      showDisconnectedOverlay();
+      clearAuthSession();
       return false;
     }
-    console.log('[Auth] IMMEDIATE CHECK: ✅ Session is valid');
     return true;
   } catch (err) {
-    console.error('[Auth] IMMEDIATE CHECK: Exception:', err);
     return false;
   }
 }
@@ -202,6 +187,8 @@ export async function tryRestoreSession() {
 }
 
 export function applyAuthIdentity(id, name, username, avatarUrl, isGuest, themeId = 'dark', language = 'it') {
+  resetDisconnectOverlayFlag();
+  restoreChatInputAfterLogin();
   state.currentUser = { 
     id, 
     name, 
