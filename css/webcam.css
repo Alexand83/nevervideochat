@@ -120,6 +120,8 @@
   flex-wrap: nowrap;
   flex-shrink: 0;
   min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -157,10 +159,10 @@
   color: var(--clr-danger);
 }
 
-/* ── Controllo volume microfono: barra con pallina (tua cam) — si ridimensiona con la finestra ── */
+/* ── Controllo volume microfono: barra con pallina (tua cam) — si allunga/accorcia con la finestra ── */
 .mic-volume-section {
-  flex: 1 1 18%;
-  min-width: 0;  /* consente di restringersi invece di andare a capo */
+  flex: 1 1 0;   /* basis 0: occupa tutto lo spazio residuo, si allarga quando la finestra è grande */
+  min-width: 0;
   max-width: 130px;
   display: flex;
   flex-direction: column;
@@ -243,10 +245,10 @@
   padding: 5px 8px !important;
   flex-shrink: 0;
 }
-/* Barra volume cam remota: si ridimensiona con la finestra (come quella locale) */
+/* Barra volume cam remota: si allunga/accorcia con la finestra (come quella locale) */
 .cam-remote-volume-wrap {
-  flex: 1 1 22%;
-  min-width: 0;  /* consente di restringersi invece di andare a capo */
+  flex: 1 1 0;   /* basis 0: occupa tutto lo spazio residuo */
+  min-width: 0;
   max-width: 130px;
   display: flex;
   flex-direction: column;
