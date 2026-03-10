@@ -649,7 +649,8 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
     
     /* Broadcast ban event - user must leave ALL rooms */
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin/mod', expires_at: expiresAt });
-    
+    const { clearBroadcastHistory } = await import('./firebase-client.js');
+    await clearBroadcastHistory(); /* niente replay al reconnect */
     /* If banned user is current user, show ban overlay */
     if (String(userId) === String(state.currentUser?.id)) {
       /* Leave all rooms and show ban overlay */

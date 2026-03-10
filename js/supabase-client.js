@@ -453,7 +453,10 @@ export async function connectSupabase() {
     
     state.signalCh
       .on('broadcast', { event: 'typing'       }, ({ payload }) => handleTyping(payload))
-      .on('broadcast', { event: 'pm'           }, ({ payload }) => handleIncomingPM(payload))
+      .on('broadcast', { event: 'pm'           }, ({ payload }) => {
+        if (isBroadcastTooOld(payload)) return; /* replay al reconnect: non riaprire chat privata */
+        handleIncomingPM(payload);
+      })
       .on('broadcast', { event: 'webrtc'       }, ({ payload }) => handleWebRTCSignal(payload))
       .on('broadcast', { event: 'cam-req'      }, ({ payload }) => handleCamRequest(payload))
       .on('broadcast', { event: 'cam-accepted' }, ({ payload }) => handleCamAccepted(payload))

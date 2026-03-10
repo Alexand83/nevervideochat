@@ -5,6 +5,7 @@ import { state }          from './state.js';
 import { dom }            from './dom.js';
 import { showToast, escHtml, sanitiseHtml } from './utils.js';
 import { broadcast }      from './broadcast.js';
+import { clearBroadcastHistory } from './firebase-client.js';
 import { hasPermission, loadUserPermissions } from './permissions.js';
 
 let currentUserRole = null;
@@ -715,6 +716,7 @@ async function banUser(userId, userName) {
     
     /* Broadcast ban event */
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin' });
+    await clearBroadcastHistory(); /* niente replay al reconnect */
     showToast(`🚫 Banned ${userName}`);
     loadUsers();
     loadBannedUsers();
@@ -823,6 +825,7 @@ async function unbanUser(userId) {
     if (snap.docs.length) {
       await batch.commit();
       broadcast('user-unbanned', userId, {});
+      await clearBroadcastHistory();
     }
     showToast('✅ User unbanned.');
     loadBannedUsers();
@@ -954,8 +957,8 @@ async function unmuteUser(userId) {
     const batch = state.fb.firestore.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
     if (snap.docs.length) await batch.commit();
-    /* Notify clients so muted user clears state without refresh */
     broadcast('user-unmuted', userId, { room_id: null });
+    await clearBroadcastHistory();
     showToast('✅ User unmuted.');
     loadMutedUsers();
   } catch (err) {

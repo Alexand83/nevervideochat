@@ -214,6 +214,10 @@ export function createBroadcastChannel() {
     if (event === 'cam-rejected' || event === 'cam-revoked' || event === 'call-ended') {
       if (ts && (Date.now() - ts > BROADCAST_UI_MAX_AGE_MS)) return; /* replay al login: non mostrare toast vecchi */
     }
+    if (event === 'pm') {
+      const pt = (v.payload && v.payload.ts) || ts || 0;
+      if (pt && (Date.now() - pt > BROADCAST_UI_MAX_AGE_MS)) return; /* replay: non riaprire chat privata */
+    }
     const payload = v.payload || {};
     /* Per webrtc passiamo _ts così handleWebRTCSignal può scartare replay vecchi (child_added su Firebase consegna tutti i messaggi passati al subscribe) */
     let payloadWithTs = event === 'webrtc' ? { ...payload, _ts: ts } : payload;
@@ -255,6 +259,15 @@ export function createBroadcastChannel() {
       broadcastUnsubscribe = null;
     },
   };
+}
+
+/** Svuota la history del canale broadcast (evita replay di ban/kick/mute/pm al reconnect). Chiamare dopo ban/unban/unkick/unmute. */
+export async function clearBroadcastHistory() {
+  try {
+    if (rtdb) await rtdb.ref('broadcast').remove();
+  } catch (e) {
+    console.warn('[Firebase] clearBroadcastHistory failed', e);
+  }
 }
 
 /* ── Presence (Realtime DB per room) ── */
