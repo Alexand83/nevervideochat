@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260314 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260316 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS, VIDEO_ICE_RELAY_ONLY } from './config.js';
 import { state }         from './state.js';
@@ -1366,8 +1366,9 @@ export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload || {};
   const isPublic = payload?.ctx === 'public', isPrivate = payload?.ctx === 'private';
   const toMeStrict = payload != null && state.currentUser?.id != null && String(payload.to).trim() === String(state.currentUser.id).trim();
-  /* Fallback: accept public ICE from a peer we have an incoming PC for (viewer receiving broadcaster's ICE even if payload.to is wrong or reordered) */
-  const toMeIceFallback = isPublic && sigType === 'ice' && from && state.incomingPCs?.[from] && (dir === 'out' || candidate);
+  /* Fallback: accept public ICE from broadcaster (dir 'out') even when payload.to !== me or ICE arrived before offer, so we can apply or buffer. */
+  const hasIncomingPC = !!(from && state.incomingPCs?.[from]);
+  const toMeIceFallback = isPublic && sigType === 'ice' && from && (dir === 'out' || candidate) && (toMeStrict || hasIncomingPC || dir === 'out');
   const toMe = toMeStrict || toMeIceFallback;
   if (!toMe) {
     if (payload?.sigType === 'ice') {
@@ -1377,7 +1378,7 @@ export async function handleWebRTCSignal(payload) {
     }
     return;
   }
-  if (sigType === 'ice' && candidate) console.log('[WebRTC-FLOW] RX ICE for me from', (from || '').slice(0, 8) + '…', toMeIceFallback ? '(fallback: incomingPC for from)' : '');
+  if (sigType === 'ice' && candidate) console.log('[WebRTC-FLOW] RX ICE for me from', (from || '').slice(0, 8) + '…', toMeIceFallback && !toMeStrict ? (hasIncomingPC ? '(fallback: incomingPC)' : '(fallback: dir=out buffer)') : '');
 
   /* Firebase replay: ignora SOLO le offer troppo vecchie (evita cam che riappaiono al refresh). ICE e answer non vanno mai filtrati per _ts altrimenti la connessione non si stabilisce. */
   if (isPublic && sigType === 'offer' && payload._ts != null && state.broadcastConnectedAt > 0 && payload._ts < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) {
