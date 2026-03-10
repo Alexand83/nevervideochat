@@ -1394,6 +1394,12 @@ export async function handleWebRTCSignal(payload) {
         if (!isPublic) return; /* only process public offers */
         /* Ignora offerta propria: Firebase recapita il messaggio anche al mittente, non creare incoming PC per se stessi */
         if (from && state.currentUser?.id && String(from) === String(state.currentUser.id)) return;
+        /* Accetta offerta SOLO se il broadcaster ha la cam nella NOSTRA stanza attiva (evita di aprire cam in stanze sbagliate) */
+        const offererHasCamInMyRoom = !!state.rooms[state.activeRoom]?.users[from]?.hasCamera;
+        if (!offererHasCamInMyRoom) {
+          console.log('[WebRTC] Rejecting offer from', (from || '').slice(0, 8) + '… — no camera in current room', state.activeRoom);
+          return;
+        }
         /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
         const prev = state._incomingOfferDone[from] || Promise.resolve();
         let doneResolve;
