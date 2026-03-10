@@ -511,11 +511,7 @@ export async function removeRemoteCameraFromGrid(uid) {
   }
   const u = state.users.find(u => u.id === uid);
   if (u) u.hasCamera = false;
-  /* Togli dalla lista online della stanza attiva così grid e lista si aggiornano insieme */
-  const ar = state.activeRoom;
-  if (ar && state.rooms[ar]?.users[uid]) {
-    delete state.rooms[ar].users[uid];
-  }
+  /* Non rimuovere l'utente dalla stanza: resta in lista (presence); aggiorniamo solo hasCamera. */
   renderUsers();
 }
 
@@ -553,11 +549,7 @@ export async function handleCamClosed(payload) {
   }
   const u = state.users.find(u => u.id === uid);
   if (u) u.hasCamera = false;
-  /* Togli dalla lista online così grid e lista si aggiornano insieme */
-  const ar = state.activeRoom;
-  if (ar && state.rooms[ar]?.users[uid]) {
-    delete state.rooms[ar].users[uid];
-  }
+  /* Non rimuovere l'utente dalla stanza: resta in lista (ha solo spento la cam). */
 
   /* CRITICO: Rimuovi il flag di chiusura manuale quando la camera viene effettivamente chiusa dall'altro utente */
   /* Questo permette all'utente di richiedere di nuovo la camera in futuro se vuole */
@@ -1366,9 +1358,9 @@ export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload || {};
   const isPublic = payload?.ctx === 'public', isPrivate = payload?.ctx === 'private';
   const toMeStrict = payload != null && state.currentUser?.id != null && String(payload.to).trim() === String(state.currentUser.id).trim();
-  /* Accept all public ICE (ctx public or missing); payload.to can be wrong on Firebase replay; firebase-client also normalizes public ICE to to=me. */
+  /* Accept all room ICE: ctx !== 'private' (public or missing). payload.to can be wrong on Firebase; firebase-client normalizes non-private ICE to to=me. */
   const hasIncomingPC = !!(from && state.incomingPCs?.[from]);
-  const toMeIceFallback = sigType === 'ice' && from && candidate && (isPublic || payload?.ctx !== 'private');
+  const toMeIceFallback = sigType === 'ice' && from && candidate && payload?.ctx !== 'private';
   const toMe = toMeStrict || toMeIceFallback;
   if (!toMe) {
     if (payload?.sigType === 'ice') {
@@ -1385,7 +1377,7 @@ export async function handleWebRTCSignal(payload) {
     return;
   }
 
-  /* Public block: ctx===public OR ICE accepted with ctx missing (Firebase replay can drop ctx) */
+  /* Public block: ctx===public OR ICE with ctx !== 'private' (Firebase replay can drop ctx). */
   const handleAsPublic = isPublic || (sigType === 'ice' && from && candidate && payload?.ctx !== 'private');
   if (handleAsPublic) {
       if (sigType === 'offer') {
@@ -1519,7 +1511,7 @@ export async function handleWebRTCSignal(payload) {
       let connectingTimeout = setTimeout(() => {
         if (state.incomingPCs[from] !== pc) return;
         if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
-          console.warn('[WebRTC-FLOW] INCOMING TIMEOUT', CONNECTING_TIMEOUT_MS / 1000, 's for', from, '| connectionState=', pc.connectionState, 'iceState=', pc.iceConnectionState, '→ remove from grid');
+          console.warn('[WebRTC-FLOW] INCOMING TIMEOUT', CONNECTING_TIMEOUT_MS / 1000, 's for', from, '| connectionState=', pc.connectionState, 'iceState=', pc.iceConnectionState, '→ remove remote cam (user stays in list)');
           try { pc.close(); } catch {}
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           removeRemoteCameraFromGrid(from).catch(() => {});
@@ -1575,10 +1567,7 @@ export async function handleWebRTCSignal(payload) {
             for (const room of Object.values(state.rooms)) { if (room.users[from]) room.users[from].hasCamera = false; }
             const u = state.users.find(usr => usr.id === from);
             if (u) u.hasCamera = false;
-            /* Togli dalla lista online così grid e lista si aggiornano insieme */
-            if (state.activeRoom && state.rooms[state.activeRoom]?.users[from]) {
-              delete state.rooms[state.activeRoom].users[from];
-            }
+            /* Non rimuovere l'utente dalla stanza: resta in lista. */
             renderUsers();
           }
 
