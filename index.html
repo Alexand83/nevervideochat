@@ -775,7 +775,7 @@
           </button>
           <button class="admin-sidebar-item" data-tab="banned" role="tab">
             <span class="admin-sidebar-icon">🚫</span>
-            <span class="admin-sidebar-label">Banned</span>
+            <span class="admin-sidebar-label">Banned / Kicked / Muted</span>
           </button>
           <button class="admin-sidebar-item" data-tab="ips" role="tab">
             <span class="admin-sidebar-icon">🌐</span>
@@ -858,13 +858,17 @@
       </div>
     </div>
 
-    <!-- Banned Users Tab -->
+    <!-- Banned / Kicked / Muted Tab -->
     <div class="admin-tab-content" id="adminTabBanned" role="tabpanel">
       <div class="admin-section">
-        <h3 class="admin-section-title">Banned Users</h3>
-        <div id="adminBannedList" class="admin-list">
-          <!-- Filled by JS -->
+        <div class="admin-subtabs" role="tablist">
+          <button class="admin-subtab active" data-restriction="banned" role="tab">🚫 Banned</button>
+          <button class="admin-subtab" data-restriction="kicked" role="tab">👢 Kicked</button>
+          <button class="admin-subtab" data-restriction="muted" role="tab">🔇 Muted</button>
         </div>
+        <div id="adminBannedList" class="admin-list admin-restriction-list" data-list="banned"><!-- Filled by JS --></div>
+        <div id="adminKickedList" class="admin-list admin-restriction-list" data-list="kicked" hidden><!-- Filled by JS --></div>
+        <div id="adminMutedList" class="admin-list admin-restriction-list" data-list="muted" hidden><!-- Filled by JS --></div>
       </div>
     </div>
 

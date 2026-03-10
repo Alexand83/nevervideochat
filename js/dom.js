@@ -169,6 +169,8 @@ export const dom = {
   adminRoomsList:      $('adminRoomsList'),
   adminUsersList:      $('adminUsersList'),
   adminBannedList:     $('adminBannedList'),
+  adminKickedList:     $('adminKickedList'),
+  adminMutedList:      $('adminMutedList'),
   adminIpsList:        $('adminIpsList'),
   adminMessagesList:   $('adminMessagesList'),
   adminAnnouncementsList: $('adminAnnouncementsList'),

@@ -198,7 +198,7 @@ async function switchAdminTab(tabName) {
   }
   else if (tabName === 'roles') loadCustomRoles();
   else if (tabName === 'messages') loadMessages();
-  else if (tabName === 'banned') loadBannedUsers();
+  else if (tabName === 'banned') initRestrictionsPanel();
   else if (tabName === 'ips') loadBannedIPs();
   else if (tabName === 'announcements') loadAnnouncements();
   else if (tabName === 'statistics') loadStatistics();
@@ -724,6 +724,32 @@ async function banUser(userId, userName) {
   }
 }
 
+/* ── Banned / Kicked / Muted panel ── */
+function initRestrictionsPanel() {
+  if (!dom.adminBannedList) return;
+  document.querySelectorAll('.admin-subtab').forEach(btn => btn.classList.remove('active'));
+  document.querySelector('.admin-subtab[data-restriction="banned"]')?.classList.add('active');
+  document.querySelectorAll('.admin-restriction-list').forEach(el => { el.hidden = true; });
+  dom.adminBannedList.hidden = false;
+  loadBannedUsers();
+  loadKickedUsers();
+  loadMutedUsers();
+  document.querySelectorAll('.admin-subtab').forEach(btn => {
+    btn.replaceWith(btn.cloneNode(true));
+  });
+  document.querySelectorAll('.admin-subtab').forEach(btn => {
+    btn.addEventListener('click', () => switchRestrictionSubtab(btn.dataset.restriction));
+  });
+}
+
+function switchRestrictionSubtab(restriction) {
+  document.querySelectorAll('.admin-subtab').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.admin-subtab[data-restriction="${restriction}"]`)?.classList.add('active');
+  document.querySelectorAll('.admin-restriction-list').forEach(el => { el.hidden = true; });
+  const list = document.querySelector(`.admin-restriction-list[data-list="${restriction}"]`);
+  if (list) list.hidden = false;
+}
+
 /* ── Banned Users ── */
 async function loadBannedUsers() {
   if (!dom.adminBannedList || !state.fb) return;
@@ -800,6 +826,126 @@ async function unbanUser(docId) {
   } catch (err) {
     console.error('[Admin] Unban error:', err);
     showToast('⚠️ Failed to unban user.');
+  }
+}
+
+/* ── Kicked Users ── */
+async function loadKickedUsers() {
+  if (!dom.adminKickedList || !state.fb) return;
+  await loadUserPermissions();
+  if (!hasPermission('can_kick')) {
+    dom.adminKickedList.innerHTML = '<p class="admin-empty">🚫 No permission to view kicked users.</p>';
+    return;
+  }
+  try {
+    const snap = await state.fb.firestore.collection('kicked_users').get();
+    const data = snap.docs.map(d => {
+      const data_ = d.data();
+      return { docId: d.id, user_id: data_.user_id ?? d.id, room_id: data_.room_id, expires_at: data_.expires_at, ...data_ };
+    });
+    data.sort((a, b) => (b.expires_at || '').localeCompare(a.expires_at || ''));
+    dom.adminKickedList.innerHTML = '';
+    if (!data.length) {
+      dom.adminKickedList.innerHTML = '<p class="admin-empty">No kicked users.</p>';
+      return;
+    }
+    data.forEach(row => {
+      const uid = String(row.user_id);
+      const isGuest = uid.startsWith('guest_');
+      const guestBadge = isGuest ? '<span class="admin-badge" style="background: #6e7681; margin-left: 6px;">Guest</span>' : '';
+      const roomLabel = row.room_id ? `Room: ${escHtml(row.room_id)}` : 'Global';
+      const item = document.createElement('div');
+      item.className = 'admin-list-item';
+      item.innerHTML = `
+        <div class="admin-item-info">
+          <strong>${escHtml(uid)}</strong>${guestBadge}
+          <span class="admin-item-id">${roomLabel}</span>
+        </div>
+        <div class="admin-item-actions">
+          <button class="admin-action-btn" data-action="unkick">✅ Remove kick</button>
+        </div>
+      `;
+      item.querySelector('[data-action="unkick"]')?.addEventListener('click', () => unkickUser(row.docId));
+      dom.adminKickedList.appendChild(item);
+    });
+  } catch (err) {
+    console.error('[Admin] Load kicked users error:', err);
+    showToast('⚠️ Failed to load kicked users.');
+  }
+}
+
+async function unkickUser(docId) {
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) { showToast('🚫 Admin access required.'); return; }
+  if (!docId || typeof docId !== 'string') { showToast('⚠️ Invalid document.'); return; }
+  if (!state.fb) return;
+  try {
+    await state.fb.firestore.collection('kicked_users').doc(docId).delete();
+    showToast('✅ Kick removed.');
+    loadKickedUsers();
+  } catch (err) {
+    console.error('[Admin] Unkick error:', err);
+    showToast('⚠️ Failed to remove kick.');
+  }
+}
+
+/* ── Muted Users ── */
+async function loadMutedUsers() {
+  if (!dom.adminMutedList || !state.fb) return;
+  await loadUserPermissions();
+  if (!hasPermission('can_mute')) {
+    dom.adminMutedList.innerHTML = '<p class="admin-empty">🚫 No permission to view muted users.</p>';
+    return;
+  }
+  try {
+    const snap = await state.fb.firestore.collection('muted_users').get();
+    const data = snap.docs.map(d => {
+      const data_ = d.data();
+      return { docId: d.id, user_id: data_.user_id ?? d.id, room_id: data_.room_id, expires_at: data_.expires_at, ...data_ };
+    });
+    data.sort((a, b) => (b.expires_at || '').localeCompare(a.expires_at || ''));
+    dom.adminMutedList.innerHTML = '';
+    if (!data.length) {
+      dom.adminMutedList.innerHTML = '<p class="admin-empty">No muted users.</p>';
+      return;
+    }
+    data.forEach(row => {
+      const uid = String(row.user_id);
+      const isGuest = uid.startsWith('guest_');
+      const guestBadge = isGuest ? '<span class="admin-badge" style="background: #6e7681; margin-left: 6px;">Guest</span>' : '';
+      const roomLabel = row.room_id ? `Room: ${escHtml(row.room_id)}` : 'Global';
+      const item = document.createElement('div');
+      item.className = 'admin-list-item';
+      item.innerHTML = `
+        <div class="admin-item-info">
+          <strong>${escHtml(uid)}</strong>${guestBadge}
+          <span class="admin-item-id">${roomLabel}</span>
+        </div>
+        <div class="admin-item-actions">
+          <button class="admin-action-btn" data-action="unmute">✅ Unmute</button>
+        </div>
+      `;
+      item.querySelector('[data-action="unmute"]')?.addEventListener('click', () => unmuteUser(row.docId));
+      dom.adminMutedList.appendChild(item);
+    });
+  } catch (err) {
+    console.error('[Admin] Load muted users error:', err);
+    showToast('⚠️ Failed to load muted users.');
+  }
+}
+
+async function unmuteUser(docId) {
+  const hasAccess = await checkAdminAccess();
+  if (!hasAccess) { showToast('🚫 Admin access required.'); return; }
+  if (!docId || typeof docId !== 'string') { showToast('⚠️ Invalid document.'); return; }
+  if (!state.fb) return;
+  try {
+    await state.fb.firestore.collection('muted_users').doc(docId).delete();
+    showToast('✅ User unmuted.');
+    loadMutedUsers();
+  } catch (err) {
+    console.error('[Admin] Unmute error:', err);
+    showToast('⚠️ Failed to unmute.');
   }
 }
 
