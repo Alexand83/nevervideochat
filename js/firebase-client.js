@@ -459,7 +459,11 @@ export async function connectRoom(roomId) {
   const onInsert = async (m) => {
     try {
       if (m.user_id === state.currentUser.id) {
-        const tempMsg = room.messages.find(msg => (msg.userId === 'me' || msg.userId === state.currentUser.id) && msg.id && msg.id.length < 30);
+        /* Correlazione per ordine: il primo INSERT ricevuto va al più vecchio messaggio temp (evita reazioni sul messaggio sbagliato) */
+        const ourTempMessages = room.messages
+          .filter(msg => (msg.userId === 'me' || msg.userId === state.currentUser.id) && msg.id && String(msg.id).startsWith('m') && String(msg.id).length < 30)
+          .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        const tempMsg = ourTempMessages[0] || null;
         if (tempMsg) {
           const oldId = tempMsg.id;
           tempMsg.id = m.id;

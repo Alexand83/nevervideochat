@@ -247,10 +247,11 @@ export async function connectRoom(roomId) {
         /* This is our own message - update the temp ID with the DB UUID */
         const room = state.rooms[roomId];
         if (room) {
-          /* Find the most recent message from us without a DB ID */
-          const tempMsg = room.messages
-            .filter(msg => msg.userId === 'me' || msg.userId === state.currentUser.id)
-            .find(msg => msg.id.startsWith('m') && msg.id.length < 20);
+          /* Correlazione per ordine: primo INSERT = messaggio temp più vecchio (evita reazioni sul messaggio sbagliato) */
+          const ourTempMessages = room.messages
+            .filter(msg => (msg.userId === 'me' || msg.userId === state.currentUser.id) && msg.id && String(msg.id).startsWith('m') && String(msg.id).length < 30)
+            .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+          const tempMsg = ourTempMessages[0] || null;
           if (tempMsg) {
             const oldId = tempMsg.id;
             tempMsg.id = m.id;
