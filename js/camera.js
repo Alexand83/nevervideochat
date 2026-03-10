@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260310 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260311 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS }   from './config.js';
 import { state }         from './state.js';
@@ -1644,6 +1644,8 @@ export async function handleWebRTCSignal(payload) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'after createAnswer, state:', pc.connectionState, pc.iceConnectionState);
+      /* Retry play a 1s, 3s, 5s per catturare connessione che si stabilisce in ritardo (NAT/firewall) */
+      [1000, 3000, 5000].forEach(ms => setTimeout(() => retryPlay('delayed-' + ms + 'ms', true), ms));
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
         } finally {
           if (typeof doneResolve === 'function') doneResolve();
