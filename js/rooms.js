@@ -193,22 +193,33 @@ export async function joinRoom(roomId) {
   switchRoom(roomIdStr);
 }
 
-/* ── Leave a room ── */
-export function leaveRoom(roomId) {
-  if (roomId === 'general') { showToast('ℹ️ Cannot leave the General room.'); return; }
+/* ── Leave a room (opts.silent = true per kick, non mostra toast) ── */
+export function leaveRoom(roomId, opts = {}) {
+  if (roomId === 'general') {
+    if (!opts.silent) showToast('ℹ️ Cannot leave the General room.');
+    return;
+  }
   const room = state.rooms[roomId];
   if (!room) return;
 
-  /* Unsubscribe channels */
-  room.presenceCh?.unsubscribe();
-  room.dbSub?.unsubscribe();
+  /* Unsubscribe presence e messaggi → esci dalla lista utenti della stanza */
+  room.presenceCh?.unsubscribe?.();
+  room.dbSub?.unsubscribe?.();
   delete state.rooms[roomId];
 
   renderRoomTabs();
 
-  /* If we were on this room, switch to general */
-  if (state.activeRoom === roomId) switchRoom('general');
-  showToast(`👋 Left #${room.name}`);
+  /* Se eravamo in questa stanza, passa a un'altra disponibile (general o prima in lista) */
+  if (state.activeRoom === roomId) {
+    const remaining = Object.keys(state.rooms);
+    if (remaining.length > 0) {
+      const next = remaining.includes('general') ? 'general' : remaining[0];
+      switchRoom(next);
+    } else {
+      state.activeRoom = null;
+    }
+  }
+  if (!opts.silent) showToast(`👋 Left #${room.name}`);
 }
 
 /* ── Timer to auto-close camera if user stays away from Events room > 1 min ── */

@@ -619,21 +619,21 @@ export async function connectFirebase() {
           if (!state.kickedUsers[targetId]) state.kickedUsers[targetId] = {};
           if (payload.is_global) {
             for (const rId of Object.keys(state.rooms)) state.kickedUsers[targetId][rId] = payload.expires_at;
-            const { leaveRoom } = await import('./rooms.js');
-            const { renderRoomTabs } = await import('./rooms.js');
-            for (const rId of Object.keys(state.rooms)) await leaveRoom(rId);
+            const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
+            for (const rId of Object.keys(state.rooms)) leaveRoom(rId, { silent: true });
             renderRoomTabs();
             const { showKickOverlay } = await import('./kick-ban.js');
             await showKickOverlay(null, payload.expires_at, true);
           } else {
             state.kickedUsers[targetId][roomId] = payload.expires_at;
-            if (state.activeRoom === roomId) {
-              const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
-              await leaveRoom(roomId);
+            /* Sempre uscire dalla stanza kickata: chiudi tab, esci da presence (lista utenti) */
+            const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
+            if (state.rooms[roomId]) {
+              leaveRoom(roomId, { silent: true });
               renderRoomTabs();
-              const { showKickOverlay } = await import('./kick-ban.js');
-              await showKickOverlay(roomId, payload.expires_at, false);
             }
+            const { showKickOverlay } = await import('./kick-ban.js');
+            await showKickOverlay(roomId, payload.expires_at, false);
           }
         }
       })

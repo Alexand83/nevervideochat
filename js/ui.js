@@ -529,24 +529,24 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
     /* Broadcast kick event */
     broadcast('user-kicked', userId, { room_id: roomId, expires_at: expiresAt, is_global: isGlobal });
     
-    /* If kicked user is current user, handle it */
+    /* If kicked user is current user, handle it (stesso comportamento del broadcast) */
     if (String(userId) === String(state.currentUser?.id)) {
+      const targetId = String(userId);
+      if (!state.kickedUsers[targetId]) state.kickedUsers[targetId] = {};
       if (isGlobal) {
-        /* Leave all rooms and show kick overlay */
-        const { leaveRoom } = await import('./rooms.js');
-        const { renderRoomTabs } = await import('./rooms.js');
-        for (const rId of Object.keys(state.rooms)) {
-          await leaveRoom(rId);
-        }
+        for (const rId of Object.keys(state.rooms)) state.kickedUsers[targetId][rId] = expiresAt;
+        const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
+        for (const rId of Object.keys(state.rooms)) leaveRoom(rId, { silent: true });
         renderRoomTabs();
         const { showKickOverlay } = await import('./kick-ban.js');
         await showKickOverlay(null, expiresAt, true);
       } else {
-        /* Leave this room and show kick overlay */
-        const { leaveRoom } = await import('./rooms.js');
-        const { renderRoomTabs } = await import('./rooms.js');
-        await leaveRoom(state.activeRoom);
-        renderRoomTabs();
+        state.kickedUsers[targetId][state.activeRoom] = expiresAt;
+        const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
+        if (state.rooms[state.activeRoom]) {
+          leaveRoom(state.activeRoom, { silent: true });
+          renderRoomTabs();
+        }
         const { showKickOverlay } = await import('./kick-ban.js');
         await showKickOverlay(state.activeRoom, expiresAt, false);
       }
