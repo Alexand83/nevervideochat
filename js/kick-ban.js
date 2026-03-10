@@ -28,21 +28,32 @@ export async function findAvailableRoom() {
 
 /* ── Show kick overlay ── */
 export async function showKickOverlay(roomId, expiresAt, isGlobal) {
+  const now = new Date();
+  const expires = new Date(expiresAt);
+  const timeUntilExpiry = expires - now;
+
+  /* Kick already expired: don't show overlay, clear from state, allow rejoin */
+  if (timeUntilExpiry <= 0) {
+    const uid = state.currentUser?.id;
+    if (uid && state.kickedUsers[uid]) {
+      if (roomId) delete state.kickedUsers[uid][roomId];
+      else state.kickedUsers[uid] = {};
+      if (Object.keys(state.kickedUsers[uid] || {}).length === 0) delete state.kickedUsers[uid];
+    }
+    showToast('✅ Your kick has expired. You can rejoin.');
+    return;
+  }
+
   /* Hide main app */
   document.body.classList.add('kick-ban-active');
   dom.kickBanOverlay.hidden = false;
-  
-  /* Calculate minutes remaining */
-  const now = new Date();
-  const expires = new Date(expiresAt);
-  const minutesRemaining = Math.ceil((expires - now) / (1000 * 60));
-  
-  /* Update UI */
+
+  const minutesRemaining = Math.ceil(timeUntilExpiry / (1000 * 60));
   dom.kickBanIcon.textContent = '👢';
   dom.kickBanTitle.textContent = isGlobal ? 'You have been kicked from all rooms' : 'You have been kicked from this room';
   dom.kickBanMessage.innerHTML = `You cannot rejoin for <span id="kickBanMinutes">${minutesRemaining}</span> minutes.`;
   dom.kickBanExpires.textContent = `Until: ${expires.toLocaleString()}`;
-  
+
   /* If not global kick, try to find an available room */
   if (!isGlobal) {
     const availableRoomId = await findAvailableRoom();
@@ -58,17 +69,33 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
   } else {
     dom.kickBanActions.hidden = true;
   }
-  
+
   /* Auto-hide when kick expires */
-  const timeUntilExpiry = expires - now;
-  if (timeUntilExpiry > 0) {
-    setTimeout(() => {
-      if (dom.kickBanOverlay && !dom.kickBanOverlay.hidden) {
-        hideKickBanOverlay();
-        showToast('✅ Your kick has expired. You can now rejoin rooms.');
+  setTimeout(() => {
+    if (dom.kickBanOverlay && !dom.kickBanOverlay.hidden) {
+      hideKickBanOverlay();
+      showToast('✅ Your kick has expired. You can now rejoin rooms.');
+    }
+  }, timeUntilExpiry);
+
+  /* If overlay was already visible with expired kick (e.g. tab slept), check every 10s and hide */
+  const expiredCheck = setInterval(() => {
+    if (!dom.kickBanOverlay || dom.kickBanOverlay.hidden) {
+      clearInterval(expiredCheck);
+      return;
+    }
+    if (new Date(expiresAt) <= new Date()) {
+      clearInterval(expiredCheck);
+      const uid = state.currentUser?.id;
+      if (uid && state.kickedUsers[uid]) {
+        if (roomId) delete state.kickedUsers[uid][roomId];
+        else state.kickedUsers[uid] = {};
+        if (Object.keys(state.kickedUsers[uid] || {}).length === 0) delete state.kickedUsers[uid];
       }
-    }, timeUntilExpiry);
-  }
+      hideKickBanOverlay();
+      showToast('✅ Your kick has expired. You can rejoin.');
+    }
+  }, 10000);
 }
 
 /* ── Show ban overlay ── */

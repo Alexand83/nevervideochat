@@ -306,12 +306,15 @@ async function loadUserRestrictions(userId) {
       const m = d.data();
       state.mutedUsers[userId] = { room_id: m.room_id, expires_at: m.expires_at };
     });
-    /* Kicked: already reset to {} then populate */
+    /* Kicked: reset then populate only non-expired (ignore past expires_at) */
     state.kickedUsers[userId] = {};
+    const now = new Date();
     const kickedSnap = await state.fb.firestore.collection('kicked_users').where('user_id', '==', userId).get();
     kickedSnap.docs.forEach(d => {
       const k = d.data();
-      state.kickedUsers[userId][k.room_id] = k.expires_at;
+      const expVal = k.expires_at;
+      const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
+      if (exp && exp > now) state.kickedUsers[userId][k.room_id] = exp.toISOString();
     });
     /* Banned: clear when DB has no ban (otherwise unban never reflects in state) */
     const bannedSnap = await state.fb.firestore.collection('banned_users').where('user_id', '==', userId).limit(1).get();
