@@ -102,10 +102,10 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
 export function showBanOverlay(reason, expiresAt) {
   const now = new Date();
   const expires = expiresAt ? (expiresAt.toDate ? expiresAt.toDate() : new Date(expiresAt)) : null;
-  const timeUntilExpiry = expires ? expires - now : null;
+  const timeUntilExpiry = expires && !Number.isNaN(expires.getTime()) ? expires - now : null;
 
   /* Ban already expired (temporary ban): clear state and reload so user can use app */
-  if (expiresAt && timeUntilExpiry <= 0) {
+  if (expiresAt && timeUntilExpiry !== null && timeUntilExpiry <= 0) {
     const uid = state.currentUser?.id;
     if (uid) delete state.bannedUsers[uid];
     showToast('✅ Your ban has expired. You can rejoin.');
@@ -121,7 +121,7 @@ export function showBanOverlay(reason, expiresAt) {
   dom.kickBanTitle.textContent = 'You have been banned';
   dom.kickBanMessage.textContent = reason || 'You have been banned from all rooms.';
 
-  if (expires) {
+  if (expires && !Number.isNaN(expires.getTime()) && timeUntilExpiry !== null) {
     const minutesRemaining = Math.ceil(timeUntilExpiry / (1000 * 60));
     dom.kickBanMinutes.textContent = minutesRemaining;
     dom.kickBanExpires.textContent = `Ban expires: ${expires.toLocaleString()}`;
@@ -132,7 +132,7 @@ export function showBanOverlay(reason, expiresAt) {
         clearInterval(expiredCheck);
         return;
       }
-      if (new Date(expires) <= new Date()) {
+      if (expires <= new Date()) {
         clearInterval(expiredCheck);
         const uid = state.currentUser?.id;
         if (uid) delete state.bannedUsers[uid];

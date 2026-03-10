@@ -320,14 +320,17 @@ async function loadUserRestrictions(userId) {
       const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
       if (exp && exp > now) state.kickedUsers[userId][k.room_id] = exp.toISOString();
     });
-    /* Banned: only set if ban exists and not expired (temporary ban with past expires_at = no ban) */
+    /* Banned: only set if ban exists and not expired; store expires_at as ISO string for reliable parsing */
     const bannedSnap = await state.fb.firestore.collection('banned_users').where('user_id', '==', userId).limit(1).get();
     if (!bannedSnap.empty) {
       const banned = bannedSnap.docs[0].data();
       const expVal = banned.expires_at;
       const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
       if (!exp || exp > now) {
-        state.bannedUsers[userId] = { expires_at: banned.expires_at, reason: banned.reason };
+        state.bannedUsers[userId] = {
+          expires_at: exp ? exp.toISOString() : null,
+          reason: banned.reason
+        };
       } else {
         delete state.bannedUsers[userId];
       }

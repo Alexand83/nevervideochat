@@ -196,10 +196,13 @@ export function checkIsBanned(userId) {
   const ban = state.bannedUsers[String(userId)];
   if (!ban) return false;
   
-  /* Check if expired */
-  if (ban.expires_at && new Date(ban.expires_at) < new Date()) {
-    delete state.bannedUsers[String(userId)];
-    return false;
+  /* Check if expired (expires_at can be ISO string or Firestore Timestamp) */
+  if (ban.expires_at) {
+    const exp = ban.expires_at.toDate ? ban.expires_at.toDate() : new Date(ban.expires_at);
+    if (!Number.isNaN(exp.getTime()) && exp < new Date()) {
+      delete state.bannedUsers[String(userId)];
+      return false;
+    }
   }
   
   return true;
