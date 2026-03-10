@@ -1720,7 +1720,11 @@ export async function handleWebRTCSignal(payload) {
         pc = state.outgoingPCs[from] || state.incomingPCs[from]; /* Legacy fallback */
       }
       if (!candidate) return;
-      const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidate);
+      /* Normalize: Firebase may deliver candidate as object { candidate, sdpMid, sdpMLineIndex } or as string (SDP line) */
+      const candidateObj = typeof candidate === 'string'
+        ? { candidate: candidate.trim() }
+        : (candidate && typeof candidate === 'object' && 'candidate' in candidate ? candidate : { candidate: String(candidate) });
+      const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidateObj);
       /* dir 'out': if we don't have incoming PC yet (offer not processed), buffer so we don't drop owner's ICE */
       if (dir === 'out' && !pc) {
         state.pendingIncomingICE[from] = state.pendingIncomingICE[from] || [];
