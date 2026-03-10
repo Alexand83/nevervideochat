@@ -670,6 +670,10 @@ export function updateEventsCamGrid() {
   const maxCams = roomData?.max_cams;
   if (!maxCams) {
     dom.eventsCamGrid.hidden = true;
+    /* Non siamo in Eventi: svuota la grid così non restano slot visibili in altre stanze (es. dopo refresh) */
+    if (dom.eventsCamGrid.innerHTML.trim() !== '') {
+      clearEventsCamGrid();
+    }
     return;
   }
   

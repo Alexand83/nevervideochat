@@ -125,7 +125,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     }
     videoEl.play().then(() => {
       if (!isOwn) {
-        videoEl.muted = false;
+        /* Non smutare mai il video remoto: l'audio deve passare solo da Web Audio (initRemoteVolumeControl) così volume e mute funzionano */
         initRemoteVolumeControl(uid);
       }
     }).catch(() => {});
@@ -147,8 +147,8 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         if (v && v.srcObject === cw.stream && v.videoWidth === 0 && cw.stream.getVideoTracks().some(t => t.readyState === 'live')) {
           v.srcObject = null;
           v.srcObject = cw.stream;
-          v.muted = true;
-          v.play().then(() => { v.muted = false; }).catch(() => {});
+          v.muted = true; /* remoto: audio solo da Web Audio (volume/mute) */
+          v.play().catch(() => {});
         }
       }, 2000);
     }
@@ -1466,8 +1466,8 @@ export async function handleWebRTCSignal(payload) {
             if (vid) {
               vid.srcObject = null;
               vid.srcObject = cw.stream;
-              vid.muted = true;
-              vid.play().then(() => { if (!cw.isOwn) vid.muted = false; }).catch(() => {});
+              vid.muted = true; /* remoto: audio solo da Web Audio così volume/mute funzionano */
+              vid.play().catch(() => {});
             }
           } else if (track?.kind === 'audio' && !cw.stream.getAudioTracks().length) {
             cw.stream.addTrack(track);
@@ -1619,13 +1619,11 @@ export async function handleWebRTCSignal(payload) {
           didReattach = true;
           vid.srcObject = null;
           vid.srcObject = cw.stream;
-          vid.muted = true;
+          vid.muted = true; /* remoto: audio solo da Web Audio così volume/mute funzionano */
         }
         if (!vid.srcObject) return;
         if (!vid.paused && !forceReattach) return;
-        vid.play().then(() => {
-          if (!cw.isOwn) vid.muted = false;
-        }).catch(() => {});
+        vid.play().then(() => {}).catch(() => {});
       };
 
       pc.addEventListener('iceconnectionstatechange', () => {
@@ -1893,9 +1891,12 @@ export function endCall(notify = true) {
   state.activeCallUID = null; showToast('📵 Call ended.');
 }
 
-/* Insert camera into Events room grid */
+/* Insert camera into Events room grid — SOLO quando siamo nella stanza Eventi */
 export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   if (!dom.eventsCamGrid) return;
+  const roomData = getAvailableRooms().find(r => String(r.id) === String(state.activeRoom));
+  const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
+  if (!isEventsRoom) return; /* Non inserire in grid se siamo in un'altra stanza (es. dopo refresh in General) */
 
   dom.eventsCamGrid.hidden = false;
 
