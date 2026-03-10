@@ -455,15 +455,23 @@ async function loadUsers() {
   }
   
   try {
-    const profilesSnap = await state.fb.firestore.collection('profiles').where('is_guest', '==', false).orderBy('display_name').get();
-    const rolesSnap = await state.fb.firestore.collection('custom_roles').get();
+    /* Carica utenti registrati e guest (i guest hanno ruolo guest in automatico) */
+    const [profilesSnap, guestsSnap, rolesSnap] = await Promise.all([
+      state.fb.firestore.collection('profiles').where('is_guest', '==', false).orderBy('display_name').get(),
+      state.fb.firestore.collection('profiles').where('is_guest', '==', true).orderBy('display_name').get(),
+      state.fb.firestore.collection('custom_roles').get()
+    ]);
     const roleMap = {};
     rolesSnap.docs.forEach(d => { roleMap[d.id] = d.data(); });
     
-    const allProfiles = profilesSnap.docs.map(d => {
+    const toProfile = (d) => {
       const data = d.data();
-      return { id: d.id, ...data, custom_roles: data.custom_role_id ? roleMap[data.custom_role_id] : null };
-    });
+      const custom_role_id = data.custom_role_id || (data.is_guest ? 'guest' : null);
+      return { id: d.id, ...data, custom_role_id, custom_roles: custom_role_id ? roleMap[custom_role_id] : null };
+    };
+    const registered = profilesSnap.docs.map(toProfile);
+    const guests = guestsSnap.docs.map(toProfile);
+    const allProfiles = [...registered, ...guests].sort((a, b) => (a.display_name || '').localeCompare(b.display_name || ''));
     
     const onlineUsers = Object.values(state.rooms[state.activeRoom]?.users || {});
     const onlineUserIds = new Set(onlineUsers.map(u => u.id));
@@ -540,7 +548,7 @@ async function filterAndRenderUsers() {
       const customRole = profile?.custom_roles;
       const roleBadge = customRole 
         ? `<span class="admin-badge" style="background: ${customRole.color || '#8b949e'}; margin-left: 8px;">${escHtml(customRole.name)}</span>`
-        : '';
+        : (user.is_guest ? '<span class="admin-badge" style="background: #6e7681; margin-left: 8px;">Guest</span>' : '');
       
       const onlineBadge = user.is_online ? '<span class="admin-badge" style="background: #4caf50; margin-left: 8px;">Online</span>' : '<span class="admin-badge" style="background: #9e9e9e; margin-left: 8px;">Offline</span>';
       
@@ -745,11 +753,13 @@ async function loadBannedUsers() {
     }
     
     data.forEach(ban => {
+      const isGuest = String(ban.user_id).startsWith('guest_');
+      const guestBadge = isGuest ? '<span class="admin-badge" style="background: #6e7681; margin-left: 6px;">Guest</span>' : '';
       const item = document.createElement('div');
       item.className = 'admin-list-item';
       item.innerHTML = `
         <div class="admin-item-info">
-          <strong>${escHtml(ban.username)}</strong>
+          <strong>${escHtml(ban.username || ban.user_id)}</strong>${guestBadge}
           <span class="admin-item-id">ID: ${escHtml(ban.user_id)}</span>
           ${ban.reason ? `<p class="admin-item-reason">${escHtml(ban.reason)}</p>` : ''}
         </div>
