@@ -130,6 +130,14 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       }
     }).catch(() => {});
     if (!isOwn) {
+      /* Indicatore "sta parlando" e volume: avvia subito se c'è audio, così il bordo si illumina anche se play() è in ritardo */
+      if (stream?.getAudioTracks?.()?.length) {
+        initRemoteVolumeControl(uid);
+      } else {
+        setTimeout(() => {
+          if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length) initRemoteVolumeControl(uid);
+        }, 500);
+      }
       updateRemoteVideoVisibility(uid);
       /* Fallback: dopo 2s se il video è ancora senza frame, reattach (utile su stessa rete quando i frame arrivano un po' dopo) */
       setTimeout(() => {
@@ -859,6 +867,7 @@ function initMicVolumeSlider(uid) {
 
 /* ── Volume e mute della voce della cam remota (Web Audio: gain + indicatore "sta parlando") ── */
 function initRemoteVolumeControl(uid) {
+  closeRemoteVolumeContext(uid);
   const cw = state.cameraWindows[uid];
   const stream = cw?.stream;
   const muteBtn = $(`cam-remote-mute-${safeId(uid)}`);
@@ -1599,13 +1608,15 @@ export async function handleWebRTCSignal(payload) {
           }
         }
       });
-      /* Retry play() quando la connessione è pronta; reattach forzato per evitare video nero (stesso LAN o remoto) */
+      /* Retry play() quando la connessione è pronta. Un solo reattach alla prima connected per evitare flicker. */
+      let didReattach = false;
       const retryPlay = (trigger, forceReattach = false) => {
         const cw = state.cameraWindows[from];
         if (!cw?.el) return;
         const vid = cw.el.querySelector('video');
         if (!vid) return;
-        if (forceReattach && cw.stream) {
+        if (forceReattach && cw.stream && !didReattach) {
+          didReattach = true;
           vid.srcObject = null;
           vid.srcObject = cw.stream;
           vid.muted = true;
@@ -1620,16 +1631,16 @@ export async function handleWebRTCSignal(payload) {
       pc.addEventListener('iceconnectionstatechange', () => {
         console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'iceConnectionState=', pc.iceConnectionState, 'connectionState=', pc.connectionState);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          setTimeout(() => retryPlay('ICE-connected', true), 150);
-          setTimeout(() => retryPlay('ICE-connected+1s', true), 1150);
+          setTimeout(() => retryPlay('ICE-connected', true), 200);
         }
       });
       
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'connectionState=', pc.connectionState, 'iceConnectionState=', pc.iceConnectionState);
         if (pc.connectionState === 'connected') {
-          setTimeout(() => retryPlay('connection-connected', true), 300);
-          setTimeout(() => retryPlay('connection-connected+2s', true), 2300);
+          setTimeout(() => retryPlay('connection-connected', true), 400);
+          /* Un solo retry senza reattach dopo 2s per connessioni che si stabiliscono tardi */
+          setTimeout(() => retryPlay('connection+2s', false), 2400);
         }
       });
       console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'listeners attached, initial state:', pc.connectionState, pc.iceConnectionState);
@@ -1662,8 +1673,8 @@ export async function handleWebRTCSignal(payload) {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'after createAnswer, state:', pc.connectionState, pc.iceConnectionState);
-      /* Retry play a 1s, 3s, 5s per catturare connessione che si stabilisce in ritardo (NAT/firewall) */
-      [1000, 3000, 5000].forEach(ms => setTimeout(() => retryPlay('delayed-' + ms + 'ms', true), ms));
+      /* Retry play senza reattach a 1.5s e 4s per connessioni che si stabiliscono in ritardo (NAT/firewall); evita multipli reattach = meno flicker */
+      [1500, 4000].forEach(ms => setTimeout(() => retryPlay('delayed-' + ms + 'ms', false), ms));
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
         } finally {
           if (typeof doneResolve === 'function') doneResolve();
