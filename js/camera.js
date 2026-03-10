@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260317 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260318 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS, VIDEO_ICE_RELAY_ONLY } from './config.js';
 import { state }         from './state.js';
@@ -1366,9 +1366,9 @@ export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload || {};
   const isPublic = payload?.ctx === 'public', isPrivate = payload?.ctx === 'private';
   const toMeStrict = payload != null && state.currentUser?.id != null && String(payload.to).trim() === String(state.currentUser.id).trim();
-  /* Accept all public ICE (from + candidate): payload.to can be wrong on Firebase replay or multi-recipient; routing by dir is done in the ICE block. */
+  /* Accept all public ICE (ctx public or missing); payload.to can be wrong on Firebase replay; firebase-client also normalizes public ICE to to=me. */
   const hasIncomingPC = !!(from && state.incomingPCs?.[from]);
-  const toMeIceFallback = isPublic && sigType === 'ice' && from && candidate;
+  const toMeIceFallback = sigType === 'ice' && from && candidate && (isPublic || payload?.ctx !== 'private');
   const toMe = toMeStrict || toMeIceFallback;
   if (!toMe) {
     if (payload?.sigType === 'ice') {
@@ -1385,8 +1385,11 @@ export async function handleWebRTCSignal(payload) {
     return;
   }
 
-  if (isPublic) {
+  /* Public block: ctx===public OR ICE accepted with ctx missing (Firebase replay can drop ctx) */
+  const handleAsPublic = isPublic || (sigType === 'ice' && from && candidate && payload?.ctx !== 'private');
+  if (handleAsPublic) {
       if (sigType === 'offer') {
+        if (!isPublic) return; /* only process public offers */
         /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
         const prev = state._incomingOfferDone[from] || Promise.resolve();
         let doneResolve;
@@ -1673,6 +1676,7 @@ export async function handleWebRTCSignal(payload) {
       return;
     }
     if (sigType === 'answer') {
+      if (!isPublic) return; /* only process public answers */
       const pc = state.outgoingPCs[from];
       console.log('[WebRTC-FLOW] RX answer from', from, '| hasOutgoingPC=', !!pc, pc ? 'signaling=' + pc.signalingState + ' conn=' + pc.connectionState : '');
       if (pc) {
