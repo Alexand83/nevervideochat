@@ -11,7 +11,7 @@ export function broadcast(event, toUid, extra = {}) {
   state.signalCh.send({
     type:    'broadcast',
     event,
-    payload: { to: String(toUid), from: state.currentUser?.id, fromName: state.currentUser?.name, ...extra },
+    payload: { to: String(toUid), from: state.currentUser?.id, fromName: state.currentUser?.name, ts: Date.now(), ...extra },
   });
 }
 
@@ -21,6 +21,6 @@ export function broadcastAll(event, extra = {}) {
   state.signalCh.send({
     type:    'broadcast',
     event,
-    payload: { from: state.currentUser?.id, fromName: state.currentUser?.name, ...extra },
+    payload: { from: state.currentUser?.id, fromName: state.currentUser?.name, ts: Date.now(), ...extra },
   });
 }

@@ -12,6 +12,14 @@ import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClose
          closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318';
 import { clearPendingCamRequest } from './storage.js';
 
+/** Messaggi broadcast più vecchi di questo non mostrano toast/UI (evita replay al login/reconnect) */
+const BROADCAST_UI_MAX_AGE_MS = 25000;
+
+function isBroadcastTooOld(payload) {
+  const ts = payload?.ts;
+  return typeof ts === 'number' && (Date.now() - ts > BROADCAST_UI_MAX_AGE_MS);
+}
+
 /* Flag per indicare se la sessione è appena stata creata (non controllare subito) */
 let sessionJustCreated = false;
 let sessionCreationTime = 0;
@@ -430,6 +438,7 @@ export async function connectSupabase() {
       .on('broadcast', { event: 'cam-accepted' }, ({ payload }) => handleCamAccepted(payload))
       .on('broadcast', { event: 'cam-rejected' }, ({ payload }) => {
         if (String(payload.to) !== String(state.currentUser?.id)) return;
+        if (isBroadcastTooOld(payload)) return; /* replay al login: non mostrare toast vecchi */
         clearPendingCamRequest(String(payload.from));
         if (payload.reason === 'wrong-room') {
           showToast(`📵 ${payload.fromName || 'User'} is in a different room — camera not available.`);
@@ -439,6 +448,7 @@ export async function connectSupabase() {
       })
       .on('broadcast', { event: 'cam-revoked'  }, ({ payload }) => {
         if (String(payload.to) !== String(state.currentUser?.id)) return;
+        if (isBroadcastTooOld(payload)) return; /* replay al login: non mostrare toast vecchi */
         const fromId = String(payload.from);
         if (state.cameraWindows[fromId]) closeCameraWindow(fromId);
         showToast('📵 Camera access revoked.');
@@ -539,6 +549,7 @@ export async function connectSupabase() {
       .on('broadcast', { event: 'cam-closed'   }, ({ payload }) => handleCamClosed(payload))
       .on('broadcast', { event: 'call-ended'   }, ({ payload }) => {
         if (String(payload.to) !== String(state.currentUser?.id)) return;
+        if (isBroadcastTooOld(payload)) return; /* replay al login: non mostrare toast vecchi */
         if (!dom.vcallWin.hidden) { endCall(false); showToast(`📵 ${payload.fromName} ended the call.`); }
       })
       .on('broadcast', { event: 'reaction-update' }, ({ payload }) => handleReactionUpdate(payload))
@@ -632,7 +643,7 @@ export async function connectSupabase() {
         const { renderUsers } = await import('./users.js');
         renderUsers();
         
-        if (isCurrentUser) {
+        if (isCurrentUser && !isBroadcastTooOld(payload)) {
           const scope = roomId ? 'in this room' : 'globally';
           const duration = payload.duration > 0 ? ` for ${payload.duration} minutes` : ' permanently';
           showToast(`🔇 You have been muted ${scope}${duration}.`);
