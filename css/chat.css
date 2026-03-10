@@ -39,8 +39,8 @@
 .msg-group {
   display: flex;
   align-items: flex-start;
-  gap: var(--s3);
-  padding: 6px 0;
+  gap: var(--s2);
+  padding: 2px 0;
   animation: msgIn .18s ease;
 }
 
@@ -50,13 +50,13 @@
 }
 
 .msg-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--r-pill);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
@@ -64,7 +64,6 @@
   cursor: pointer;
   user-select: none;
   transition: opacity var(--tf);
-  margin-top: 2px;
 }
 .msg-avatar:hover { opacity: .88; }
 
@@ -84,7 +83,6 @@
   gap: var(--s2);
   flex-wrap: wrap;
   touch-action: none;
-  padding: 0 2px;
 }
 
 .msg-sender {
@@ -99,33 +97,33 @@
 }
 
 .msg-bubble {
-  padding: 10px 14px;
-  border-radius: var(--r4);
+  padding: 6px 10px;
+  border-radius: var(--r3);
   background: var(--bubble-other);
   border: 1px solid var(--border-subtle);
   word-break: break-word;
   overflow-wrap: anywhere;
-  line-height: 1.5;
+  line-height: 1.45;
   position: relative;
   width: 100%;
   box-sizing: border-box;
 }
 .msg-group.own .msg-bubble {
   background: var(--bubble-other);
-  border-left: 3px solid var(--accent);
+  border-left: 2px solid var(--accent);
 }
 
 /* Quote / Reply block dentro il bubble */
 .msg-quote {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
+  gap: 1px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
   background: var(--bg2);
-  border-left: 3px solid var(--accent);
-  border-radius: 0 var(--r2) var(--r2) 0;
-  font-size: var(--fz-xs);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--r1) var(--r1) 0;
+  font-size: 11px;
 }
 .msg-quote-author {
   font-weight: 600;
@@ -138,11 +136,11 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .msg-text {
-  line-height: 1.5;
+  line-height: 1.45;
 }
 .msg-text:empty { display: none; }
 
@@ -569,28 +567,27 @@
 .msg-reactions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 6px;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid var(--border-subtle);
 }
 .msg-reaction {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: 2px;
+  padding: 2px 6px;
   border-radius: var(--r-pill);
   background: var(--bg2);
   border: 1px solid var(--border);
   color: var(--tx0);
-  font-size: var(--fz-xs);
+  font-size: 11px;
   cursor: pointer;
-  transition: background var(--tf), border-color var(--tf), transform var(--tf);
+  transition: background var(--tf), border-color var(--tf);
 }
 .msg-reaction:hover {
   background: var(--bg-hover);
   border-color: var(--accent);
-  transform: scale(1.03);
 }
 .msg-reaction.reacted {
   background: var(--accent-dim);
@@ -602,9 +599,8 @@
 .msg-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 2px;
-  padding-left: 2px;
+  gap: 2px;
+  margin-top: 0;
   opacity: 0;
   transition: opacity var(--tf);
 }
@@ -614,23 +610,22 @@
 .msg-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: var(--r2);
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--r1);
   background: transparent;
   color: var(--tx2);
-  font-size: var(--fz-xs);
-  border: 1px solid transparent;
+  font-size: 11px;
+  border: none;
   cursor: pointer;
-  transition: background var(--tf), color var(--tf), border-color var(--tf);
+  transition: background var(--tf), color var(--tf);
 }
 .msg-action-btn:hover {
   background: var(--bg-hover);
   color: var(--tx0);
-  border-color: var(--border);
 }
 .msg-react-btn {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* Reaction picker popup */
