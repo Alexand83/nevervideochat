@@ -6,7 +6,7 @@ import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast, playNotificationSound } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js';
-import { addMessage, extractQuote, renderMessage, handleReactionUpdate } from './chat.js';
+import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
          closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318';
@@ -225,8 +225,20 @@ export async function connectRoom(roomId) {
   /* ── 2. Don't load old messages - only show new ones from now on ── */
   console.log('[Supabase] connectRoom: Setting up message subscription for room', roomId);
 
-  /* ── 2. Subscribe to new messages (Postgres Changes filtered by room_id) ── */
+  /* ── 2. Subscribe to new messages and reaction updates (Postgres Changes) ── */
   const dbSub = state.supa.channel(`db-messages-${roomId}`)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, ({ new: m }) => {
+      if (!m?.id || !m.reactions) return;
+      const room = state.rooms[roomId];
+      const msg = room?.messages?.find(mess => mess.id === m.id);
+      if (msg) {
+        msg.reactions = m.reactions;
+        if (roomId === state.activeRoom && dom.msgsContainer) {
+          const group = dom.msgsContainer.querySelector(`[data-msg-id="${m.id}"]`);
+          if (group) updateMessageReactions(group, m.reactions);
+        }
+      }
+    })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, async ({ new: m }) => {
       /* NON controllare la sessione ad ogni messaggio - troppo aggressivo e causa falsi positivi */
       /* La sessione viene controllata solo in caso di errori espliciti (403, etc.) */

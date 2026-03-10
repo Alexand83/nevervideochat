@@ -96,10 +96,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Sfondo messaggi molto soft, alternato, quasi invisibile */
 .msg-bubble {
   padding: 4px 8px;
   border-radius: 0;
-  background: var(--bg1);
+  background: rgba(255, 255, 255, 0.02);
   border: none;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -109,7 +110,7 @@
   box-sizing: border-box;
 }
 .msg-group.own .msg-bubble {
-  background: var(--bg2);
+  background: rgba(255, 255, 255, 0.045);
 }
 
 /* Quote / Reply block dentro il bubble */
@@ -508,6 +509,67 @@
 .send-btn:hover  { background: var(--accent-h); }
 .send-btn:active { opacity: .9; }
 .send-btn svg { width: 14px; height: 14px; }
+
+/* Reply preview bar (quote nella zona input) — grafica chiara */
+.reply-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 6px 10px;
+  margin: 0 8px 6px;
+  background: var(--bg2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--r1) var(--r1) 0;
+  font-size: 12px;
+  min-height: 36px;
+}
+.reply-preview-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.reply-preview-label {
+  color: var(--tx2);
+  flex-shrink: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.reply-preview-author {
+  color: var(--accent-h);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.reply-preview-text {
+  color: var(--tx1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.reply-preview-cancel {
+  background: var(--bg3);
+  color: var(--tx2);
+  font-size: 14px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--r1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--tf), color var(--tf);
+}
+.reply-preview-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--tx0);
+}
 
 /* ─── SEARCH BAR ─── */
 .search-bar {

@@ -8,7 +8,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { showToast, playNotificationSound } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js';
-import { addMessage, extractQuote, renderMessage, handleReactionUpdate } from './chat.js';
+import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
          closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318';
@@ -314,6 +314,21 @@ export function subscribeMessages(roomId, onInsert) {
     .orderBy('created_at', 'asc')
     .onSnapshot((snap) => {
       snap.docChanges().forEach(change => {
+        if (change.type === 'modified') {
+          const d = change.doc.data();
+          const id = change.doc.id;
+          const reactions = d.reactions || {};
+          const room = state.rooms[roomId];
+          const msg = room?.messages?.find(m => m.id === id);
+          if (msg) {
+            msg.reactions = reactions;
+            if (roomId === state.activeRoom && dom.msgsContainer) {
+              const group = dom.msgsContainer.querySelector(`[data-msg-id="${id}"]`);
+              if (group) updateMessageReactions(group, reactions);
+            }
+          }
+          return;
+        }
         if (change.type !== 'added') return;
         const d = change.doc.data();
         const id = change.doc.id;

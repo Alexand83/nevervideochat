@@ -482,13 +482,19 @@ async function toggleReaction(msgId, emoji) {
   /* Update local state */
   msg.reactions = reactions;
   
-  /* Update DB only for persisted IDs (Firestore doc id or UUID). Temp IDs are "m" + timestamp + random. */
+  /* Persist reactions: Supabase (if used) and/or Firestore */
   const isTempId = /^m\d+\.?\d*$/.test(msgId);
   if (isTempId) {
     console.warn('[NVC] toggleReaction: skipping DB update for temp ID', { msgId });
   } else {
     try {
-      await state.fb.firestore.collection('messages').doc(msgId).update({ reactions });
+      if (state.supa) {
+        const { error } = await state.supa.from('messages').update({ reactions }).eq('id', msgId);
+        if (error) throw error;
+      }
+      if (state.fb) {
+        await state.fb.firestore.collection('messages').doc(msgId).update({ reactions });
+      }
     } catch (err) {
       console.error('[NVC] toggleReaction: DB update failed', { error: err, msgId });
     }
@@ -504,8 +510,8 @@ async function toggleReaction(msgId, emoji) {
   if (_broadcast) _broadcast('reaction-update', null, { msgId, emoji, userId: myId, added: idx < 0 });
 }
 
-/* ── Update only reactions DOM without re-rendering entire message ── */
-function updateMessageReactions(groupEl, reactions) {
+/* ── Update only reactions DOM without re-rendering entire message (exported for Firestore/Supabase sync) ── */
+export function updateMessageReactions(groupEl, reactions) {
   const bubble = groupEl.querySelector('.msg-bubble');
   if (!bubble) return;
   
