@@ -11,7 +11,7 @@ import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers 
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
-         closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260312';
+         closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260313';
 import { clearPendingCamRequest } from './storage.js';
 
 const firebase = typeof window !== 'undefined' ? window.firebase : null;
@@ -214,7 +214,10 @@ export function createBroadcastChannel() {
     const payload = v.payload || {};
     /* Per webrtc passiamo _ts così handleWebRTCSignal può scartare replay vecchi (child_added su Firebase consegna tutti i messaggi passati al subscribe) */
     const payloadWithTs = event === 'webrtc' ? { ...payload, _ts: ts } : payload;
-    if (event === 'webrtc') console.log('[WebRTC-FLOW] Firebase RX broadcast webrtc', (payload.sigType || ''), 'to=', (payload.to || '').slice(0, 8) + '…', 'from=', (v.from || '').slice(0, 8) + '…');
+    if (event === 'webrtc') {
+      const toMe = payload?.to != null && state.currentUser?.id != null && String(payload.to) === String(state.currentUser.id);
+      if (toMe) console.log('[WebRTC-FLOW] Firebase RX webrtc for me', (payload.sigType || ''), 'from=', (v.from || '').slice(0, 8) + '…');
+    }
     if (handlers[event]) handlers[event].forEach(fn => fn({ payload: payloadWithTs }));
   });
   return {
@@ -356,7 +359,7 @@ export async function showDisconnectedOverlay(forceShow) {
   });
   messageUnsubscribes = {};
   try {
-    const { resetCameraStateOnDisconnect } = await import('./camera.js?v=20260312');
+    const { resetCameraStateOnDisconnect } = await import('./camera.js?v=20260313');
     resetCameraStateOnDisconnect();
   } catch (_) {}
   const appMain = document.querySelector('.app-main');
@@ -573,7 +576,7 @@ export async function connectFirebase() {
       .on('broadcast', { event: 'user-kicked' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
-        const { closeAllCamerasForUser } = await import('./camera.js?v=20260312');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260313');
         if (isCurrentUser || state.cameraWindows[targetId]) await closeAllCamerasForUser(targetId);
         if (isCurrentUser) {
           const roomId = payload.room_id;
@@ -601,7 +604,7 @@ export async function connectFirebase() {
       .on('broadcast', { event: 'user-banned' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
-        const { closeAllCamerasForUser } = await import('./camera.js?v=20260312');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260313');
         if (isCurrentUser || state.cameraWindows[targetId]) await closeAllCamerasForUser(targetId);
         if (isCurrentUser) {
           state.bannedUsers[targetId] = { expires_at: payload.expires_at, reason: payload.reason };
@@ -614,7 +617,7 @@ export async function connectFirebase() {
       })
       .on('broadcast', { event: 'user-muted' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
-        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260312');
+        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260313');
         if (String(targetId) === String(state.currentUser?.id)) await closeAllCamerasForUser(targetId);
         else if (state.cameraWindows[targetId]) await closeCameraWindow(targetId);
         state.mutedUsers[targetId] = { room_id: payload.room_id || null, expires_at: payload.expires_at };

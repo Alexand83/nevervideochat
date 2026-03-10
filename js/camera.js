@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260312 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260313 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS, VIDEO_ICE_RELAY_ONLY } from './config.js';
 import { state }         from './state.js';
@@ -1363,9 +1363,18 @@ const WEBRTC_CONNECT_SKEW_MS = 5000;
 
 /* ── All incoming WebRTC signals ──────────────────────────────── */
 export async function handleWebRTCSignal(payload) {
-  if (payload.to !== state.currentUser?.id) return;
+  const toMe = payload != null && state.currentUser?.id != null && String(payload.to) === String(state.currentUser.id);
+  if (!toMe) {
+    if (payload?.sigType === 'ice') {
+      console.log('[WebRTC-FLOW] SKIP ICE (to!=me)', payload?.to != null ? 'to=' + String(payload.to).slice(0, 12) : 'payload.to missing', 'me=' + (String(state.currentUser?.id || '')).slice(0, 12));
+    } else if (payload?.sigType === 'offer' && payload?.to != null) {
+      console.log('[WebRTC-FLOW] SKIP offer to!=me', 'to=', String(payload.to).slice(0, 12), 'me=', (String(state.currentUser?.id || '')).slice(0, 12));
+    }
+    return;
+  }
   const { sigType, from, sdp, candidate, dir } = payload;
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
+  if (sigType === 'ice' && candidate) console.log('[WebRTC-FLOW] RX ICE for me from', (from || '').slice(0, 8) + '…');
 
   /* Firebase replay: ignora SOLO le offer troppo vecchie (evita cam che riappaiono al refresh). ICE e answer non vanno mai filtrati per _ts altrimenti la connessione non si stabilisce. */
   if (isPublic && sigType === 'offer' && payload._ts != null && state.broadcastConnectedAt > 0 && payload._ts < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) {
@@ -1373,7 +1382,6 @@ export async function handleWebRTCSignal(payload) {
   }
 
   if (isPublic) {
-      if (sigType === 'ice' && candidate) console.log('[WebRTC-FLOW] webrtc for me: ice from', (from || '').slice(0, 8) + '…');
       if (sigType === 'offer') {
         /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
         const prev = state._incomingOfferDone[from] || Promise.resolve();
