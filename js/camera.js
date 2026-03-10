@@ -1603,6 +1603,7 @@ export async function handleWebRTCSignal(payload) {
       };
 
       pc.addEventListener('iceconnectionstatechange', () => {
+        console.log('[WebRTC] VIEWER incoming PC', from.slice(0, 8) + '…', 'iceConnectionState=', pc.iceConnectionState);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
           setTimeout(() => retryPlay('ICE-connected', true), 150);
           setTimeout(() => retryPlay('ICE-connected+1s', true), 1150);
@@ -1610,6 +1611,7 @@ export async function handleWebRTCSignal(payload) {
       });
       
       pc.addEventListener('connectionstatechange', () => {
+        console.log('[WebRTC] VIEWER incoming PC', from.slice(0, 8) + '…', 'connectionState=', pc.connectionState);
         if (pc.connectionState === 'connected') {
           setTimeout(() => retryPlay('connection-connected', true), 300);
           setTimeout(() => retryPlay('connection-connected+2s', true), 2300);
