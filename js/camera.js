@@ -1315,8 +1315,9 @@ export async function sharePublicCameraTo(toUid) {
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
         console.log('[WebRTC-FLOW] TX ICE dir=out to', (toUid || '').slice(0, 8) + '…', 'type=', candidate.type);
-        /* dir:'out' = from our outgoing PC → guest adds to their incomingPC */
-        broadcast('webrtc', toUid, { sigType: 'ice', candidate, ctx: 'public', dir: 'out' });
+        /* Serialize so Firebase/JSON round-trip preserves candidate (RTCIceCandidate may not survive) */
+        const candidatePayload = { candidate: candidate.candidate, sdpMid: candidate.sdpMid ?? null, sdpMLineIndex: candidate.sdpMLineIndex ?? 0 };
+        broadcast('webrtc', toUid, { sigType: 'ice', candidate: candidatePayload, ctx: 'public', dir: 'out' });
       }
     };
     const offer = await pc.createOffer();
@@ -1382,6 +1383,8 @@ export async function handleWebRTCSignal(payload) {
   if (handleAsPublic) {
       if (sigType === 'offer') {
         if (!isPublic) return; /* only process public offers */
+        /* Ignora offerta propria: Firebase recapita il messaggio anche al mittente, non creare incoming PC per se stessi */
+        if (from && state.currentUser?.id && String(from) === String(state.currentUser.id)) return;
         /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
         const prev = state._incomingOfferDone[from] || Promise.resolve();
         let doneResolve;
@@ -1429,7 +1432,10 @@ export async function handleWebRTCSignal(payload) {
       pc._camRoom = payload.room_id != null ? String(payload.room_id) : null; /* room where cam was opened (from offer) */
       state.incomingPCs[from] = pc;
       pc.onicecandidate = ({ candidate: c }) => {
-        if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'public', dir: 'in' });
+        if (c) {
+          const candidatePayload = { candidate: c.candidate, sdpMid: c.sdpMid ?? null, sdpMLineIndex: c.sdpMLineIndex ?? 0 };
+          broadcast('webrtc', from, { sigType: 'ice', candidate: candidatePayload, ctx: 'public', dir: 'in' });
+        }
       };
       
       /* Apri finestra al primo ontrack (così la cam si apre subito quando si accetta la richiesta); al secondo track (video) reattach per evitare nero */
@@ -1708,9 +1714,11 @@ export async function handleWebRTCSignal(payload) {
          - dir:'in'  means sender sent from their incomingPC (receiving our cam FROM us)
            → goes to our outgoingPC (the one sharing our cam)
          - no dir (legacy): try outgoingPC first, then incomingPC */
-      if (candidate) {
-        console.log('[WebRTC-FLOW] RX ICE from', (from || '').slice(0, 8) + '…', 'dir=', dir, 'hasIncomingPC=', !!state.incomingPCs[from], 'hasOutgoingPC=', !!state.outgoingPCs[from]);
+      if (!candidate) {
+        if (from && state.incomingPCs?.[from]) console.warn('[WebRTC] ICE from', (from || '').slice(0, 8) + '…', 'missing candidate in payload (keys:', Object.keys(payload || {}).join(','), ')');
+        return;
       }
+      console.log('[WebRTC-FLOW] RX ICE from', (from || '').slice(0, 8) + '…', 'dir=', dir, 'hasIncomingPC=', !!state.incomingPCs[from], 'hasOutgoingPC=', !!state.outgoingPCs[from]);
       let pc;
       if (dir === 'out') {
         pc = state.incomingPCs[from]; /* Their outgoing shares to us → our incoming receives */
@@ -1719,7 +1727,6 @@ export async function handleWebRTCSignal(payload) {
       } else {
         pc = state.outgoingPCs[from] || state.incomingPCs[from]; /* Legacy fallback */
       }
-      if (!candidate) return;
       /* Normalize: Firebase may deliver candidate as object { candidate, sdpMid, sdpMLineIndex } or as string (SDP line) */
       const candidateObj = typeof candidate === 'string'
         ? { candidate: candidate.trim() }
