@@ -211,6 +211,9 @@ export function createBroadcastChannel() {
     if (event === 'cam-closed') {
       if (ts && (Date.now() - ts > BROADCAST_UI_MAX_AGE_MS)) return; /* replay al refresh: non chiudere finestre né mostrare toast */
     }
+    if (event === 'cam-rejected' || event === 'cam-revoked' || event === 'call-ended') {
+      if (ts && (Date.now() - ts > BROADCAST_UI_MAX_AGE_MS)) return; /* replay al login: non mostrare toast vecchi */
+    }
     const payload = v.payload || {};
     /* Per webrtc passiamo _ts così handleWebRTCSignal può scartare replay vecchi (child_added su Firebase consegna tutti i messaggi passati al subscribe) */
     let payloadWithTs = event === 'webrtc' ? { ...payload, _ts: ts } : payload;
