@@ -211,6 +211,7 @@ export function createBroadcastChannel() {
     const payload = v.payload || {};
     /* Per webrtc passiamo _ts così handleWebRTCSignal può scartare replay vecchi (child_added su Firebase consegna tutti i messaggi passati al subscribe) */
     const payloadWithTs = event === 'webrtc' ? { ...payload, _ts: ts } : payload;
+    if (event === 'webrtc') console.log('[WebRTC-FLOW] Firebase RX broadcast webrtc', (payload.sigType || ''), 'to=', (payload.to || '').slice(0, 8) + '…', 'from=', (v.from || '').slice(0, 8) + '…');
     if (handlers[event]) handlers[event].forEach(fn => fn({ payload: payloadWithTs }));
   });
   return {
