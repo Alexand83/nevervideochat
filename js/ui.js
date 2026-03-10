@@ -512,7 +512,7 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
     const expiresAt = new Date(Date.now() + mins * 60 * 1000).toISOString();
     const roomId = isGlobal ? null : state.activeRoom;
     const col = state.fb.firestore.collection('kicked_users');
-    const payload = { user_id: userId, kicked_by: state.currentUser.id, expires_at: expiresAt };
+    const payload = { user_id: userId, username: userName || null, kicked_by: state.currentUser.id, expires_at: expiresAt };
     
     if (isGlobal) {
       const roomsSnap = await state.fb.firestore.collection('rooms').get();
@@ -568,6 +568,7 @@ async function handleMuteUser(userId, userName, minutes, isGlobal) {
     const docId = `${userId}_${roomId ?? 'global'}`;
     await state.fb.firestore.collection('muted_users').doc(docId).set({
       user_id: userId,
+      username: userName || null,
       room_id: roomId,
       muted_by: state.currentUser.id,
       expires_at: expiresAt,

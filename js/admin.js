@@ -851,14 +851,17 @@ async function loadKickedUsers() {
     }
     data.forEach(row => {
       const uid = String(row.user_id);
-      const isGuest = uid.startsWith('guest_');
+      const hasName = row.username && String(row.username).trim();
+      const looksLikeFirebaseUid = uid.length >= 20 && /^[a-zA-Z0-9]+$/.test(uid);
+      const isGuest = uid.startsWith('guest_') || (looksLikeFirebaseUid && !hasName);
+      const displayName = hasName ? row.username : (uid.startsWith('guest_') || looksLikeFirebaseUid ? 'Guest' : uid);
       const guestBadge = isGuest ? '<span class="admin-badge" style="background: #6e7681; margin-left: 6px;">Guest</span>' : '';
       const roomLabel = row.room_id ? `Room: ${escHtml(row.room_id)}` : 'Global';
       const item = document.createElement('div');
       item.className = 'admin-list-item';
       item.innerHTML = `
         <div class="admin-item-info">
-          <strong>${escHtml(uid)}</strong>${guestBadge}
+          <strong>${escHtml(displayName)}</strong>${guestBadge}
           <span class="admin-item-id">${roomLabel}</span>
         </div>
         <div class="admin-item-actions">
@@ -911,14 +914,17 @@ async function loadMutedUsers() {
     }
     data.forEach(row => {
       const uid = String(row.user_id);
-      const isGuest = uid.startsWith('guest_');
+      const hasName = row.username && String(row.username).trim();
+      const looksLikeFirebaseUid = uid.length >= 20 && /^[a-zA-Z0-9]+$/.test(uid);
+      const isGuest = uid.startsWith('guest_') || (looksLikeFirebaseUid && !hasName);
+      const displayName = hasName ? row.username : (uid.startsWith('guest_') || looksLikeFirebaseUid ? 'Guest' : uid);
       const guestBadge = isGuest ? '<span class="admin-badge" style="background: #6e7681; margin-left: 6px;">Guest</span>' : '';
       const roomLabel = row.room_id ? `Room: ${escHtml(row.room_id)}` : 'Global';
       const item = document.createElement('div');
       item.className = 'admin-list-item';
       item.innerHTML = `
         <div class="admin-item-info">
-          <strong>${escHtml(uid)}</strong>${guestBadge}
+          <strong>${escHtml(displayName)}</strong>${guestBadge}
           <span class="admin-item-id">${roomLabel}</span>
         </div>
         <div class="admin-item-actions">
