@@ -735,11 +735,16 @@ async function loadBannedUsers() {
   }
   
   try {
-    const snap = await state.fb.firestore.collection('banned_users').orderBy('banned_at', 'desc').get();
-    /* docId per unban; user_id da data o doc id (supporta sia .doc(uid).set che .add con user_id) */
+    /* Carica TUTTI i documenti senza orderBy, così non escludiamo doc senza banned_at (es. guest o vecchi) */
+    const snap = await state.fb.firestore.collection('banned_users').get();
     const data = snap.docs.map(d => {
       const data_ = d.data();
       return { docId: d.id, user_id: data_.user_id ?? d.id, ...data_ };
+    });
+    data.sort((a, b) => {
+      const ta = a.banned_at?.toDate?.()?.getTime?.() ?? (a.banned_at ? new Date(a.banned_at).getTime() : 0);
+      const tb = b.banned_at?.toDate?.()?.getTime?.() ?? (b.banned_at ? new Date(b.banned_at).getTime() : 0);
+      return tb - ta;
     });
     
     dom.adminBannedList.innerHTML = '';
