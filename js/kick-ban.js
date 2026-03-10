@@ -100,26 +100,53 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
 
 /* ── Show ban overlay ── */
 export function showBanOverlay(reason, expiresAt) {
+  const now = new Date();
+  const expires = expiresAt ? (expiresAt.toDate ? expiresAt.toDate() : new Date(expiresAt)) : null;
+  const timeUntilExpiry = expires ? expires - now : null;
+
+  /* Ban already expired (temporary ban): clear state and reload so user can use app */
+  if (expiresAt && timeUntilExpiry <= 0) {
+    const uid = state.currentUser?.id;
+    if (uid) delete state.bannedUsers[uid];
+    showToast('✅ Your ban has expired. You can rejoin.');
+    window.location.reload();
+    return;
+  }
+
   /* Hide main app */
   document.body.classList.add('kick-ban-active');
   dom.kickBanOverlay.hidden = false;
-  
-  /* Update UI — ban is always global, no "available room" option */
+
   dom.kickBanIcon.textContent = '🚫';
   dom.kickBanTitle.textContent = 'You have been banned';
   dom.kickBanMessage.textContent = reason || 'You have been banned from all rooms.';
-  
-  if (expiresAt) {
-    const expires = new Date(expiresAt);
-    const now = new Date();
-    const minutesRemaining = Math.ceil((expires - now) / (1000 * 60));
+
+  if (expires) {
+    const minutesRemaining = Math.ceil(timeUntilExpiry / (1000 * 60));
     dom.kickBanMinutes.textContent = minutesRemaining;
     dom.kickBanExpires.textContent = `Ban expires: ${expires.toLocaleString()}`;
+
+    /* Auto-clear when ban expires: check every 10s, then reload */
+    const expiredCheck = setInterval(() => {
+      if (!dom.kickBanOverlay || dom.kickBanOverlay.hidden) {
+        clearInterval(expiredCheck);
+        return;
+      }
+      if (new Date(expires) <= new Date()) {
+        clearInterval(expiredCheck);
+        const uid = state.currentUser?.id;
+        if (uid) delete state.bannedUsers[uid];
+        hideKickBanOverlay();
+        document.body.classList.remove('kick-ban-active');
+        showToast('✅ Your ban has expired. You can rejoin.');
+        window.location.reload();
+      }
+    }, 10000);
   } else {
     dom.kickBanMinutes.textContent = 'permanently';
     dom.kickBanExpires.textContent = 'This ban is permanent.';
   }
-  
+
   /* Banned users cannot join any room — hide actions (no "Enter available room") */
   dom.kickBanActions.hidden = true;
   if (dom.kickBanEnterBtn) dom.kickBanEnterBtn.onclick = null;

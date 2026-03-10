@@ -299,16 +299,20 @@ async function ensureUserProfile(user) {
 async function loadUserRestrictions(userId) {
   if (!state.fb) return;
   try {
-    /* Muted: clear first then repopulate from DB (otherwise old mute stays if DB is now empty) */
+    /* Muted: clear first then repopulate only non-expired (ignore past expires_at) */
     delete state.mutedUsers[userId];
+    const now = new Date();
     const mutedSnap = await state.fb.firestore.collection('muted_users').where('user_id', '==', userId).get();
     mutedSnap.docs.forEach(d => {
       const m = d.data();
-      state.mutedUsers[userId] = { room_id: m.room_id, expires_at: m.expires_at };
+      const expVal = m.expires_at;
+      const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
+      if (!exp || exp > now) {
+        state.mutedUsers[userId] = { room_id: m.room_id, expires_at: expVal };
+      }
     });
     /* Kicked: reset then populate only non-expired (ignore past expires_at) */
     state.kickedUsers[userId] = {};
-    const now = new Date();
     const kickedSnap = await state.fb.firestore.collection('kicked_users').where('user_id', '==', userId).get();
     kickedSnap.docs.forEach(d => {
       const k = d.data();
@@ -316,11 +320,17 @@ async function loadUserRestrictions(userId) {
       const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
       if (exp && exp > now) state.kickedUsers[userId][k.room_id] = exp.toISOString();
     });
-    /* Banned: clear when DB has no ban (otherwise unban never reflects in state) */
+    /* Banned: only set if ban exists and not expired (temporary ban with past expires_at = no ban) */
     const bannedSnap = await state.fb.firestore.collection('banned_users').where('user_id', '==', userId).limit(1).get();
     if (!bannedSnap.empty) {
       const banned = bannedSnap.docs[0].data();
-      state.bannedUsers[userId] = { expires_at: banned.expires_at, reason: banned.reason };
+      const expVal = banned.expires_at;
+      const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
+      if (!exp || exp > now) {
+        state.bannedUsers[userId] = { expires_at: banned.expires_at, reason: banned.reason };
+      } else {
+        delete state.bannedUsers[userId];
+      }
     } else {
       delete state.bannedUsers[userId];
     }
