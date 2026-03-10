@@ -463,14 +463,22 @@ export async function connectRoom(roomId) {
         if (tempMsg) {
           const oldId = tempMsg.id;
           tempMsg.id = m.id;
-          tempMsg.reactions = m.reactions || {};
+          const serverReactions = m.reactions || {};
+          const hadLocalReactions = tempMsg.reactions && Object.keys(tempMsg.reactions).length > 0;
+          if (hadLocalReactions && (!serverReactions || Object.keys(serverReactions).length === 0)) {
+            tempMsg.reactions = tempMsg.reactions || {};
+            try {
+              await firestore.collection('messages').doc(m.id).update({ reactions: tempMsg.reactions });
+            } catch (err) {
+              console.warn('[Firebase] Could not persist local reactions on confirm', err);
+            }
+          } else {
+            tempMsg.reactions = Object.keys(serverReactions).length > 0 ? serverReactions : (tempMsg.reactions || {});
+          }
           const group = dom.msgsContainer.querySelector(`[data-msg-id="${oldId}"]`);
           if (group) {
             group.dataset.msgId = m.id;
-            if (m.reactions && Object.keys(m.reactions).length > 0) {
-              group.remove();
-              renderMessage(tempMsg);
-            }
+            updateMessageReactions(group, tempMsg.reactions);
           }
         }
         return;

@@ -2,6 +2,7 @@
 .chat-section {
   flex: 1;
   min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -12,9 +13,11 @@
   margin-right: calc(var(--games-panel-width, 0px) + var(--users-panel-width, 0px));
 }
 
-/* Messages container */
+/* Messages container: sfondo e area messaggi fino al bordo (colonna utenti) */
 .msgs-container {
   flex: 1;
+  min-width: 0;
+  width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--s4) var(--s4) var(--s2);
@@ -22,6 +25,7 @@
   flex-direction: column;
   gap: 2px;
   scroll-behavior: smooth;
+  background: var(--bg0);
 }
 
 /* Welcome banner */
@@ -70,7 +74,7 @@
 .msg-content {
   flex: 1;
   min-width: 0;
-  max-width: 85%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -626,46 +630,46 @@
   border-radius: 2px;
 }
 
-/* ─── MESSAGE REACTIONS ─── */
+/* ─── MESSAGE REACTIONS (sempre visibili per mittente e viewer) ─── */
 .msg-reactions {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-  margin-top: 3px;
-  padding-top: 3px;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid var(--border-subtle);
+  min-height: 22px;
 }
 .msg-reaction {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 1px 5px;
-  border-radius: 2px;
-  background: var(--bg0);
-  border: none;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: var(--r2);
+  background: var(--bg2);
+  border: 1px solid var(--border-subtle);
   color: var(--tx0);
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 1.2;
   cursor: pointer;
-  transition: background var(--tf);
+  transition: background var(--tf), border-color var(--tf);
 }
 .msg-reaction:hover {
   background: var(--bg-hover);
+  border-color: var(--border);
 }
 .msg-reaction.reacted {
   background: var(--accent-dim);
+  border-color: var(--accent);
   color: var(--accent-h);
 }
 
-/* Message actions row (Reply, Add reaction) */
+/* Message actions row (Reply, Add reaction) — sempre visibili */
 .msg-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
-  margin-top: 0;
-  opacity: 0;
-  transition: opacity var(--tf);
-}
-.msg-group:hover .msg-actions {
+  gap: 4px;
+  margin-top: 2px;
   opacity: 1;
 }
 .msg-action-btn {

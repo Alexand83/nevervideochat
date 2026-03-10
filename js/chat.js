@@ -446,8 +446,12 @@ function openReactionPicker(e, msgId) {
 }
 
 async function toggleReaction(msgId, emoji) {
-  if (!state.fb || !msgId) {
-    console.warn('[NVC] toggleReaction: missing fb or msgId', { msgId, ready: !!state.fb });
+  if (!msgId) {
+    console.warn('[NVC] toggleReaction: missing msgId');
+    return;
+  }
+  if (!state.fb && !state.supa) {
+    console.warn('[NVC] toggleReaction: no backend (fb/supa)');
     return;
   }
   

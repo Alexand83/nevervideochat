@@ -254,16 +254,24 @@ export async function connectRoom(roomId) {
           if (tempMsg) {
             const oldId = tempMsg.id;
             tempMsg.id = m.id;
-            tempMsg.reactions = m.reactions || {};
-            /* Update DOM - search with old ID before updating */
+            /* Preserva reazioni locali (aggiunte prima che arrivasse l'id reale); poi persisti sul server */
+            const serverReactions = m.reactions || {};
+            const hadLocalReactions = tempMsg.reactions && Object.keys(tempMsg.reactions).length > 0;
+            if (hadLocalReactions && (!serverReactions || Object.keys(serverReactions).length === 0)) {
+              /* Merge: mantieni le locali e salvale sul server */
+              tempMsg.reactions = tempMsg.reactions || {};
+              try {
+                await state.supa.from('messages').update({ reactions: tempMsg.reactions }).eq('id', m.id);
+              } catch (err) {
+                console.warn('[Supabase] Could not persist local reactions on confirm', err);
+              }
+            } else {
+              tempMsg.reactions = Object.keys(serverReactions).length > 0 ? serverReactions : (tempMsg.reactions || {});
+            }
             const group = dom.msgsContainer.querySelector(`[data-msg-id="${oldId}"]`);
             if (group) {
               group.dataset.msgId = m.id;
-              /* Re-render to show reactions if any */
-              if (m.reactions && Object.keys(m.reactions).length > 0) {
-                group.remove();
-                renderMessage(tempMsg);
-              }
+              updateMessageReactions(group, tempMsg.reactions);
             }
           }
         }
