@@ -2,9 +2,9 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260311 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260312 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
-import { ICE_SERVERS }   from './config.js';
+import { ICE_SERVERS, VIDEO_ICE_RELAY_ONLY } from './config.js';
 import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
@@ -1415,7 +1415,9 @@ export async function handleWebRTCSignal(payload) {
         }
       }
       
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+      const incomingPcConfig = VIDEO_ICE_RELAY_ONLY ? { ...ICE_SERVERS, iceTransportPolicy: 'relay' } : ICE_SERVERS;
+      if (VIDEO_ICE_RELAY_ONLY) console.log('[WebRTC] Incoming PC using relay-only (TURN) to avoid NAT issues');
+      const pc = new RTCPeerConnection(incomingPcConfig);
       pc._createdInRoom = state.activeRoom; /* Track room at creation — used to discard stale streams */
       pc._camRoom = payload.room_id != null ? String(payload.room_id) : null; /* room where cam was opened (from offer) */
       state.incomingPCs[from] = pc;
@@ -1641,6 +1643,12 @@ export async function handleWebRTCSignal(payload) {
         }
         pc._pendingCandidates = [];
       }
+      console.log('[WebRTC-FLOW] INCOMING after ICE flush:', from.slice(0, 8) + '…', 'iceConn=', pc.iceConnectionState, 'conn=', pc.connectionState);
+      /* Diagnostic: log PC state after 2s and 5s to see if we ever reach connected (NAT/firewall) */
+      [2000, 5000].forEach(ms => setTimeout(() => {
+        if (state.incomingPCs[from] !== pc) return;
+        console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', '+' + (ms/1000) + 's', 'iceConn=', pc.iceConnectionState, 'conn=', pc.connectionState);
+      }, ms));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'after createAnswer, state:', pc.connectionState, pc.iceConnectionState);
