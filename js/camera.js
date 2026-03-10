@@ -1367,9 +1367,8 @@ export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload;
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
 
-  /* Firebase replay: ignora webrtc pubblici scritti prima che ci connettessimo (evita cam che riappaiono al refresh) */
-  if (isPublic && payload._ts != null && state.broadcastConnectedAt > 0 && payload._ts < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) {
-    if (payload.sigType === 'ice') console.log('[WebRTC-FLOW] DROP webrtc replay _ts', payload.sigType, (payload.from || '').slice(0, 8) + '…', '_ts=', payload._ts, 'broadcastConnectedAt=', state.broadcastConnectedAt);
+  /* Firebase replay: ignora SOLO le offer troppo vecchie (evita cam che riappaiono al refresh). ICE e answer non vanno mai filtrati per _ts altrimenti la connessione non si stabilisce. */
+  if (isPublic && sigType === 'offer' && payload._ts != null && state.broadcastConnectedAt > 0 && payload._ts < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) {
     return;
   }
 
