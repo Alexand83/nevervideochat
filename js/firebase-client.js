@@ -651,6 +651,16 @@ export async function connectFirebase() {
           showBanOverlay(payload.reason || 'No reason provided', payload.expires_at);
         }
       })
+      .on('broadcast', { event: 'user-unbanned' }, async ({ payload }) => {
+        const targetId = payload.to || payload.user_id;
+        delete state.bannedUsers[targetId];
+        if (String(targetId) === String(state.currentUser?.id)) {
+          const { hideKickBanOverlay } = await import('./kick-ban.js');
+          hideKickBanOverlay();
+          document.body.classList.remove('kick-ban-active');
+          window.location.reload();
+        }
+      })
       .on('broadcast', { event: 'user-muted' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
         const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260318');

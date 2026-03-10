@@ -820,7 +820,10 @@ async function unbanUser(userId) {
     const snap = await state.fb.firestore.collection('banned_users').where('user_id', '==', userId).get();
     const batch = state.fb.firestore.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
-    if (snap.docs.length) await batch.commit();
+    if (snap.docs.length) {
+      await batch.commit();
+      broadcast('user-unbanned', userId, {});
+    }
     showToast('✅ User unbanned.');
     loadBannedUsers();
   } catch (err) {
