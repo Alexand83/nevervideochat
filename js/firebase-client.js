@@ -615,6 +615,20 @@ export async function connectFirebase() {
         const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
         if (isCurrentUser || state.cameraWindows[targetId]) await closeAllCamerasForUser(targetId);
         if (isCurrentUser) {
+          /* Replay-safe: verify kick still in DB */
+          try {
+            const snap = await firestore.collection('kicked_users').where('user_id', '==', targetId).get();
+            const now = new Date();
+            const hasValidKick = snap.docs.some(d => {
+              const d_ = d.data();
+              const expVal = d_.expires_at;
+              const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
+              if (!exp || exp <= now) return false;
+              if (payload.is_global) return true;
+              return String(d_.room_id) === String(payload.room_id);
+            });
+            if (!hasValidKick) return; /* Unkicked or expired — ignore replay */
+          } catch (_) { return; }
           const roomId = payload.room_id;
           if (!state.kickedUsers[targetId]) state.kickedUsers[targetId] = {};
           if (payload.is_global) {
@@ -626,7 +640,6 @@ export async function connectFirebase() {
             await showKickOverlay(null, payload.expires_at, true);
           } else {
             state.kickedUsers[targetId][roomId] = payload.expires_at;
-            /* Sempre uscire dalla stanza kickata: chiudi tab, esci da presence (lista utenti) */
             const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
             if (state.rooms[roomId]) {
               leaveRoom(roomId, { silent: true });
@@ -672,10 +685,25 @@ export async function connectFirebase() {
       })
       .on('broadcast', { event: 'user-muted' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
+        const roomId = payload.room_id ?? null;
+        /* Replay-safe: verify mute still in DB */
+        try {
+          const snap = await firestore.collection('muted_users').where('user_id', '==', targetId).get();
+          const now = new Date();
+          const hasValidMute = snap.docs.some(d => {
+            const d_ = d.data();
+            const r = d_.room_id ?? null;
+            if (String(r) !== String(roomId)) return false;
+            const expVal = d_.expires_at;
+            const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
+            return !exp || exp > now;
+          });
+          if (!hasValidMute) return; /* Unmuted or expired — ignore replay */
+        } catch (_) { return; }
         const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260318');
         if (String(targetId) === String(state.currentUser?.id)) await closeAllCamerasForUser(targetId);
         else if (state.cameraWindows[targetId]) await closeCameraWindow(targetId);
-        state.mutedUsers[targetId] = { room_id: payload.room_id || null, expires_at: payload.expires_at };
+        state.mutedUsers[targetId] = { room_id: roomId, expires_at: payload.expires_at };
         renderUsers();
         if (String(targetId) === String(state.currentUser?.id)) showToast(`🔇 You have been muted.`);
       })
