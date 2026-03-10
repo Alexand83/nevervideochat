@@ -795,7 +795,7 @@ async function loadBannedUsers() {
           <button class="admin-action-btn" data-action="unban" data-doc-id="${ban.docId}">✅ Unban</button>
         </div>
       `;
-      item.querySelector('[data-action="unban"]')?.addEventListener('click', () => unbanUser(ban.docId));
+      item.querySelector('[data-action="unban"]')?.addEventListener('click', () => unbanUser(ban.user_id));
       dom.adminBannedList.appendChild(item);
     });
   } catch (err) {
@@ -804,23 +804,23 @@ async function loadBannedUsers() {
   }
 }
 
-async function unbanUser(docId) {
-  /* Security: Verify admin access */
+async function unbanUser(userId) {
   const hasAccess = await checkAdminAccess();
   if (!hasAccess) {
     showToast('🚫 Admin access required.');
     return;
   }
-  
-  /* docId = id del documento in banned_users (può essere userId o id auto-generato) */
-  if (!docId || typeof docId !== 'string') {
-    showToast('⚠️ Invalid document.');
+  if (!userId || typeof userId !== 'string') {
+    showToast('⚠️ Invalid user.');
     return;
   }
-  
   if (!state.fb) return;
   try {
-    await state.fb.firestore.collection('banned_users').doc(docId).delete();
+    /* Delete ALL ban documents for this user (avoids duplicates / reappearing ban) */
+    const snap = await state.fb.firestore.collection('banned_users').where('user_id', '==', userId).get();
+    const batch = state.fb.firestore.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    if (snap.docs.length) await batch.commit();
     showToast('✅ User unbanned.');
     loadBannedUsers();
   } catch (err) {
@@ -931,7 +931,7 @@ async function loadMutedUsers() {
           <button class="admin-action-btn" data-action="unmute">✅ Unmute</button>
         </div>
       `;
-      item.querySelector('[data-action="unmute"]')?.addEventListener('click', () => unmuteUser(row.docId));
+      item.querySelector('[data-action="unmute"]')?.addEventListener('click', () => unmuteUser(row.user_id));
       dom.adminMutedList.appendChild(item);
     });
   } catch (err) {
@@ -940,13 +940,19 @@ async function loadMutedUsers() {
   }
 }
 
-async function unmuteUser(docId) {
+async function unmuteUser(userId) {
   const hasAccess = await checkAdminAccess();
   if (!hasAccess) { showToast('🚫 Admin access required.'); return; }
-  if (!docId || typeof docId !== 'string') { showToast('⚠️ Invalid document.'); return; }
+  if (!userId || typeof userId !== 'string') { showToast('⚠️ Invalid user.'); return; }
   if (!state.fb) return;
   try {
-    await state.fb.firestore.collection('muted_users').doc(docId).delete();
+    /* Delete ALL mute documents for this user (per-room + global) so unmute is complete */
+    const snap = await state.fb.firestore.collection('muted_users').where('user_id', '==', userId).get();
+    const batch = state.fb.firestore.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    if (snap.docs.length) await batch.commit();
+    /* Notify clients so muted user clears state without refresh */
+    broadcast('user-unmuted', userId, { room_id: null });
     showToast('✅ User unmuted.');
     loadMutedUsers();
   } catch (err) {

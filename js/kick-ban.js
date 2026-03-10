@@ -77,7 +77,7 @@ export function showBanOverlay(reason, expiresAt) {
   document.body.classList.add('kick-ban-active');
   dom.kickBanOverlay.hidden = false;
   
-  /* Update UI */
+  /* Update UI — ban is always global, no "available room" option */
   dom.kickBanIcon.textContent = '🚫';
   dom.kickBanTitle.textContent = 'You have been banned';
   dom.kickBanMessage.textContent = reason || 'You have been banned from all rooms.';
@@ -93,7 +93,9 @@ export function showBanOverlay(reason, expiresAt) {
     dom.kickBanExpires.textContent = 'This ban is permanent.';
   }
   
+  /* Banned users cannot join any room — hide actions (no "Enter available room") */
   dom.kickBanActions.hidden = true;
+  if (dom.kickBanEnterBtn) dom.kickBanEnterBtn.onclick = null;
 }
 
 /* ── Hide kick/ban overlay ── */
