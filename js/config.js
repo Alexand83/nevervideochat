@@ -1,6 +1,9 @@
 /* ================================================================
    config.js  — all compile-time constants
 ================================================================ */
+/* Incrementa a ogni release / deploy */
+export const APP_VERSION = '1.0.2';
+
 /* Firebase config is in js/firebase-config.js */
 export const AUTH_EMAIL_DOMAIN = 'nvc.local';
 

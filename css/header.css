@@ -67,6 +67,14 @@
   white-space: nowrap;
 }
 
+.logo-version {
+  font-size: var(--fz-sm, 0.8125rem);
+  font-weight: 500;
+  color: var(--tx2, #8b949e);
+  letter-spacing: 0.02em;
+  margin-left: var(--s1, 4px);
+}
+
 /* Header action buttons */
 .header-actions {
   display: flex;

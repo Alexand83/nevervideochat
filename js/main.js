@@ -4,6 +4,7 @@
 import { state }              from './state.js';
 import { dom }                from './dom.js';
 import { showToast }          from './utils.js';
+import { APP_VERSION }        from './config.js';
 import { loadRejectedCams, loadIgnoredUsers, loadDeviceSettings } from './storage.js';
 import { initFirebaseClient, connectFirebase, connectRoom } from './firebase-client.js';
 import { applyAuthIdentity, getOrCreateGuestIdentity,
@@ -62,6 +63,10 @@ function filterCookieWarnings() {
 async function init() {
   /* Filtra warning cookie prima di inizializzare */
   filterCookieWarnings();
+
+  /* Versione in header vicino al logo */
+  const appVersionEl = document.getElementById('appVersion');
+  if (appVersionEl) appVersionEl.textContent = 'v' + APP_VERSION;
   
   /* CRITICO: Chiudi la propria cam quando si aggiorna la pagina (per gli altri utenti) */
   window.addEventListener('beforeunload', async () => {
