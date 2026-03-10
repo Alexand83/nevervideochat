@@ -1507,7 +1507,7 @@ export async function handleWebRTCSignal(payload) {
       }, CONNECTING_TIMEOUT_MS);
 
       pc.addEventListener('connectionstatechange', () => {
-        console.log('[WebRTC] Connection state changed:', pc.connectionState, 'for', from);
+        console.log('[WebRTC-FLOW] INCOMING connectionState=', pc.connectionState, 'iceConnectionState=', pc.iceConnectionState, 'for', from.slice(0, 8) + '…');
         if (pc.connectionState === 'connected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
           clearTimeout(connectingTimeout);
         }
@@ -1603,7 +1603,7 @@ export async function handleWebRTCSignal(payload) {
       };
 
       pc.addEventListener('iceconnectionstatechange', () => {
-        console.log('[WebRTC] VIEWER incoming PC', from.slice(0, 8) + '…', 'iceConnectionState=', pc.iceConnectionState);
+        console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'iceConnectionState=', pc.iceConnectionState, 'connectionState=', pc.connectionState);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
           setTimeout(() => retryPlay('ICE-connected', true), 150);
           setTimeout(() => retryPlay('ICE-connected+1s', true), 1150);
@@ -1611,18 +1611,19 @@ export async function handleWebRTCSignal(payload) {
       });
       
       pc.addEventListener('connectionstatechange', () => {
-        console.log('[WebRTC] VIEWER incoming PC', from.slice(0, 8) + '…', 'connectionState=', pc.connectionState);
+        console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'connectionState=', pc.connectionState, 'iceConnectionState=', pc.iceConnectionState);
         if (pc.connectionState === 'connected') {
           setTimeout(() => retryPlay('connection-connected', true), 300);
           setTimeout(() => retryPlay('connection-connected+2s', true), 2300);
         }
       });
+      console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'listeners attached, initial state:', pc.connectionState, pc.iceConnectionState);
       console.log('[WebRTC-FLOW] INCOMING: setRemoteDescription(offer) for', from);
       await pc.setRemoteDescription({ type: 'offer', sdp });
       /* Flush ICE arrivati prima dell'offer (dir 'out' da questo peer). Se sono di una vecchia sessione addIceCandidate può fallire → catch e ignora. */
       const prePcCount = state.pendingIncomingICE[from]?.length || 0;
       if (prePcCount) {
-        console.log('[WebRTC-FLOW] INCOMING: flush pre-PC ICE', prePcCount, 'for', from);
+        console.log('[WebRTC] VIEWER: flush', prePcCount, 'buffered ICE to incoming PC from', from.slice(0, 8) + '…');
         for (const c of state.pendingIncomingICE[from]) {
           await pc.addIceCandidate(c).catch(err => console.warn('[WebRTC] Pre-PC ICE flush error:', err.message));
         }
@@ -1639,6 +1640,7 @@ export async function handleWebRTCSignal(payload) {
       }
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'after createAnswer, state:', pc.connectionState, pc.iceConnectionState);
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
         } finally {
           if (typeof doneResolve === 'function') doneResolve();
@@ -1715,7 +1717,7 @@ export async function handleWebRTCSignal(payload) {
           pc._pendingCandidates.push(iceCandidate);
           console.log('[WebRTC-FLOW] ICE from', (from || '').slice(0, 8) + '…', 'dir=', dir, '→', pcType, 'BUFFER (no remoteDesc) size=', pc._pendingCandidates.length);
         } else {
-          console.log('[WebRTC-FLOW] ICE from', (from || '').slice(0, 8) + '…', 'dir=', dir, '→', pcType, 'ADD', candType);
+          if (pcType === 'incoming') console.log('[WebRTC] VIEWER: add ICE to incoming PC from', (from || '').slice(0, 8) + '…', 'type=', candType);
           await pc.addIceCandidate(iceCandidate).catch(err => console.warn('[WebRTC] addIceCandidate error:', err.message));
         }
       } else {
