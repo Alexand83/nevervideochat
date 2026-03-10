@@ -1368,9 +1368,13 @@ export async function handleWebRTCSignal(payload) {
   const isPublic = payload.ctx === 'public', isPrivate = payload.ctx === 'private';
 
   /* Firebase replay: ignora webrtc pubblici scritti prima che ci connettessimo (evita cam che riappaiono al refresh) */
-  if (isPublic && payload._ts != null && state.broadcastConnectedAt > 0 && payload._ts < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) return;
+  if (isPublic && payload._ts != null && state.broadcastConnectedAt > 0 && payload._ts < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) {
+    if (payload.sigType === 'ice') console.log('[WebRTC-FLOW] DROP webrtc replay _ts', payload.sigType, (payload.from || '').slice(0, 8) + '…', '_ts=', payload._ts, 'broadcastConnectedAt=', state.broadcastConnectedAt);
+    return;
+  }
 
   if (isPublic) {
+      if (sigType === 'ice' && candidate) console.log('[WebRTC-FLOW] webrtc for me: ice from', (from || '').slice(0, 8) + '…');
       if (sigType === 'offer') {
         /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
         const prev = state._incomingOfferDone[from] || Promise.resolve();
