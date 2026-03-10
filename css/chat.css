@@ -97,10 +97,10 @@
 }
 
 .msg-bubble {
-  padding: 6px 10px;
-  border-radius: var(--r3);
-  background: var(--bubble-other);
-  border: 1px solid var(--border-subtle);
+  padding: 4px 8px;
+  border-radius: 0;
+  background: var(--bg1);
+  border: none;
   word-break: break-word;
   overflow-wrap: anywhere;
   line-height: 1.45;
@@ -109,8 +109,7 @@
   box-sizing: border-box;
 }
 .msg-group.own .msg-bubble {
-  background: var(--bubble-other);
-  border-left: 2px solid var(--accent);
+  background: var(--bg2);
 }
 
 /* Quote / Reply block dentro il bubble */
@@ -118,11 +117,11 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 4px 8px;
-  margin-bottom: 4px;
-  background: var(--bg2);
+  padding: 3px 6px;
+  margin-bottom: 3px;
+  background: var(--bg0);
   border-left: 2px solid var(--accent);
-  border-radius: 0 var(--r1) var(--r1) 0;
+  border-radius: 0;
   font-size: 11px;
 }
 .msg-quote-author {
@@ -455,58 +454,60 @@
 .rec-cancel-btn { background: var(--bg3); color: var(--tx1); }
 .rec-cancel-btn:hover { background: var(--bg-hover); color: var(--tx0); }
 
-/* Input row */
+/* Input row: compatto e lineare */
 .input-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--s2);
   touch-action: none;
-  padding: var(--s1) var(--s3) var(--s2);
+  padding: 6px 8px;
+  background: var(--bg0);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .msg-input {
   text-align: left;
   flex: 1;
-  min-height: 36px;
-  max-height: 120px;
+  min-height: 28px;
+  max-height: 100px;
   overflow-y: auto;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--r5);
-  padding: 6px 10px;
+  background: var(--bg1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 4px 8px;
   line-height: 1.4;
-  font-size: var(--fz-base);
+  font-size: 13px;
   color: var(--tx0);
   word-break: break-word;
   outline: none;
-  transition: border-color var(--tf), box-shadow var(--tf);
+  transition: border-color var(--tf);
   direction: ltr;
 }
 .msg-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(31,111,235,.15);
 }
 .msg-input:empty::before {
   content: attr(data-placeholder);
   color: var(--tx2);
   pointer-events: none;
-  display: block; /* needed for :empty pseudo to show in some browsers */
+  display: block;
 }
 
 .send-btn {
-  width: 36px; height: 36px;
-  border-radius: var(--r-pill);
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
   background: var(--accent);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background var(--tf), transform var(--tf);
+  transition: background var(--tf);
 }
-.send-btn:hover  { background: var(--accent-h); transform: scale(1.05); }
-.send-btn:active { transform: scale(.95); }
-.send-btn svg { width: 16px; height: 16px; }
+.send-btn:hover  { background: var(--accent-h); }
+.send-btn:active { opacity: .9; }
+.send-btn svg { width: 14px; height: 14px; }
 
 /* ─── SEARCH BAR ─── */
 .search-bar {
@@ -567,31 +568,29 @@
 .msg-reactions {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-  padding-top: 4px;
+  gap: 3px;
+  margin-top: 3px;
+  padding-top: 3px;
   border-top: 1px solid var(--border-subtle);
 }
 .msg-reaction {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 2px 6px;
-  border-radius: var(--r-pill);
-  background: var(--bg2);
-  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--bg0);
+  border: none;
   color: var(--tx0);
   font-size: 11px;
   cursor: pointer;
-  transition: background var(--tf), border-color var(--tf);
+  transition: background var(--tf);
 }
 .msg-reaction:hover {
   background: var(--bg-hover);
-  border-color: var(--accent);
 }
 .msg-reaction.reacted {
   background: var(--accent-dim);
-  border-color: var(--accent);
   color: var(--accent-h);
 }
 
