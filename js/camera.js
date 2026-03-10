@@ -1358,9 +1358,9 @@ export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload || {};
   const isPublic = payload?.ctx === 'public', isPrivate = payload?.ctx === 'private';
   const toMeStrict = payload != null && state.currentUser?.id != null && String(payload.to).trim() === String(state.currentUser.id).trim();
-  /* Accept all room ICE: ctx !== 'private' (public or missing). payload.to can be wrong on Firebase; firebase-client normalizes non-private ICE to to=me. */
+  /* Accept room ICE: ctx !== 'private' OR we already have incomingPC for this peer (viewer: accept their ICE so cam connects). */
   const hasIncomingPC = !!(from && state.incomingPCs?.[from]);
-  const toMeIceFallback = sigType === 'ice' && from && candidate && payload?.ctx !== 'private';
+  const toMeIceFallback = sigType === 'ice' && from && candidate && (payload?.ctx !== 'private' || hasIncomingPC);
   const toMe = toMeStrict || toMeIceFallback;
   if (!toMe) {
     if (payload?.sigType === 'ice') {
@@ -1377,8 +1377,8 @@ export async function handleWebRTCSignal(payload) {
     return;
   }
 
-  /* Public block: ctx===public OR ICE with ctx !== 'private' (Firebase replay can drop ctx). */
-  const handleAsPublic = isPublic || (sigType === 'ice' && from && candidate && payload?.ctx !== 'private');
+  /* Public block: ctx===public OR ICE with ctx !== 'private' OR ICE from peer we're viewing (hasIncomingPC). */
+  const handleAsPublic = isPublic || (sigType === 'ice' && from && candidate && (payload?.ctx !== 'private' || hasIncomingPC));
   if (handleAsPublic) {
       if (sigType === 'offer') {
         if (!isPublic) return; /* only process public offers */
