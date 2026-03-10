@@ -108,16 +108,16 @@
   display: block;
 }
 
-/* ── Controls footer: una sola riga, scroll orizzontale se stretto (la barra volume non va sotto) ── */
+/* ── Controls footer: grid così la colonna volume (1fr) si allunga con la finestra ── */
 .cam-win-footer {
   padding: 6px var(--s2);
   padding-right: 36px;
   background: var(--bg2);
   border-top: 1px solid var(--border);
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;  /* [mic][video][device] [volume=resto] */
   align-items: center;
   gap: var(--s2);
-  flex-wrap: nowrap;
   flex-shrink: 0;
   min-width: 0;
   width: 100%;
@@ -127,8 +127,7 @@
   -webkit-overflow-scrolling: touch;
 }
 .cam-win-footer-remote {
-  justify-content: flex-start;
-  padding-right: 36px;
+  grid-template-columns: auto auto 1fr;  /* [hide][mute] [volume=resto] */
 }
 
 /* ── Mic toggle button (own camera) — si ridimensiona con footer ── */
@@ -159,11 +158,11 @@
   color: var(--clr-danger);
 }
 
-/* ── Controllo volume microfono: barra con pallina (tua cam) — si allunga/accorcia con la finestra ── */
+/* ── Controllo volume microfono: barra con pallina (tua cam) — in grid prende la colonna 1fr, si allunga con la finestra ── */
 .mic-volume-section {
-  flex: 1 1 0;   /* basis 0: occupa tutto lo spazio residuo, si allarga quando la finestra è grande */
-  min-width: 0;
-  max-width: 130px;
+  min-width: 0;   /* necessario in grid per permettere alla colonna 1fr di restringersi */
+  max-width: none;
+  width: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -245,11 +244,11 @@
   padding: 5px 8px !important;
   flex-shrink: 0;
 }
-/* Barra volume cam remota: si allunga/accorcia con la finestra (come quella locale) */
+/* Barra volume cam remota: in grid prende la colonna 1fr, si allunga con la finestra */
 .cam-remote-volume-wrap {
-  flex: 1 1 0;   /* basis 0: occupa tutto lo spazio residuo */
   min-width: 0;
-  max-width: 130px;
+  max-width: none;
+  width: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
