@@ -643,6 +643,15 @@ export async function connectFirebase() {
         const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
         if (isCurrentUser || state.cameraWindows[targetId]) await closeAllCamerasForUser(targetId);
         if (isCurrentUser) {
+          /* Replay-safe: verify ban still exists in DB (avoid stale broadcast after unban) */
+          try {
+            const snap = await firestore.collection('banned_users').where('user_id', '==', targetId).limit(1).get();
+            if (snap.empty) return; /* Unbanned — ignore replayed user-banned */
+            const data = snap.docs[0].data();
+            const expVal = data.expires_at;
+            const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
+            if (exp && exp <= new Date()) return; /* Expired — ignore */
+          } catch (_) { /* On error, skip applying stale ban */ return; }
           state.bannedUsers[targetId] = { expires_at: payload.expires_at, reason: payload.reason };
           const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
           for (const rId of Object.keys(state.rooms)) await leaveRoom(rId);

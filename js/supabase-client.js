@@ -615,21 +615,25 @@ export async function connectSupabase() {
         const targetId = payload.to || payload.user_id;
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
-        /* Close all cameras for the banned user */
         const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
         if (isCurrentUser || state.cameraWindows[targetId]) {
           await closeAllCamerasForUser(targetId);
         }
         
         if (isCurrentUser) {
-          /* Add to banned cache with reason */
-          state.bannedUsers[targetId] = { 
-            expires_at: payload.expires_at,
-            reason: payload.reason 
-          };
-          /* Leave all rooms and show ban overlay */
-          const { leaveRoom } = await import('./rooms.js');
-          const { renderRoomTabs } = await import('./rooms.js');
+          /* Replay-safe: verify ban still exists in DB (avoid stale broadcast after unban) */
+          try {
+            if (state.fb?.firestore) {
+              const snap = await state.fb.firestore.collection('banned_users').where('user_id', '==', targetId).limit(1).get();
+              if (snap.empty) return; /* Unbanned — ignore replayed user-banned */
+              const data = snap.docs[0].data();
+              const expVal = data.expires_at;
+              const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
+              if (exp && exp <= new Date()) return; /* Expired — ignore */
+            }
+          } catch (_) { return; }
+          state.bannedUsers[targetId] = { expires_at: payload.expires_at, reason: payload.reason };
+          const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
           for (const rId of Object.keys(state.rooms)) {
             await leaveRoom(rId);
           }

@@ -298,9 +298,12 @@ async function ensureUserProfile(user) {
 /* ── Load mute/kick/ban status for current user ── */
 async function loadUserRestrictions(userId) {
   if (!state.fb) return;
+  /* Clear current user's restrictions first — DB is source of truth (avoids stale state from bfcache / old broadcast) */
+  delete state.bannedUsers[userId];
+  delete state.mutedUsers[userId];
+  state.kickedUsers[userId] = {};
   try {
-    /* Muted: clear first then repopulate only non-expired (ignore past expires_at) */
-    delete state.mutedUsers[userId];
+    /* Muted: repopulate only non-expired from DB */
     const now = new Date();
     const mutedSnap = await state.fb.firestore.collection('muted_users').where('user_id', '==', userId).get();
     mutedSnap.docs.forEach(d => {
@@ -311,8 +314,7 @@ async function loadUserRestrictions(userId) {
         state.mutedUsers[userId] = { room_id: m.room_id, expires_at: expVal };
       }
     });
-    /* Kicked: reset then populate only non-expired (ignore past expires_at) */
-    state.kickedUsers[userId] = {};
+    /* Kicked: populate only non-expired (already reset above) */
     const kickedSnap = await state.fb.firestore.collection('kicked_users').where('user_id', '==', userId).get();
     kickedSnap.docs.forEach(d => {
       const k = d.data();
@@ -339,6 +341,7 @@ async function loadUserRestrictions(userId) {
     }
   } catch (err) {
     console.error('[Main] Load restrictions error:', err);
+    /* On error we already cleared state above — user is not restricted until DB says so */
   }
 }
 
