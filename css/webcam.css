@@ -108,7 +108,7 @@
   display: block;
 }
 
-/* ── Controls footer: si ridimensiona con la finestra, wrap se stretto ── */
+/* ── Controls footer: una sola riga, scroll orizzontale se stretto (la barra volume non va sotto) ── */
 .cam-win-footer {
   padding: 6px var(--s2);
   padding-right: 36px;
@@ -117,9 +117,12 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex-shrink: 0;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 .cam-win-footer-remote {
   justify-content: flex-start;
