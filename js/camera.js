@@ -1690,6 +1690,9 @@ export async function handleWebRTCSignal(payload) {
          - dir:'in'  means sender sent from their incomingPC (receiving our cam FROM us)
            → goes to our outgoingPC (the one sharing our cam)
          - no dir (legacy): try outgoingPC first, then incomingPC */
+      if (candidate) {
+        console.log('[WebRTC-FLOW] RX ICE from', (from || '').slice(0, 8) + '…', 'dir=', dir, 'hasIncomingPC=', !!state.incomingPCs[from], 'hasOutgoingPC=', !!state.outgoingPCs[from]);
+      }
       let pc;
       if (dir === 'out') {
         pc = state.incomingPCs[from]; /* Their outgoing shares to us → our incoming receives */
