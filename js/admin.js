@@ -7,6 +7,7 @@ import { showToast, escHtml, sanitiseHtml } from './utils.js';
 import { broadcast }      from './broadcast.js';
 import { clearBroadcastHistory } from './firebase-client.js';
 import { hasPermission, loadUserPermissions } from './permissions.js';
+import { renderUsers }    from './users.js';
 
 let currentUserRole = null;
 
@@ -643,8 +644,13 @@ async function kickUser(userId, userName) {
   if (!confirm(`Kick ${escHtml(userName)}?`)) return;
   if (!state.fb) return;
   
-  /* Broadcast kick event */
   broadcast('user-kicked', String(userId), { reason: 'Kicked by admin' });
+  /* Togli subito dalla lista in tutte le stanze (kick globale) */
+  const uidStr = String(userId);
+  for (const rId of Object.keys(state.rooms || {})) {
+    if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+  }
+  renderUsers();
   showToast(`👢 Kicked ${escHtml(userName)}`);
   loadUsers();
 }

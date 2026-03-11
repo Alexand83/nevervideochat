@@ -528,7 +528,18 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
     
     /* Broadcast kick event */
     broadcast('user-kicked', userId, { room_id: roomId, expires_at: expiresAt, is_global: isGlobal });
-    
+
+    /* Togli subito l'utente kickato dalla lista (chi ha kickato lo vede sparire) */
+    const uidStr = String(userId);
+    if (isGlobal) {
+      for (const rId of Object.keys(state.rooms)) {
+        if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+      }
+    } else if (state.rooms[state.activeRoom]?.users[uidStr]) {
+      delete state.rooms[state.activeRoom].users[uidStr];
+    }
+    renderUsers();
+
     /* If kicked user is current user, handle it (stesso comportamento del broadcast) */
     if (String(userId) === String(state.currentUser?.id)) {
       const targetId = String(userId);

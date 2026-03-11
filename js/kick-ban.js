@@ -7,22 +7,21 @@ import { checkIsKicked, checkIsBanned } from './users.js';
 import { joinRoom, getAvailableRooms, loadRoomsFromDB } from './rooms.js';
 import { showToast } from './utils.js';
 
-/* ── Find an available room where user is not kicked ── */
-export async function findAvailableRoom() {
+/* ── Find an available room where user is not kicked ──
+   excludeRoomId: stanza da escludere sempre (es. quella da cui sei stato kickato) */
+export async function findAvailableRoom(excludeRoomId = null) {
   await loadRoomsFromDB();
   const availableRooms = getAvailableRooms();
   const userId = state.currentUser?.id;
-  
+  const exclude = excludeRoomId != null ? String(excludeRoomId) : null;
+
   if (!userId) return null;
-  
-  /* Find first room where user is not kicked */
+
   for (const room of availableRooms) {
     const roomId = String(room.id);
-    if (!checkIsKicked(userId, roomId)) {
-      return roomId;
-    }
+    if (exclude && roomId === exclude) continue; /* esclusione esplicita */
+    if (!checkIsKicked(userId, roomId)) return roomId;
   }
-  
   return null;
 }
 
@@ -42,7 +41,7 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
     }
     showToast('✅ Your kick has expired. You can rejoin.');
     await loadRoomsFromDB();
-    const defaultRoomId = await findAvailableRoom();
+    const defaultRoomId = await findAvailableRoom(null); /* nessuna esclusione: kick scaduto */
     if (defaultRoomId) await joinRoom(defaultRoomId);
     return;
   }
@@ -57,14 +56,14 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
   dom.kickBanMessage.innerHTML = `You cannot rejoin for <span id="kickBanMinutes">${minutesRemaining}</span> minutes.`;
   dom.kickBanExpires.textContent = `Until: ${expires.toLocaleString()}`;
 
-  /* If not global kick, try to find an available room */
+  /* If not global kick, try to find an available room (escludi sempre la stanza da cui sei kickato) */
+  const kickedFromRoomId = roomId != null ? String(roomId) : null;
   if (!isGlobal) {
-    const availableRoomId = await findAvailableRoom();
+    const availableRoomId = await findAvailableRoom(kickedFromRoomId);
     if (availableRoomId) {
       dom.kickBanActions.hidden = false;
       dom.kickBanEnterBtn.onclick = async () => {
-        /* Ricalcola al click così non entri nella stanza da cui sei kickato (chiavi sempre String) */
-        const rid = await findAvailableRoom();
+        const rid = await findAvailableRoom(kickedFromRoomId);
         if (rid) await joinRoom(rid);
         hideKickBanOverlay();
       };
@@ -87,11 +86,10 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
     hideKickBanOverlay();
     showToast('✅ Your kick has expired. You can now rejoin rooms.');
     await loadRoomsFromDB();
-    const defaultRoomId = await findAvailableRoom();
+    const defaultRoomId = await findAvailableRoom(null);
     if (defaultRoomId) await joinRoom(defaultRoomId);
   }, timeUntilExpiry);
 
-  /* If overlay was already visible with expired kick (e.g. tab slept), check every 10s then hide and enter default room */
   const expiredCheck = setInterval(async () => {
     if (!dom.kickBanOverlay || dom.kickBanOverlay.hidden) {
       clearInterval(expiredCheck);
@@ -108,7 +106,7 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
       hideKickBanOverlay();
       showToast('✅ Your kick has expired. You can rejoin.');
       await loadRoomsFromDB();
-      const defaultRoomId = await findAvailableRoom();
+      const defaultRoomId = await findAvailableRoom(null);
       if (defaultRoomId) await joinRoom(defaultRoomId);
     }
   }, 10000);
