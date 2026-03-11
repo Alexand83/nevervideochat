@@ -13,7 +13,7 @@
   margin-right: calc(var(--games-panel-width, 0px) + var(--users-panel-width, 0px));
 }
 
-/* Messages container: sfondo e area messaggi fino al bordo (colonna utenti) */
+/* Messages container — sfondo tipo "nastro" */
 .msgs-container {
   flex: 1;
   min-width: 0;
@@ -23,9 +23,9 @@
   padding: var(--s4) var(--s4) var(--s2);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   scroll-behavior: smooth;
-  background: var(--bg0);
+  background: linear-gradient(180deg, var(--bg0) 0%, #0a0e14 50%, var(--bg0) 100%);
 }
 
 /* Welcome banner */
@@ -39,37 +39,45 @@
 .welcome-banner h3 { font-size: var(--fz-md); color: var(--tx1); margin-bottom: var(--s2); }
 .welcome-banner p  { font-size: var(--fz-sm); line-height: 1.6; max-width: 380px; margin: 0 auto; }
 
-/* ─── Message Groups: riga compatta, avatar allineato al testo ─── */
+/* ─── Message Groups: "Neon tape" — strisce con bordo colorato e micro-rotazione ─── */
 .msg-group {
   display: flex;
   align-items: flex-start;
   gap: var(--s2);
-  padding: 1px 0;
-  animation: msgIn .18s ease;
+  padding: 0;
+  animation: msgIn .25s ease;
+  transform-origin: left center;
 }
+.msg-group:nth-child(5n+1) { transform: rotate(-0.4deg); }
+.msg-group:nth-child(5n+2) { transform: rotate(0.35deg); }
+.msg-group:nth-child(5n+3) { transform: rotate(-0.25deg); }
+.msg-group:nth-child(5n+4) { transform: rotate(0.5deg); }
+.msg-group:nth-child(5n)   { transform: rotate(-0.15deg); }
+.msg-group:hover { transform: rotate(0deg) scale(1.002); }
 
 @keyframes msgIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0);   }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .msg-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--r-pill);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   color: #fff;
   flex-shrink: 0;
   align-self: flex-start;
   cursor: pointer;
   user-select: none;
-  transition: opacity var(--tf);
+  transition: opacity var(--tf), transform var(--tf);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08);
 }
-.msg-avatar:hover { opacity: .88; }
+.msg-avatar:hover { opacity: .9; transform: scale(1.05); }
 
 .msg-content {
   flex: 1;
@@ -77,7 +85,7 @@
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   align-items: flex-start;
 }
 
@@ -90,9 +98,10 @@
 }
 
 .msg-sender {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: var(--tx1);
+  letter-spacing: 0.02em;
 }
 .msg-time {
   font-size: 10px;
@@ -100,30 +109,73 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Sfondo messaggi: alternato per riga, visibile ma poco (sottile) */
+/* Striscia "neon": bordo sinistro spesso + glow, colore che ruota per messaggio */
 .msg-bubble {
-  padding: 3px 6px;
-  border-radius: 0;
+  padding: 6px 10px 6px 12px;
+  border-radius: 0 10px 10px 0;
   border: none;
+  border-left: 4px solid;
   word-break: break-word;
   overflow-wrap: anywhere;
-  line-height: 1.35;
-  font-size: 12px;
+  line-height: 1.4;
+  font-size: 13px;
   position: relative;
   width: 100%;
   box-sizing: border-box;
+  letter-spacing: 0.01em;
+  background: var(--bg1);
 }
-.msg-group:nth-child(odd) .msg-bubble {
-  background: rgba(255, 255, 255, 0.025);
+/* Palette a rotazione: cyan → coral → lime → violet → amber */
+.msg-group:nth-child(5n+1) .msg-bubble {
+  border-left-color: #22d3ee;
+  box-shadow: -2px 0 12px rgba(34, 211, 238, .15), inset 0 0 0 1px rgba(255,255,255,.03);
+  background: linear-gradient(90deg, rgba(34, 211, 238, .06) 0%, var(--bg1) 24px);
 }
-.msg-group:nth-child(even) .msg-bubble {
-  background: rgba(255, 255, 255, 0.055);
+.msg-group:nth-child(5n+2) .msg-bubble {
+  border-left-color: #fb7185;
+  box-shadow: -2px 0 12px rgba(251, 113, 133, .15), inset 0 0 0 1px rgba(255,255,255,.03);
+  background: linear-gradient(90deg, rgba(251, 113, 133, .06) 0%, var(--bg1) 24px);
 }
-.msg-group.own:nth-child(odd) .msg-bubble {
-  background: rgba(255, 255, 255, 0.04);
+.msg-group:nth-child(5n+3) .msg-bubble {
+  border-left-color: #4ade80;
+  box-shadow: -2px 0 12px rgba(74, 222, 128, .15), inset 0 0 0 1px rgba(255,255,255,.03);
+  background: linear-gradient(90deg, rgba(74, 222, 128, .06) 0%, var(--bg1) 24px);
 }
-.msg-group.own:nth-child(even) .msg-bubble {
-  background: rgba(255, 255, 255, 0.07);
+.msg-group:nth-child(5n+4) .msg-bubble {
+  border-left-color: #a78bfa;
+  box-shadow: -2px 0 12px rgba(167, 139, 250, .15), inset 0 0 0 1px rgba(255,255,255,.03);
+  background: linear-gradient(90deg, rgba(167, 139, 250, .06) 0%, var(--bg1) 24px);
+}
+.msg-group:nth-child(5n) .msg-bubble {
+  border-left-color: #fbbf24;
+  box-shadow: -2px 0 12px rgba(251, 191, 36, .15), inset 0 0 0 1px rgba(255,255,255,.03);
+  background: linear-gradient(90deg, rgba(251, 191, 36, .06) 0%, var(--bg1) 24px);
+}
+/* Messaggi propri: bordo più marcato + sfondo leggermente accent */
+.msg-group.own:nth-child(5n+1) .msg-bubble {
+  border-left-color: #67e8f9;
+  box-shadow: 2px 0 14px rgba(34, 211, 238, .25), inset 0 0 0 1px rgba(255,255,255,.05);
+  background: linear-gradient(90deg, rgba(34, 211, 238, .12) 0%, var(--bg2) 28px);
+}
+.msg-group.own:nth-child(5n+2) .msg-bubble {
+  border-left-color: #fda4af;
+  box-shadow: 2px 0 14px rgba(251, 113, 133, .25), inset 0 0 0 1px rgba(255,255,255,.05);
+  background: linear-gradient(90deg, rgba(251, 113, 133, .12) 0%, var(--bg2) 28px);
+}
+.msg-group.own:nth-child(5n+3) .msg-bubble {
+  border-left-color: #86efac;
+  box-shadow: 2px 0 14px rgba(74, 222, 128, .25), inset 0 0 0 1px rgba(255,255,255,.05);
+  background: linear-gradient(90deg, rgba(74, 222, 128, .12) 0%, var(--bg2) 28px);
+}
+.msg-group.own:nth-child(5n+4) .msg-bubble {
+  border-left-color: #c4b5fd;
+  box-shadow: 2px 0 14px rgba(167, 139, 250, .25), inset 0 0 0 1px rgba(255,255,255,.05);
+  background: linear-gradient(90deg, rgba(167, 139, 250, .12) 0%, var(--bg2) 28px);
+}
+.msg-group.own:nth-child(5n) .msg-bubble {
+  border-left-color: #fde047;
+  box-shadow: 2px 0 14px rgba(251, 191, 36, .25), inset 0 0 0 1px rgba(255,255,255,.05);
+  background: linear-gradient(90deg, rgba(251, 191, 36, .12) 0%, var(--bg2) 28px);
 }
 
 /* Quote / Reply block dentro il bubble */
@@ -153,8 +205,8 @@
 }
 
 .msg-text {
-  line-height: 1.35;
-  font-size: 12px;
+  line-height: 1.4;
+  font-size: 13px;
 }
 .msg-text:empty { display: none; }
 
