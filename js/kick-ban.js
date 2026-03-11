@@ -32,15 +32,18 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
   const expires = new Date(expiresAt);
   const timeUntilExpiry = expires - now;
 
-  /* Kick already expired: don't show overlay, clear from state, allow rejoin */
+  /* Kick already expired: don't show overlay, clear from state, join default room */
   if (timeUntilExpiry <= 0) {
     const uid = state.currentUser?.id;
     if (uid && state.kickedUsers[uid]) {
-      if (roomId) delete state.kickedUsers[uid][roomId];
+      if (roomId != null) delete state.kickedUsers[uid][String(roomId)];
       else state.kickedUsers[uid] = {};
       if (Object.keys(state.kickedUsers[uid] || {}).length === 0) delete state.kickedUsers[uid];
     }
     showToast('✅ Your kick has expired. You can rejoin.');
+    await loadRoomsFromDB();
+    const defaultRoomId = await findAvailableRoom();
+    if (defaultRoomId) await joinRoom(defaultRoomId);
     return;
   }
 
@@ -60,7 +63,9 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
     if (availableRoomId) {
       dom.kickBanActions.hidden = false;
       dom.kickBanEnterBtn.onclick = async () => {
-        await joinRoom(availableRoomId);
+        /* Ricalcola al click così non entri nella stanza da cui sei kickato (chiavi sempre String) */
+        const rid = await findAvailableRoom();
+        if (rid) await joinRoom(rid);
         hideKickBanOverlay();
       };
     } else {
@@ -70,16 +75,24 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
     dom.kickBanActions.hidden = true;
   }
 
-  /* Auto-hide when kick expires */
-  setTimeout(() => {
-    if (dom.kickBanOverlay && !dom.kickBanOverlay.hidden) {
-      hideKickBanOverlay();
-      showToast('✅ Your kick has expired. You can now rejoin rooms.');
+  /* Auto-hide when kick expires and enter default room */
+  setTimeout(async () => {
+    if (!dom.kickBanOverlay || dom.kickBanOverlay.hidden) return;
+    const uid = state.currentUser?.id;
+    if (uid && state.kickedUsers[uid]) {
+      if (roomId != null) delete state.kickedUsers[uid][String(roomId)];
+      else state.kickedUsers[uid] = {};
+      if (Object.keys(state.kickedUsers[uid] || {}).length === 0) delete state.kickedUsers[uid];
     }
+    hideKickBanOverlay();
+    showToast('✅ Your kick has expired. You can now rejoin rooms.');
+    await loadRoomsFromDB();
+    const defaultRoomId = await findAvailableRoom();
+    if (defaultRoomId) await joinRoom(defaultRoomId);
   }, timeUntilExpiry);
 
-  /* If overlay was already visible with expired kick (e.g. tab slept), check every 10s and hide */
-  const expiredCheck = setInterval(() => {
+  /* If overlay was already visible with expired kick (e.g. tab slept), check every 10s then hide and enter default room */
+  const expiredCheck = setInterval(async () => {
     if (!dom.kickBanOverlay || dom.kickBanOverlay.hidden) {
       clearInterval(expiredCheck);
       return;
@@ -88,12 +101,15 @@ export async function showKickOverlay(roomId, expiresAt, isGlobal) {
       clearInterval(expiredCheck);
       const uid = state.currentUser?.id;
       if (uid && state.kickedUsers[uid]) {
-        if (roomId) delete state.kickedUsers[uid][roomId];
+        if (roomId != null) delete state.kickedUsers[uid][String(roomId)];
         else state.kickedUsers[uid] = {};
         if (Object.keys(state.kickedUsers[uid] || {}).length === 0) delete state.kickedUsers[uid];
       }
       hideKickBanOverlay();
       showToast('✅ Your kick has expired. You can rejoin.');
+      await loadRoomsFromDB();
+      const defaultRoomId = await findAvailableRoom();
+      if (defaultRoomId) await joinRoom(defaultRoomId);
     }
   }, 10000);
 }

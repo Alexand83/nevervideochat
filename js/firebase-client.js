@@ -645,14 +645,14 @@ export async function connectFirebase() {
           const roomId = payload.room_id;
           if (!state.kickedUsers[targetId]) state.kickedUsers[targetId] = {};
           if (payload.is_global) {
-            for (const rId of Object.keys(state.rooms)) state.kickedUsers[targetId][rId] = payload.expires_at;
+            for (const rId of Object.keys(state.rooms)) state.kickedUsers[targetId][String(rId)] = payload.expires_at;
             const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
             for (const rId of Object.keys(state.rooms)) leaveRoom(rId, { silent: true });
             renderRoomTabs();
             const { showKickOverlay } = await import('./kick-ban.js');
             await showKickOverlay(null, payload.expires_at, true);
           } else {
-            state.kickedUsers[targetId][roomId] = payload.expires_at;
+            state.kickedUsers[targetId][String(roomId)] = payload.expires_at;
             const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
             if (state.rooms[roomId]) {
               leaveRoom(roomId, { silent: true });

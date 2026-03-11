@@ -176,12 +176,13 @@ export function checkIsMuted(userId, roomId) {
 /* ── Check if user is kicked from this room ── */
 export function checkIsKicked(userId, roomId) {
   const kicked = state.kickedUsers[String(userId)];
-  if (!kicked || !kicked[roomId]) return false;
+  const key = String(roomId);
+  if (!kicked || !kicked[key]) return false;
   
-  const expiresAt = kicked[roomId];
+  const expiresAt = kicked[key];
   if (new Date(expiresAt) < new Date()) {
     /* Expired, remove from cache */
-    delete kicked[roomId];
+    delete kicked[key];
     if (Object.keys(kicked).length === 0) {
       delete state.kickedUsers[String(userId)];
     }
