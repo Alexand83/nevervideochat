@@ -718,7 +718,11 @@ export async function connectFirebase() {
         else if (state.cameraWindows[targetId]) await closeCameraWindow(targetId);
         state.mutedUsers[targetId] = { room_id: roomId, expires_at: payload.expires_at };
         renderUsers();
-        if (String(targetId) === String(state.currentUser?.id)) showToast(`🔇 You have been muted.`);
+        /* Toast solo se messaggio recente (no replay al refresh: evita "sei stato mutato" 3 volte) */
+        const ts = payload?.ts || 0;
+        if (String(targetId) === String(state.currentUser?.id) && (!ts || Date.now() - ts <= BROADCAST_UI_MAX_AGE_MS)) {
+          showToast(`🔇 You have been muted.`);
+        }
       })
       .on('broadcast', { event: 'user-unmuted' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
