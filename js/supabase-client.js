@@ -611,7 +611,7 @@ export async function connectSupabase() {
             }
             const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
             for (const rId of Object.keys(state.rooms)) {
-              leaveRoom(rId, { silent: true });
+              leaveRoom(rId, { silent: true, force: true });
             }
             renderRoomTabs();
             const { showKickOverlay } = await import('./kick-ban.js');
@@ -620,7 +620,7 @@ export async function connectSupabase() {
             state.kickedUsers[targetId][String(roomId)] = payload.expires_at;
             const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
             if (state.rooms[roomId]) {
-              leaveRoom(roomId, { silent: true });
+              leaveRoom(roomId, { silent: true, force: true });
               renderRoomTabs();
             }
             const { showKickOverlay } = await import('./kick-ban.js');

@@ -547,7 +547,7 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
       if (isGlobal) {
         for (const rId of Object.keys(state.rooms)) state.kickedUsers[targetId][String(rId)] = expiresAt;
         const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
-        for (const rId of Object.keys(state.rooms)) leaveRoom(rId, { silent: true });
+        for (const rId of Object.keys(state.rooms)) leaveRoom(rId, { silent: true, force: true });
         renderRoomTabs();
         const { showKickOverlay } = await import('./kick-ban.js');
         await showKickOverlay(null, expiresAt, true);
@@ -555,7 +555,7 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
         state.kickedUsers[targetId][String(state.activeRoom)] = expiresAt;
         const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
         if (state.rooms[state.activeRoom]) {
-          leaveRoom(state.activeRoom, { silent: true });
+          leaveRoom(state.activeRoom, { silent: true, force: true });
           renderRoomTabs();
         }
         const { showKickOverlay } = await import('./kick-ban.js');

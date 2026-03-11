@@ -193,9 +193,9 @@ export async function joinRoom(roomId) {
   switchRoom(roomIdStr);
 }
 
-/* ── Leave a room (opts.silent = true per kick, non mostra toast) ── */
+/* ── Leave a room (opts.silent = true per kick; opts.force = true permette di uscire anche da general quando kickato) ── */
 export function leaveRoom(roomId, opts = {}) {
-  if (roomId === 'general') {
+  if (roomId === 'general' && !opts.force) {
     if (!opts.silent) showToast('ℹ️ Cannot leave the General room.');
     return;
   }
