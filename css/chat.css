@@ -39,12 +39,12 @@
 .welcome-banner h3 { font-size: var(--fz-md); color: var(--tx1); margin-bottom: var(--s2); }
 .welcome-banner p  { font-size: var(--fz-sm); line-height: 1.6; max-width: 380px; margin: 0 auto; }
 
-/* ─── Message Groups: tutto a sinistra, avatar allineato al testo ─── */
+/* ─── Message Groups: riga compatta, avatar allineato al testo ─── */
 .msg-group {
   display: flex;
   align-items: flex-start;
   gap: var(--s2);
-  padding: 2px 0;
+  padding: 1px 0;
   animation: msgIn .18s ease;
 }
 
@@ -54,13 +54,13 @@
 }
 
 .msg-avatar {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: var(--r-pill);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
@@ -90,31 +90,40 @@
 }
 
 .msg-sender {
-  font-size: var(--fz-xs);
+  font-size: 10px;
   font-weight: 600;
   color: var(--tx1);
 }
 .msg-time {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--tx2);
   font-variant-numeric: tabular-nums;
 }
 
-/* Sfondo messaggi molto soft, alternato, quasi invisibile */
+/* Sfondo messaggi: alternato per riga, visibile ma poco (sottile) */
 .msg-bubble {
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.02);
   border: none;
   word-break: break-word;
   overflow-wrap: anywhere;
-  line-height: 1.45;
+  line-height: 1.35;
+  font-size: 12px;
   position: relative;
   width: 100%;
   box-sizing: border-box;
 }
-.msg-group.own .msg-bubble {
-  background: rgba(255, 255, 255, 0.045);
+.msg-group:nth-child(odd) .msg-bubble {
+  background: rgba(255, 255, 255, 0.025);
+}
+.msg-group:nth-child(even) .msg-bubble {
+  background: rgba(255, 255, 255, 0.055);
+}
+.msg-group.own:nth-child(odd) .msg-bubble {
+  background: rgba(255, 255, 255, 0.04);
+}
+.msg-group.own:nth-child(even) .msg-bubble {
+  background: rgba(255, 255, 255, 0.07);
 }
 
 /* Quote / Reply block dentro il bubble */
@@ -144,7 +153,8 @@
 }
 
 .msg-text {
-  line-height: 1.45;
+  line-height: 1.35;
+  font-size: 12px;
 }
 .msg-text:empty { display: none; }
 
@@ -459,13 +469,13 @@
 .rec-cancel-btn { background: var(--bg3); color: var(--tx1); }
 .rec-cancel-btn:hover { background: var(--bg-hover); color: var(--tx0); }
 
-/* Input row: compatto e lineare */
+/* Input row: piccola e compatta */
 .input-row {
   display: flex;
   align-items: center;
   gap: var(--s2);
   touch-action: none;
-  padding: 6px 8px;
+  padding: 4px 6px;
   background: var(--bg0);
   border-top: 1px solid var(--border-subtle);
 }
@@ -473,15 +483,15 @@
 .msg-input {
   text-align: left;
   flex: 1;
-  min-height: 28px;
-  max-height: 100px;
+  min-height: 22px;
+  max-height: 80px;
   overflow-y: auto;
   background: var(--bg1);
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  padding: 4px 8px;
-  line-height: 1.4;
-  font-size: 13px;
+  padding: 3px 6px;
+  line-height: 1.3;
+  font-size: 12px;
   color: var(--tx0);
   word-break: break-word;
   outline: none;
