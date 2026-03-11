@@ -18,37 +18,34 @@ function nickToEmail(nick) {
   return `${nick.toLowerCase().replace(/[^a-z0-9._-]/g, '_')}@${AUTH_EMAIL_DOMAIN}`;
 }
 
-/* ── Crea un ID univoco per la sessione (UUID per browser) ── */
+/* ── Crea un ID univoco per la sessione (UUID per TAB) ── */
+/* CRITICO: sessionStorage è per-tab. Così due tab = due session_id; al login in una tab
+   Firestore active_sessions viene aggiornato con la nuova tab → l'altra tab vede session_id
+   diverso dal proprio e si disconnette (una sola sessione attiva). */
 function createSessionId(accessToken) {
-  /* CRITICO: Genera un sessionId univoco per ogni browser/sessione */
-  /* Non usare il token JWT perché può essere lo stesso per più browser */
-  /* Usa un UUID generato lato client salvato nel localStorage */
-  let sessionId = localStorage.getItem('nvc_browser_session_id');
+  let sessionId = sessionStorage.getItem('nvc_browser_session_id');
   if (!sessionId) {
-    /* Genera un UUID v4 semplice */
     sessionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
       const r = Math.random() * 16 | 0;
       const v = c === 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
     });
-    /* NON aggiungere timestamp - deve essere lo stesso per tutta la durata della sessione */
-    localStorage.setItem('nvc_browser_session_id', sessionId);
-    console.log('[Auth] Generated new browser session ID:', sessionId.substring(0, 30) + '...');
+    sessionStorage.setItem('nvc_browser_session_id', sessionId);
+    console.log('[Auth] Generated new browser session ID (this tab):', sessionId.substring(0, 30) + '...');
   } else {
-    console.log('[Auth] Using existing browser session ID:', sessionId.substring(0, 30) + '...');
+    console.log('[Auth] Using existing browser session ID (this tab):', sessionId.substring(0, 30) + '...');
   }
   return sessionId;
 }
 
-/* ── Salva l'ID della sessione nel localStorage ── */
+/* ── Salva l'ID della sessione (per-tab) ── */
 function saveSessionId(sessionId) {
-  localStorage.setItem('nvc_session_id', sessionId);
+  sessionStorage.setItem('nvc_session_id', sessionId);
 }
 
-/* ── Ottieni l'ID della sessione salvato ── */
+/* ── Ottieni l'ID della sessione salvato (questo tab) ── */
 export function getSavedSessionId() {
-  /* Usa nvc_browser_session_id invece di nvc_session_id per coerenza */
-  return localStorage.getItem('nvc_browser_session_id');
+  return sessionStorage.getItem('nvc_browser_session_id');
 }
 
 /* ── Verifica immediatamente se la sessione è valida ── */
@@ -177,7 +174,7 @@ export async function tryRestoreSession() {
       clearAuthSession();
       return null;
     }
-    if (!getSavedSessionId()) localStorage.setItem('nvc_browser_session_id', sessionId);
+    if (!getSavedSessionId()) sessionStorage.setItem('nvc_browser_session_id', sessionId);
     await verifySessionImmediately(data.user.id, token);
     const { markSessionAsNew } = await import('./firebase-client.js');
     markSessionAsNew();

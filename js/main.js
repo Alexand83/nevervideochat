@@ -125,6 +125,8 @@ async function init() {
   localStorage.removeItem('nvc_auth_session');
   localStorage.removeItem('nvc_browser_session_id');
   localStorage.removeItem('nvc_session_id');
+  sessionStorage.removeItem('nvc_browser_session_id');
+  sessionStorage.removeItem('nvc_session_id');
 
   dom.authModal.hidden = false;
 }

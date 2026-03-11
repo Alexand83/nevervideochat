@@ -413,6 +413,8 @@ export async function showDisconnectedOverlay(forceShow) {
   localStorage.removeItem('nvc_auth_session');
   localStorage.removeItem('nvc_browser_session_id');
   localStorage.removeItem('nvc_session_id');
+  sessionStorage.removeItem('nvc_browser_session_id');
+  sessionStorage.removeItem('nvc_session_id');
   try { auth.signOut(); } catch (_) {}
   const authModal = document.getElementById('authModal');
   if (authModal) { authModal.hidden = false; authModal.style.zIndex = '9999'; authModal.style.pointerEvents = 'auto'; authModal.classList.add('modal-visible'); }

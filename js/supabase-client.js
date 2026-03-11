@@ -182,6 +182,8 @@ export async function showDisconnectedOverlay(forceShow) {
   localStorage.removeItem('nvc_auth_session');
   localStorage.removeItem('nvc_browser_session_id');
   localStorage.removeItem('nvc_session_id');
+  sessionStorage.removeItem('nvc_browser_session_id');
+  sessionStorage.removeItem('nvc_session_id');
 
   /* Disconnetti da Supabase (solo locale se offline, per non bloccare al ritorno online) */
   if (state.supa) {
