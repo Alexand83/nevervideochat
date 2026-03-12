@@ -876,8 +876,9 @@ async function initRemoteVolumeControl(uid) {
   const wrap = $(`cam-remote-volume-wrap-${safeId(uid)}`);
   const fill = $(`cam-remote-fill-${safeId(uid)}`);
   const thumb = $(`cam-remote-thumb-${safeId(uid)}`);
-  const video = $(`cam-vid-${safeId(uid)}`);
-  if (!wrap || !video) return;
+  const video = $(`cam-vid-${safeId(uid)}`) || cw?.el?.querySelector?.('video');
+  /* Serve almeno il video (floating o grid Eventi): senza non possiamo fare Web Audio. wrap è opzionale (in grid non c'è). */
+  if (!video) return;
 
   const audioTrack = stream?.getAudioTracks()[0];
   let remoteCtx = null;
@@ -895,7 +896,7 @@ async function initRemoteVolumeControl(uid) {
       remoteGain.connect(remoteCtx.destination);
       video.muted = true; /* audio da Web Audio, non dal video */
 
-      /* stesso stream per indicatore "sta parlando" */
+      /* stesso stream per indicatore "sta parlando" + tick tiene vivo il contesto (altrimenti audio si stacca dopo ~1s) */
       analyser = remoteCtx.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.75;
@@ -928,7 +929,7 @@ async function initRemoteVolumeControl(uid) {
     if (fill) fill.style.width = clamped + '%';
     if (thumb) thumb.style.left = clamped + '%';
   };
-  setVolumeFromPct(100);
+  if (wrap || fill) setVolumeFromPct(100);
 
   let isMuted = false;
   if (muteBtn) {
@@ -941,39 +942,41 @@ async function initRemoteVolumeControl(uid) {
     });
   }
 
-  const onInput = (e) => {
-    const rect = wrap.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const x = clientX - rect.left;
-    const pct = (x / rect.width) * 100;
-    setVolumeFromPct(pct);
-    if (isMuted && pct > 0) { isMuted = false; if (muteBtn) { muteBtn.setAttribute('aria-pressed', 'false'); muteBtn.textContent = '🔊'; } }
-  };
-  wrap.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    wrap.classList.add('grabbing');
-    onInput(e);
-    const move = (ev) => onInput(ev);
-    const up = () => {
-      document.removeEventListener('mousemove', move);
-      document.removeEventListener('mouseup', up);
-      wrap.classList.remove('grabbing');
+  if (wrap) {
+    const onInput = (e) => {
+      const rect = wrap.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      const pct = (x / rect.width) * 100;
+      setVolumeFromPct(pct);
+      if (isMuted && pct > 0) { isMuted = false; if (muteBtn) { muteBtn.setAttribute('aria-pressed', 'false'); muteBtn.textContent = '🔊'; } }
     };
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', up);
-  });
-  wrap.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    onInput(e);
-    const move = (ev) => { ev.preventDefault(); onInput(ev); };
-    const end = () => {
-      document.removeEventListener('touchmove', move);
-      document.removeEventListener('touchend', end);
-    };
-    document.addEventListener('touchmove', move, { passive: false });
-    document.addEventListener('touchend', end);
-  });
+    wrap.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      wrap.classList.add('grabbing');
+      onInput(e);
+      const move = (ev) => onInput(ev);
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        wrap.classList.remove('grabbing');
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+    wrap.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      onInput(e);
+      const move = (ev) => { ev.preventDefault(); onInput(ev); };
+      const end = () => {
+        document.removeEventListener('touchmove', move);
+        document.removeEventListener('touchend', end);
+      };
+      document.addEventListener('touchmove', move, { passive: false });
+      document.addEventListener('touchend', end);
+    });
+  }
 }
 
 function closeRemoteVolumeContext(uid) {
@@ -2015,8 +2018,9 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   targetSlot.dataset.userId = uid;
 
   /* Video element — always start MUTED so autoplay works on ALL browsers (PC/Safari/etc.)
-     For remote streams we auto-unmute once playing; own cam stays muted always */
+     For remote streams we auto-unmute once playing (via Web Audio in initRemoteVolumeControl); own cam stays muted always */
   const video = document.createElement('video');
+  video.id = `cam-vid-${safeId(uid)}`; /* necessario per initRemoteVolumeControl (audio remoto in grid) */
   video.autoplay   = true;
   video.playsInline = true;
   video.muted      = true;   /* KEY: muted = guaranteed autoplay on any browser */
@@ -2054,8 +2058,8 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
         if (playStarted) return;
         playStarted = true;
         video.play().then(() => {
-          console.log('[Events Grid] Playing for', uid, '(via frame event) — unmuting:', !isOwn);
-          if (!isOwn) video.muted = false;
+          console.log('[Events Grid] Playing for', uid, '(via frame event)');
+          /* remoto: audio da initRemoteVolumeControl (Web Audio), video resta muted */
         }).catch(console.warn);
       };
       video.addEventListener('canplay',     onFrames, { once: true });
@@ -2076,8 +2080,7 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
             video.play().then(() => {
               if (!playStarted) {
                 playStarted = true;
-                console.log('[Events Grid] Playing for', uid, `(forced retry ${playRetryCount}) — unmuting:`, !isOwn);
-                if (!isOwn) video.muted = false;
+                console.log('[Events Grid] Playing for', uid, `(forced retry ${playRetryCount})`);
               }
             }).catch(err => {
               if (err.name !== 'AbortError') {
@@ -2099,8 +2102,7 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           clearTimeout(playTimeout);
           if (playStarted) return; /* already handled by frame event */
           playStarted = true;
-          console.log('[Events Grid] Playing for', uid, '(playPromise resolved) — unmuting:', !isOwn);
-          if (!isOwn) video.muted = false;
+          console.log('[Events Grid] Playing for', uid, '(playPromise resolved)');
         }).catch(err => {
           clearTimeout(playTimeout);
           /* AbortError is expected when slot is removed during play() — ignore it */
@@ -2126,8 +2128,7 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           console.log('[Events Grid] Timeout fallback — forcing play() for', uid);
           video.play().then(() => {
             playStarted = true;
-            console.log('[Events Grid] Playing for', uid, '(timeout fallback) — unmuting:', !isOwn);
-            if (!isOwn) video.muted = false;
+            console.log('[Events Grid] Playing for', uid, '(timeout fallback)');
           }).catch(err => {
             if (err.name !== 'AbortError') console.warn('[Events Grid] Timeout fallback play() failed:', err.name);
           });
@@ -2152,8 +2153,7 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
             if (!playStarted) {
               playStarted = true;
               clearInterval(continuousRetry);
-              console.log('[Events Grid] Playing for', uid, '(continuous retry) — unmuting:', !isOwn);
-              if (!isOwn) video.muted = false;
+              console.log('[Events Grid] Playing for', uid, '(continuous retry)');
             }
           }).catch(err => {
             if (err.name !== 'AbortError') {
@@ -2164,8 +2164,7 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           /* Video is playing — mark as started and stop retry */
           playStarted = true;
           clearInterval(continuousRetry);
-          console.log('[Events Grid] Playing for', uid, '(detected playing) — unmuting:', !isOwn);
-          if (!isOwn) video.muted = false;
+          console.log('[Events Grid] Playing for', uid, '(detected playing)');
         }
       }, 2000);
       
@@ -2211,6 +2210,8 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
 
   /* CRITICO: per la propria cam in Eventi avvia il mic meter: tiene vivo l'AudioContext (altrimenti si sospende e il mic si stacca dopo ~0.5s) */
   if (isOwn) startMicMeter(stream, uid);
+  /* Per cam remota in Eventi: audio via Web Audio + tick che tiene vivo il contesto (altrimenti i viewer sentono 1s e poi si stacca) */
+  if (!isOwn && stream?.getAudioTracks?.()?.length) initRemoteVolumeControl(uid);
 
   /* ── Update grid layout ── */
   import('./rooms.js').then(({ updateEventsCamGrid }) => updateEventsCamGrid());
