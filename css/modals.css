@@ -341,7 +341,7 @@
 
 
 /* ── SETTINGS MODAL specific ── */
-.settings-modal { max-width: 420px; }
+.settings-modal { max-width: 520px; min-width: 380px; }
 
 /* Settings tab bar */
 .settings-tabs {

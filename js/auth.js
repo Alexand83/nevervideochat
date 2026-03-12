@@ -547,7 +547,7 @@ export function initSettingsModal() {
     await setUserTheme(themeId);
   });
   
-  dom.settingsSaveBtn?.addEventListener('click', () => {
+  dom.settingsSaveBtn?.addEventListener('click', async () => {
     const s = {
       ...loadDeviceSettings(),
       cameraId: dom.cameraDeviceSelect?.value || '',
@@ -555,9 +555,32 @@ export function initSettingsModal() {
       autoLoadImages: document.getElementById('settingsAutoLoadImages')?.checked !== false,
       soundChat: document.getElementById('settingsSoundChat')?.checked !== false,
       soundPM: document.getElementById('settingsSoundPM')?.checked !== false,
+      isBold: state.isBold,
+      currentColor: state.currentColor,
+      fontSize: state.fontSize,
     };
-    saveDeviceSettings(s); state.settings = s;
-    dom.settingsModal.hidden = true; showToast('✅ Settings saved.');
+    saveDeviceSettings(s);
+    state.settings = s;
+    /* Utenti registrati: salva anche nel DB (profilo); guest: solo in locale */
+    if (state.currentUser && !state.currentUser.is_guest && state.fb) {
+      try {
+        await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).update({
+          cameraId: s.cameraId || null,
+          micId: s.micId || null,
+          autoLoadImages: s.autoLoadImages !== false,
+          soundChat: s.soundChat !== false,
+          soundPM: s.soundPM !== false,
+          isBold: s.isBold,
+          currentColor: s.currentColor || null,
+          fontSize: s.fontSize || null,
+        });
+      } catch (err) {
+        console.error('[Auth] Save settings to profile failed:', err);
+        showToast('⚠️ Impostazioni salvate in locale; sync con account non riuscita.');
+      }
+    }
+    dom.settingsModal.hidden = true;
+    showToast('✅ Settings saved.');
   });
 }
 
@@ -583,6 +606,34 @@ function openSettingsModal() {
   renderIgnoredUsers();
   switchSettingsTab('general');
   dom.settingsModal.hidden = false;
+}
+
+/**
+ * Carica le impostazioni dal profilo Firestore per utenti registrati e le applica a state.settings + localStorage.
+ * Chiamata dopo il login / al caricamento pagina se c'è sessione attiva.
+ */
+export async function loadUserSettingsFromProfile() {
+  if (!state.currentUser?.id || state.currentUser.is_guest || !state.fb?.firestore) return;
+  try {
+    const snap = await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).get();
+    const data = snap.data();
+    if (!data) return;
+    const merged = {
+      ...loadDeviceSettings(),
+      ...(data.cameraId != null && { cameraId: data.cameraId }),
+      ...(data.micId != null && { micId: data.micId }),
+      ...(data.autoLoadImages !== undefined && { autoLoadImages: data.autoLoadImages }),
+      ...(data.soundChat !== undefined && { soundChat: data.soundChat }),
+      ...(data.soundPM !== undefined && { soundPM: data.soundPM }),
+      ...(data.isBold !== undefined && { isBold: data.isBold }),
+      ...(data.currentColor != null && { currentColor: data.currentColor }),
+      ...(data.fontSize != null && { fontSize: data.fontSize }),
+    };
+    state.settings = merged;
+    saveDeviceSettings(merged);
+  } catch (err) {
+    console.warn('[Auth] Load settings from profile failed:', err);
+  }
 }
 
 async function populateDeviceSelects() {

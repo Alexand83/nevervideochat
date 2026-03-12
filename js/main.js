@@ -8,7 +8,7 @@ import { APP_VERSION }        from './config.js';
 import { loadRejectedCams, loadIgnoredUsers, loadDeviceSettings } from './storage.js';
 import { initFirebaseClient, connectFirebase, connectRoom } from './firebase-client.js';
 import { applyAuthIdentity, getOrCreateGuestIdentity,
-         initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser } from './auth.js';
+         initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser, loadUserSettingsFromProfile } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
 import { renderUsers, setOpenContextMenu } from './users.js';
 import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate } from './chat.js';
@@ -16,7 +16,7 @@ import { setPChatDeps } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js?v=20260318';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initContextMenu, openContextMenu,
-         initPanelResize, initMobilePanel, setUIDeps } from './ui.js';
+         initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js';
 import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
 import { initGames, handleGameCommand } from './games.js';
@@ -178,7 +178,12 @@ export async function finishInit() {
   state.pendingCamRequests = {};
   state.rejectedCamUsers   = loadRejectedCams();
   state.ignoredUsers       = loadIgnoredUsers();
-  state.settings           = loadDeviceSettings();
+  state.settings = loadDeviceSettings();
+  /* Utenti registrati: sovrascrivi con impostazioni dal profilo (DB) */
+  if (state.currentUser && !state.currentUser.is_guest && state.fb) {
+    try { await loadUserSettingsFromProfile(); } catch (e) { console.warn('[Settings] Load from profile failed', e); }
+  }
+  applyRichTextSettings(state.settings);
   if (!state.privateChats) state.privateChats = {};
   
   /* Reset games panel width CSS variable to 0 on init (unless in games room) */

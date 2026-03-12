@@ -6,7 +6,7 @@ import { state }             from './state.js';
 import { dom }               from './dom.js';
 import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js';
 import { findUser, checkIsMuted, renderUsers } from './users.js';
-import { addIgnoredUser, removeIgnoredUser } from './storage.js';
+import { addIgnoredUser, removeIgnoredUser, loadDeviceSettings, saveDeviceSettings } from './storage.js';
 import { broadcast }         from './broadcast.js';
 import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260318';
 import { openPrivateChat, closePChat } from './private-chat.js';
@@ -20,19 +20,40 @@ let _supabaseReady   = null;
 export function setUIDeps(upload, supaReady) { _uploadToStorage = upload; _supabaseReady = supaReady; }
 
 /* ── Rich-text toolbar ─────────────────────────────────────────── */
+/** Applica colore/grandezza/grassetto da settings a state e alla toolbar (chiamata da main/auth dopo load settings). */
+export function applyRichTextSettings(settings) {
+  if (!settings) return;
+  if (settings.isBold !== undefined) state.isBold = !!settings.isBold;
+  if (settings.currentColor !== undefined) state.currentColor = settings.currentColor;
+  if (settings.fontSize !== undefined) state.fontSize = settings.fontSize;
+  if (dom.boldBtn) {
+    dom.boldBtn.setAttribute('aria-pressed', String(state.isBold));
+    dom.boldBtn.classList.toggle('active', state.isBold);
+  }
+  if (dom.colorPicker) dom.colorPicker.value = state.currentColor;
+  if (dom.fontSizeSelect) dom.fontSizeSelect.value = state.fontSize;
+}
+
+function persistRichTextToLocalStorage() {
+  saveDeviceSettings({ ...loadDeviceSettings(), isBold: state.isBold, currentColor: state.currentColor, fontSize: state.fontSize });
+}
+
 export function initToolbar() {
   dom.boldBtn.addEventListener('click', () => {
     state.isBold = !state.isBold;
     dom.boldBtn.setAttribute('aria-pressed', String(state.isBold));
     dom.boldBtn.classList.toggle('active', state.isBold);
+    persistRichTextToLocalStorage();
     dom.msgInput.focus(); document.execCommand('bold');
   });
   dom.colorPicker.addEventListener('input', e => {
     state.currentColor = e.target.value;
+    persistRichTextToLocalStorage();
     dom.msgInput.focus(); document.execCommand('foreColor', false, state.currentColor);
   });
   dom.fontSizeSelect.addEventListener('change', e => {
     state.fontSize = e.target.value;
+    persistRichTextToLocalStorage();
     dom.msgInput.focus();
     
     /* Enable CSS styling */
