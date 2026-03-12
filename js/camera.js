@@ -614,7 +614,7 @@ export async function toggleOwnCamera() {
 }
 
 /* ── Pipeline audio: GainNode per controllare volume mic (barra verticale alza/abbassa) ── */
-function createMicVolumePipeline(stream) {
+async function createMicVolumePipeline(stream) {
   const audioTrack = stream.getAudioTracks()[0];
   if (!audioTrack) return null;
   try {
@@ -632,8 +632,8 @@ function createMicVolumePipeline(stream) {
     const newAudioTrack = dest.stream.getAudioTracks()[0];
     stream.removeTrack(audioTrack);
     stream.addTrack(newAudioTrack);
-    /* Risveglia contesto (richiesto da molti browser per far partire audio e analisi) */
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    /* CRITICO: attendi resume così il contesto è running e il track invia audio (e l'analyser ha dati per il bordo "sta parlando") */
+    if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
     return { gainNode, analyser, ctx };
   } catch (err) {
     console.warn('[Camera] createMicVolumePipeline failed:', err);
@@ -647,7 +647,7 @@ export async function startOwnCamera() {
     const msSince = Date.now() - state.cameraClosedAt;
     if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
     state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
-    state.micPipeline = createMicVolumePipeline(state.localStream) || null;
+    state.micPipeline = await createMicVolumePipeline(state.localStream) || null;
     state.currentUser.hasCamera = true;
     state.cameraRoom = state.activeRoom;    /* camera is active in THIS room */
     dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
@@ -868,7 +868,7 @@ function initMicVolumeSlider(uid) {
 }
 
 /* ── Volume e mute della voce della cam remota (Web Audio: gain + indicatore "sta parlando") ── */
-function initRemoteVolumeControl(uid) {
+async function initRemoteVolumeControl(uid) {
   closeRemoteVolumeContext(uid);
   const cw = state.cameraWindows[uid];
   const stream = cw?.stream;
@@ -887,7 +887,7 @@ function initRemoteVolumeControl(uid) {
   if (audioTrack) {
     try {
       remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (remoteCtx.state === 'suspended') remoteCtx.resume().catch(() => {});
+      if (remoteCtx.state === 'suspended') await remoteCtx.resume().catch(() => {});
       const src = remoteCtx.createMediaStreamSource(new MediaStream([audioTrack]));
       remoteGain = remoteCtx.createGain();
       remoteGain.gain.value = 1;
@@ -1145,7 +1145,7 @@ async function recoverLocalStreamAfterVisibility() {
     const newStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
     state.localStream.getTracks().forEach(t => t.stop());
     state.localStream = newStream;
-    state.micPipeline = createMicVolumePipeline(state.localStream) || null;
+    state.micPipeline = (await createMicVolumePipeline(state.localStream)) || null;
 
     const cw = state.cameraWindows[ownUid];
     const videoEl = cw?.el?.querySelector?.('video') || $(`cam-vid-${safeId(ownUid)}`);
@@ -1329,7 +1329,7 @@ export async function sharePublicCameraTo(toUid) {
       const msSince = Date.now() - state.cameraClosedAt;
       if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
       state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
-      state.micPipeline = createMicVolumePipeline(state.localStream) || null;
+      state.micPipeline = (await createMicVolumePipeline(state.localStream)) || null;
       state.currentUser.hasCamera = true;
       state.cameraRoom = state.activeRoom;
       dom.cameraBtnLabel.textContent = 'Camera On'; dom.cameraBtnHeader.classList.add('camera-on');
