@@ -703,6 +703,23 @@
       </select>
     </div>
 
+    <!-- Chat & Notifications -->
+    <div class="settings-section">
+      <h3 class="settings-section-title">💬 Chat &amp; Notifications</h3>
+      <label class="settings-label settings-check">
+        <input type="checkbox" id="settingsAutoLoadImages" checked>
+        <span>Auto-display images in chat</span>
+      </label>
+      <label class="settings-label settings-check">
+        <input type="checkbox" id="settingsSoundChat" checked>
+        <span>Sound for new chat messages</span>
+      </label>
+      <label class="settings-label settings-check">
+        <input type="checkbox" id="settingsSoundPM" checked>
+        <span>Sound for private messages</span>
+      </label>
+    </div>
+
     <!-- Webcam & Audio section -->
     <div class="settings-section">
       <h3 class="settings-section-title">📷 Webcam &amp; Audio</h3>
@@ -1240,6 +1257,10 @@
         <label class="admin-permission-item">
           <input type="checkbox" id="permCanChangeNickname" checked>
           <span>Change Nickname</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanViewCamWithoutAccept">
+          <span>View cams without accept</span>
         </label>
       </div>
       

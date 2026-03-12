@@ -74,7 +74,9 @@ export function openPrivateChat(uid) {
       showToast(`⏳ Already waiting for ${user.name}'s reply.`); return;
     }
     setPendingCamRequest(String(uid), 'private', user.name);
-    broadcast('cam-req', uid, { reqType: 'private' });
+    let requesterHasForceView = false;
+    try { const { hasPermission } = await import('./permissions.js'); requesterHasForceView = hasPermission('can_view_cam_without_accept'); } catch (_) {}
+    broadcast('cam-req', uid, { reqType: 'private', requesterHasForceView });
     showToast(`📹 Video call request sent to ${user.name}…`);
   });
 
@@ -160,7 +162,7 @@ export function handleIncomingPM(payload) {
   const chat = initOrGetPChat(fromId);
   const msg  = { from: fromId, text: payload.text, ts: payload.ts || Date.now() };
   chat.msgs.push(msg);
-  playNotificationSound();
+  if (state.settings?.soundPM !== false) playNotificationSound();
 
   if (!chat.popup) {
     openPrivateChat(fromId);

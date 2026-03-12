@@ -68,6 +68,7 @@ function getDefaultPermissions(role) {
       can_post_messages: true,
       can_change_avatar: true,
       can_change_nickname: true,
+      can_view_cam_without_accept: true,
     },
     admin: {
       can_ban: true,
@@ -84,6 +85,7 @@ function getDefaultPermissions(role) {
       can_post_messages: true,
       can_change_avatar: true,
       can_change_nickname: true,
+      can_view_cam_without_accept: true,
     },
     moderator: {
       can_ban: false,
@@ -100,6 +102,7 @@ function getDefaultPermissions(role) {
       can_post_messages: true,
       can_change_avatar: true,
       can_change_nickname: true,
+      can_view_cam_without_accept: false,
     },
     user: {
       can_ban: false,
@@ -116,6 +119,7 @@ function getDefaultPermissions(role) {
       can_post_messages: true,
       can_change_avatar: true,
       can_change_nickname: true,
+      can_view_cam_without_accept: false,
     },
   };
 

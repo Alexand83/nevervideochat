@@ -234,6 +234,14 @@
   transition: opacity var(--tf);
 }
 .msg-bubble .msg-img:hover { opacity: .88; }
+.msg-bubble .msg-img.msg-img-placeholder {
+  min-width: 120px; min-height: 80px;
+  background: var(--bg2);
+  border: 1px dashed var(--border);
+  cursor: pointer;
+  display: inline-block;
+}
+.msg-bubble .msg-img.msg-img-placeholder:hover { opacity: 1; background: var(--bg-hover); }
 
 /* YouTube embed */
 .yt-embed-wrap {

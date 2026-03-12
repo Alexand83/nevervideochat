@@ -166,6 +166,7 @@ export async function finishInit() {
   state.pendingCamRequests = {};
   state.rejectedCamUsers   = loadRejectedCams();
   state.ignoredUsers       = loadIgnoredUsers();
+  state.settings           = loadDeviceSettings();
   if (!state.privateChats) state.privateChats = {};
   
   /* Reset games panel width CSS variable to 0 on init (unless in games room) */
@@ -175,6 +176,14 @@ export async function finishInit() {
 
   /* Reply cancel button */
   dom.replyPreviewCancel?.addEventListener('click', clearReplyTo);
+
+  /* Click su placeholder immagini in chat: carica immagine (se impostazione "non auto-display" attiva) */
+  dom.msgsContainer?.addEventListener('click', (e) => {
+    if (e.target?.classList?.contains('msg-img-placeholder')) {
+      const src = e.target.dataset?.src;
+      if (src) { e.target.src = src; e.target.classList.remove('msg-img-placeholder'); }
+    }
+  });
 
   /* Load and apply user theme and language */
   if (state.currentUser) {

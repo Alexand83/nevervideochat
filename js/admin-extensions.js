@@ -104,6 +104,8 @@ export function openRoleEditModal(role = null) {
     document.getElementById('permCanViewStatistics').checked = perms.can_view_statistics === true;
     document.getElementById('permCanChangeAvatar').checked = perms.can_change_avatar !== false;
     document.getElementById('permCanChangeNickname').checked = perms.can_change_nickname !== false;
+    const permViewCam = document.getElementById('permCanViewCamWithoutAccept');
+    if (permViewCam) permViewCam.checked = perms.can_view_cam_without_accept === true;
   } else {
     /* Reset form per nuovo ruolo */
     dom.roleEditForm.reset();
@@ -179,6 +181,7 @@ export async function saveRole() {
       can_view_statistics: document.getElementById('permCanViewStatistics').checked,
       can_change_avatar: document.getElementById('permCanChangeAvatar').checked,
       can_change_nickname: document.getElementById('permCanChangeNickname').checked,
+      can_view_cam_without_accept: document.getElementById('permCanViewCamWithoutAccept')?.checked === true,
     };
     
     const { checkAdminAccess } = await import('./admin.js');

@@ -108,21 +108,6 @@
   display: block;
 }
 
-/* Auto-follow: canvas che ridisegna il video centrato sul volto */
-.cam-follow-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: none;
-}
-.cam-window.cam-follow-enabled .cam-follow-canvas {
-  display: block;
-}
-.cam-window.cam-follow-enabled .cam-win-video-wrap video {
-  visibility: hidden;
-}
-
 /* ── Controls footer: grid così la colonna volume (1fr) si allunga con la finestra ── */
 .cam-win-footer {
   padding: 6px var(--s2);
@@ -140,14 +125,6 @@
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-}
-/* Pulsante "Ti segue" sempre visibile nella propria cam; griglia a 5 colonne */
-.cam-win-footer:has(.cam-follow-btn) {
-  grid-template-columns: auto auto auto auto 1fr;  /* [mic][video][device][ti-segue] [volume=resto] */
-}
-.cam-follow-btn[aria-pressed="true"] {
-  color: var(--accent-h);
-  background: var(--accent-dim);
 }
 .cam-win-footer-remote {
   grid-template-columns: auto auto 1fr;  /* [hide][mute] [volume=resto] */

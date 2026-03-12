@@ -531,7 +531,14 @@ export function initSettingsModal() {
   });
   
   dom.settingsSaveBtn?.addEventListener('click', () => {
-    const s = { cameraId: dom.cameraDeviceSelect.value || '', micId: dom.micDeviceSelect.value || '' };
+    const s = {
+      ...loadDeviceSettings(),
+      cameraId: dom.cameraDeviceSelect?.value || '',
+      micId: dom.micDeviceSelect?.value || '',
+      autoLoadImages: document.getElementById('settingsAutoLoadImages')?.checked !== false,
+      soundChat: document.getElementById('settingsSoundChat')?.checked !== false,
+      soundPM: document.getElementById('settingsSoundPM')?.checked !== false,
+    };
     saveDeviceSettings(s); state.settings = s;
     dom.settingsModal.hidden = true; showToast('✅ Settings saved.');
   });
@@ -541,6 +548,12 @@ function openSettingsModal() {
   const s = loadDeviceSettings();
   dom.cameraDeviceSelect.value = s.cameraId || '';
   dom.micDeviceSelect.value    = s.micId    || '';
+  const autoLoadEl = document.getElementById('settingsAutoLoadImages');
+  const soundChatEl = document.getElementById('settingsSoundChat');
+  const soundPMEl = document.getElementById('settingsSoundPM');
+  if (autoLoadEl) autoLoadEl.checked = s.autoLoadImages !== false;
+  if (soundChatEl) soundChatEl.checked = s.soundChat !== false;
+  if (soundPMEl) soundPMEl.checked = s.soundPM !== false;
   dom.detectDevicesHint.textContent = 'Click "Detect Devices" to list your cameras and microphones.';
   
   /* Set current language and theme */

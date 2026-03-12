@@ -288,7 +288,7 @@ export async function connectRoom(roomId) {
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
       console.log('[Supabase] Adding message to room:', { roomId, userId: m.user_id, hasHtml: !!html });
       addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);
-      if (roomId === state.activeRoom) playNotificationSound();
+      if (roomId === state.activeRoom && state.settings?.soundChat !== false) playNotificationSound();
       } catch (err) {
         console.error('[Supabase] Error processing new message:', err);
       }

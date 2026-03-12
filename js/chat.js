@@ -159,6 +159,15 @@ export function renderMessage(msg) {
   const textDiv = document.createElement('div');
   textDiv.className = 'msg-text';
   textDiv.innerHTML = processHtml(msg.html);
+  /* Opzione impostazioni: non caricare immagini automaticamente (solo al click) */
+  if (state.settings?.autoLoadImages === false) {
+    textDiv.querySelectorAll('img').forEach(img => {
+      img.dataset.src = img.src || img.getAttribute('src') || '';
+      img.removeAttribute('src');
+      img.classList.add('msg-img-placeholder');
+      img.alt = 'Click to load image';
+    });
+  }
   bubble.appendChild(textDiv);
 
   /* Reactions */

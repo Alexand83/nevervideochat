@@ -18,146 +18,6 @@ function camCount() { return Object.keys(state.cameraWindows).length; }
 /** Per evitare XSS/breakout in id HTML: solo caratteri sicuri */
 function safeId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '') || 'u'; }
 
-/* ── Face tracking (auto-follow own cam) ───────────────────────── */
-const HAS_FACE_DETECTOR = typeof window !== 'undefined' && 'FaceDetector' in window;
-let faceDetector = null;
-
-async function ensureFaceDetector() {
-  if (!HAS_FACE_DETECTOR) return null;
-  if (!faceDetector) {
-    try {
-      faceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
-    } catch (_) {
-      faceDetector = null;
-    }
-  }
-  return faceDetector;
-}
-
-function startFollowOwnCamera(uid) {
-  const cw = state.cameraWindows[uid];
-  if (!cw || !HAS_FACE_DETECTOR || !cw.followCanvas || !cw.el) return;
-  const videoEl = cw.el.querySelector('video');
-  const wrapEl = cw.el.querySelector('.cam-win-video-wrap');
-  if (!videoEl || !wrapEl) return;
-
-  cw.followEnabled = true;
-  cw.el.classList.add('cam-follow-enabled');
-  updateFollowButtonState(uid, true);
-
-  const canvas = cw.followCanvas;
-  const ctx = canvas.getContext('2d');
-  let lastCenter = cw.lastFaceCenter || null;
-
-  const loop = async () => {
-    if (!state.cameraWindows[uid] || !cw.followEnabled) return;
-    const det = await ensureFaceDetector();
-    if (!det) {
-      cw.followEnabled = false;
-      cw.el.classList.remove('cam-follow-enabled');
-      return;
-    }
-
-    const vw = videoEl.videoWidth || 0;
-    const vh = videoEl.videoHeight || 0;
-    if (!vw || !vh) {
-      cw.followRaf = requestAnimationFrame(loop);
-      return;
-    }
-
-    const wrapRect = wrapEl.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = wrapRect.width * dpr;
-    canvas.height = wrapRect.height * dpr;
-
-    let faces = [];
-    try {
-      faces = await det.detect(videoEl);
-    } catch (_) {
-      // ignore detection errors, just keep last frame
-    }
-
-    let cx = vw / 2;
-    let cy = vh / 2;
-    if (faces && faces[0] && faces[0].boundingBox) {
-      const box = faces[0].boundingBox;
-      cx = box.x + box.width / 2;
-      cy = box.y + box.height * 0.35; /* un po' sopra il centro, verso il viso */
-    }
-
-    if (!lastCenter) lastCenter = { x: cx, y: cy };
-    /* Smoothing: sposta il centro gradualmente verso il nuovo punto */
-    const alpha = 0.2;
-    lastCenter = {
-      x: lastCenter.x + (cx - lastCenter.x) * alpha,
-      y: lastCenter.y + (cy - lastCenter.y) * alpha,
-    };
-    cw.lastFaceCenter = lastCenter;
-
-    const targetAspect = wrapRect.width / wrapRect.height || 16 / 9;
-    let cropH = vh;
-    let cropW = cropH * targetAspect;
-    if (cropW > vw) {
-      cropW = vw;
-      cropH = cropW / targetAspect;
-    }
-
-    let sx = lastCenter.x - cropW / 2;
-    let sy = lastCenter.y - cropH / 2;
-    if (sx < 0) sx = 0;
-    if (sy < 0) sy = 0;
-    if (sx + cropW > vw) sx = vw - cropW;
-    if (sy + cropH > vh) sy = vh - cropH;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(
-      videoEl,
-      sx, sy, cropW, cropH,
-      0, 0, canvas.width, canvas.height
-    );
-
-    cw.followRaf = requestAnimationFrame(loop);
-  };
-
-  if (cw.followRaf) cancelAnimationFrame(cw.followRaf);
-  cw.followRaf = requestAnimationFrame(loop);
-}
-
-function stopFollowOwnCamera(uid) {
-  const cw = state.cameraWindows[uid];
-  if (!cw) return;
-  if (cw.followRaf) {
-    cancelAnimationFrame(cw.followRaf);
-    cw.followRaf = null;
-  }
-  cw.followEnabled = false;
-  cw.el?.classList.remove('cam-follow-enabled');
-  updateFollowButtonState(uid, false);
-}
-
-function toggleFollowOwnCamera(uid) {
-  const cw = state.cameraWindows[uid];
-  if (!cw) return;
-  if (!HAS_FACE_DETECTOR || !cw.followCanvas) {
-    showToast('L\'effetto "Ti segue" richiede Chrome o un browser che supporta il rilevamento del volto.');
-    return;
-  }
-  if (cw.followEnabled) {
-    stopFollowOwnCamera(uid);
-  } else {
-    startFollowOwnCamera(uid);
-  }
-}
-
-function updateFollowButtonState(uid, enabled) {
-  const cw = state.cameraWindows[uid];
-  if (!cw?.el) return;
-  const btn = cw.el.querySelector('.cam-follow-btn');
-  if (!btn) return;
-  btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-  btn.title = enabled ? 'Disattiva "Ti segue"' : 'Ti segue: inquadratura che segue il volto';
-}
-
 /** True se la cam è attiva nella stanza (per obbligare a disattivarla prima della videochiamata privata). */
 export function isRoomCameraActive() {
   return !!(state.localStream && state.cameraRoom != null);
@@ -216,7 +76,6 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         </button>
         <div class="cam-device-dropdown" id="cam-device-dropdown-${safeUid}" hidden></div>
       </div>
-      <button class="cam-ctrl-btn cam-follow-btn" id="cam-follow-btn-${safeUid}" type="button" aria-label="Ti segue" title="Ti segue: inquadratura che segue il volto" aria-pressed="false">🎯</button>
       <div class="mic-volume-section mic-volume-vertical" id="mic-volume-wrap-${safeUid}" title="Volume microfono: trascina la pallina">
         <div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${safeUid}"></div><div class="mic-volume-thumb" id="mic-thumb-${safeUid}"></div></div>
       </div>
@@ -257,20 +116,6 @@ export function createCameraWindow(uid, stream, name, isOwn) {
   const remoteSenderVideoOff = !isOwn && !!state.remoteVideoOffState?.[uid];
   state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true, videoOff: false, videoHiddenByMe: false, remoteSenderVideoOff };
 
-  /* Auto-follow: prepara canvas solo se FaceDetector supportato (il pulsante è sempre nel footer) */
-  if (isOwn && HAS_FACE_DETECTOR) {
-    const wrap = win.querySelector('.cam-win-video-wrap');
-    if (wrap) {
-      const followCanvas = document.createElement('canvas');
-      followCanvas.className = 'cam-follow-canvas';
-      wrap.appendChild(followCanvas);
-      state.cameraWindows[uid].followCanvas = followCanvas;
-      state.cameraWindows[uid].followEnabled = false;
-      state.cameraWindows[uid].followRaf = null;
-      state.cameraWindows[uid].lastFaceCenter = null;
-    }
-  }
-
   const videoEl = $(`cam-vid-${safeUid}`);
   if (videoEl) {
     videoEl.srcObject = null; videoEl.srcObject = stream;
@@ -283,8 +128,6 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         /* Non smutare mai il video remoto: l'audio deve passare solo da Web Audio (initRemoteVolumeControl) così volume e mute funzionano */
         initRemoteVolumeControl(uid);
       }
-
-      /* L'effetto "ti segue" si attiva solo cliccando il pulsante 🎯 nel footer */
     }).catch(() => {});
     if (!isOwn) {
       /* Indicatore "sta parlando" e volume: avvia subito se c'è audio, così il bordo si illumina anche se play() è in ritardo */
@@ -408,8 +251,6 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       devDrop.addEventListener('click', (e) => e.stopPropagation());
       document.addEventListener('click', () => { if (devDrop) devDrop.hidden = true; });
     }
-    const followBtn = win.querySelector('.cam-follow-btn');
-    if (followBtn) followBtn.addEventListener('click', () => toggleFollowOwnCamera(uid));
     const vBtn   = $(`cam-viewers-btn-${safeId(uid)}`);
     const vPanel = $(`cam-viewers-panel-${safeId(uid)}`);
     if (vBtn && vPanel) {
@@ -511,11 +352,6 @@ export async function closeAllCamerasForUser(userId) {
 export async function closeCameraWindow(uid) {
   /* Check if this camera is in events grid */
   const camWin = state.cameraWindows[uid];
-  /* Stop auto-follow if active */
-  if (camWin?.followRaf) {
-    cancelAnimationFrame(camWin.followRaf);
-    camWin.followRaf = null;
-  }
   stopRemoteSpeakingIndicator(uid);
   closeRemoteVolumeContext(uid);
 
@@ -630,7 +466,6 @@ export function resetCameraStateOnDisconnect() {
   }
   for (const uid of Object.keys(state.cameraWindows)) {
     const cw = state.cameraWindows[uid];
-    if (cw.followRaf) { cancelAnimationFrame(cw.followRaf); cw.followRaf = null; }
     if (cw.streamCheckInterval) { clearInterval(cw.streamCheckInterval); cw.streamCheckInterval = null; }
     if (cw.stream) { cw.stream.getTracks().forEach(t => t.stop()); cw.stream = null; }
     if (cw.isEventsGrid && cw.el?.parentNode) cw.el.remove();
@@ -1331,7 +1166,7 @@ export function initCameraSystem() {
 }
 
 /* ── Public camera request ────────────────────────────────────── */
-export function requestPublicCamera(targetUid) {
+export async function requestPublicCamera(targetUid) {
   const uid    = String(targetUid);
   const target = findUser(uid);
   console.log('[WebRTC-FLOW] CAM-REQ: request camera from', (uid || '').slice(0, 8) + '…', 'target=', (target?.id || '').slice(0, 8) + '…');
@@ -1376,12 +1211,14 @@ export function requestPublicCamera(targetUid) {
   }
   console.log('[Camera Request] Sending camera request to', uid, 'in room', state.activeRoom);
   setPendingCamRequest(uid, 'public', target.name);
-  broadcast('cam-req', uid, { reqType: 'public', room_id: state.activeRoom });
+  let requesterHasForceView = false;
+  try { const { hasPermission } = await import('./permissions.js'); requesterHasForceView = hasPermission('can_view_cam_without_accept'); } catch (_) {}
+  broadcast('cam-req', uid, { reqType: 'public', room_id: state.activeRoom, requesterHasForceView });
   showToast(`📹 Camera request sent to ${target.name}…`);
 }
 
 /* ── Incoming cam/call request ────────────────────────────────── */
-export function handleCamRequest(payload) {
+export async function handleCamRequest(payload) {
   if (payload.to !== state.currentUser?.id) return;
   const fromId   = String(payload.from);
   const fromName = payload.fromName || 'User';
@@ -1420,6 +1257,12 @@ export function handleCamRequest(payload) {
   /* Auto-accept SOLO ed esclusivamente per la stanza Eventi (max_cams 1-8) */
   if (wouldAutoAcceptEvents) {
     console.log('[Events Room] Auto-accepting camera request from', fromName || fromId, '(only for Events room)');
+    sharePublicCameraTo(fromId);
+    return;
+  }
+
+  /* Ruolo con "View cams without accept": solo cam pubblica (stanza). La cam privata richiede sempre accettazione. */
+  if (payload.requesterHasForceView === true && payload.reqType === 'public') {
     sharePublicCameraTo(fromId);
     return;
   }
