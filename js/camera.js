@@ -1226,6 +1226,11 @@ export async function requestPublicCamera(targetUid) {
     return; 
   }
   console.log('[Camera Request] Sending camera request to', uid, 'in room', state.activeRoom);
+  /* L'utente sta chiedendo di nuovo esplicitamente: se prima aveva chiuso manualmente quella cam, permettiamo di riaprirla. */
+  if (state.manuallyClosedCameras[uid]) {
+    delete state.manuallyClosedCameras[uid];
+    console.log('[Camera Request] Clearing manual-close flag for', uid, 'due to explicit new request');
+  }
   setPendingCamRequest(uid, 'public', target.name);
   let requesterHasForceView = false;
   try {

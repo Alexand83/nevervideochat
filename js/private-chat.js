@@ -73,6 +73,11 @@ export function openPrivateChat(uid) {
     if (state.pendingCamRequests?.[String(uid)]) {
       showToast(`⏳ Already waiting for ${user.name}'s reply.`); return;
     }
+    /* Nuova richiesta esplicita: se avevamo chiuso manualmente la sua cam, togli il blocco così può riaprirsi. */
+    if (state.manuallyClosedCameras?.[uid]) {
+      delete state.manuallyClosedCameras[uid];
+      console.log('[PChat] Clearing manual-close flag for', uid, 'due to explicit private cam request');
+    }
     setPendingCamRequest(String(uid), 'private', user.name);
     let requesterHasForceView = false;
     try { const { hasPermission } = await import('./permissions.js'); requesterHasForceView = hasPermission('can_view_cam_without_accept'); } catch (_) {}
