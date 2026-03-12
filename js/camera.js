@@ -1055,6 +1055,7 @@ async function openCameraDeviceDropdown(uid, dropdownEl) {
   dropdownEl.innerHTML = '';
   if (videoDevices.length === 0) {
     dropdownEl.innerHTML = '<div class="cam-device-item cam-device-empty">Nessuna camera</div>';
+    positionDeviceDropdown(uid, dropdownEl);
     return;
   }
   videoDevices.forEach(dev => {
@@ -1071,6 +1072,19 @@ async function openCameraDeviceDropdown(uid, dropdownEl) {
     });
     dropdownEl.appendChild(item);
   });
+  positionDeviceDropdown(uid, dropdownEl);
+}
+
+/** Posiziona il dropdown sopra il bottone con position:fixed così non viene clippato dal footer (overflow-y:hidden). */
+function positionDeviceDropdown(uid, dropdownEl) {
+  const btn = $(`cam-device-btn-${safeId(uid)}`);
+  if (!btn) return;
+  const rect = btn.getBoundingClientRect();
+  dropdownEl.style.position = 'fixed';
+  dropdownEl.style.left = rect.left + 'px';
+  dropdownEl.style.top = (rect.top - dropdownEl.offsetHeight - 6) + 'px';
+  dropdownEl.style.right = 'auto';
+  dropdownEl.style.bottom = 'auto';
 }
 
 async function switchCameraDevice(ownUid, deviceId) {
