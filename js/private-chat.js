@@ -63,7 +63,7 @@ export function openPrivateChat(uid) {
 
   popup.querySelector('.pchat-min-btn').addEventListener('click',   () => minPChat(uid));
   popup.querySelector('.pchat-close-btn').addEventListener('click', () => closePChat(uid));
-  popup.querySelector('.pchat-vcall-btn').addEventListener('click', () => {
+  popup.querySelector('.pchat-vcall-btn').addEventListener('click', async () => {
     if (!_supabaseReady?.()) { showToast('⚠️ Server connection required for video calls.'); return; }
     if (!dom.vcallWin.hidden) { showToast('📹 A video call is already active.'); return; }
     if (isRoomCameraActive()) { showToast('Disattiva prima la cam nella stanza.'); return; }
