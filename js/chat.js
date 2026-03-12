@@ -249,7 +249,7 @@ export async function sendMessage() {
         const { isSessionValid, showDisconnectedOverlay } = await import('./firebase-client.js');
         const isValid = await isSessionValid(state.currentUser.id, sessionId);
         if (!isValid) {
-          showDisconnectedOverlay();
+          showDisconnectedOverlay(true); /* sessione invalidata (es. login altra scheda): modal e reset subito */
           return;
         }
       } catch (err) {

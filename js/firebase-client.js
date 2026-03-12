@@ -760,7 +760,7 @@ export async function connectFirebase() {
         const token = auth.currentUser ? await auth.currentUser.getIdToken().catch(() => null) : null;
         if (!token) return;
         const isValid = await verifySessionImmediately(state.currentUser.id, token);
-        if (!isValid) showDisconnectedOverlay();
+        if (!isValid) showDisconnectedOverlay(true); /* altra scheda: modal e reset subito */
       })
       .subscribe();
 
@@ -778,7 +778,8 @@ export async function connectFirebase() {
           if (disconnectOverlayShown) return;
           const myId = getSavedSessionId();
           if (myId != null && docSessionId != null && docSessionId !== myId) {
-            showDisconnectedOverlay();
+            /* Login in altra scheda: mostra subito modal e resetta tutto, senza grazia */
+            showDisconnectedOverlay(true);
             if (activeSessionUnsubscribe) { activeSessionUnsubscribe(); activeSessionUnsubscribe = null; }
           }
         });
