@@ -221,7 +221,7 @@ export function applyAuthIdentity(id, name, username, avatarUrl, isGuest, themeI
 export function getOrCreateGuestIdentity() {
   try {
     const stored = JSON.parse(localStorage.getItem('nvc_identity') || 'null');
-    if (stored?.id && stored?.name && stored?.isGuest !== false) return stored;
+    if (stored?.id && stored?.name && stored?.isGuest !== false) return { ...stored, hasCamera: false };
   } catch {}
   const id   = `guest_${Math.random().toString(36).slice(2, 10)}`;
   const name = `Guest_${id.slice(6, 12)}`;
@@ -489,10 +489,27 @@ export function updateHeaderUser() {
 }
 
 /* ── Settings modal ────────────────────────────────────────────── */
+function switchSettingsTab(tabId) {
+  const tabs = dom.settingsModal?.querySelectorAll('.settings-tab');
+  const panels = dom.settingsModal?.querySelectorAll('.settings-tab-panel');
+  tabs?.forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tabId);
+    t.setAttribute('aria-selected', t.dataset.tab === tabId ? 'true' : 'false');
+  });
+  panels?.forEach(p => {
+    const show = (p.id === 'settingsPanelBlocked' && tabId === 'blocked') || (p.id === 'settingsPanelNotifications' && tabId === 'notifications');
+    p.classList.toggle('hidden', !show);
+  });
+}
+
 export function initSettingsModal() {
   dom.headerSettingsBtn?.addEventListener('click', openSettingsModal);
   dom.settingsModalClose?.addEventListener('click', () => { dom.settingsModal.hidden = true; });
   dom.settingsModal?.addEventListener('click', e => { if (e.target === dom.settingsModal) dom.settingsModal.hidden = true; });
+
+  dom.settingsModal?.querySelectorAll('.settings-tab').forEach(btn => {
+    btn.addEventListener('click', () => switchSettingsTab(btn.dataset.tab));
+  });
 
   dom.detectDevicesBtn?.addEventListener('click', async () => {
     dom.detectDevicesBtn.textContent = 'Detecting…'; dom.detectDevicesBtn.disabled = true;
@@ -564,6 +581,7 @@ function openSettingsModal() {
   
   renderRejectedCams();
   renderIgnoredUsers();
+  switchSettingsTab('blocked');
   dom.settingsModal.hidden = false;
 }
 

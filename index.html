@@ -658,31 +658,60 @@
       <button class="nvc-modal-close-btn" id="settingsModalClose" aria-label="Close settings">✕</button>
     </div>
 
-    <!-- Blocked camera requests — always shown, JS fills the list -->
-    <div class="settings-section" id="rejectedCamsSection">
-      <h3 class="settings-section-title">🚫 Blocked Camera Senders</h3>
-      <p class="settings-hint">
-        Users whose camera requests <strong>you have rejected</strong>. Their future requests are
-        automatically declined. Click <strong>Unblock</strong> to allow them to request again.
-      </p>
-      <div id="rejectedCamsList" class="rejected-cams-list">
-        <!-- filled by renderRejectedCams() -->
+    <!-- Tab bar -->
+    <div class="settings-tabs" role="tablist">
+      <button type="button" class="settings-tab active" id="settingsTabBlocked" role="tab" aria-selected="true" data-tab="blocked">Blocked &amp; Ignored</button>
+      <button type="button" class="settings-tab" id="settingsTabNotifications" role="tab" aria-selected="false" data-tab="notifications">Notifiche</button>
+    </div>
+
+    <!-- Tab: Blocked & Ignored -->
+    <div class="settings-tab-panel" id="settingsPanelBlocked" role="tabpanel" aria-labelledby="settingsTabBlocked">
+      <div class="settings-section" id="rejectedCamsSection">
+        <h3 class="settings-section-title">🚫 Blocked Camera Senders</h3>
+        <p class="settings-hint">
+          Users whose camera requests <strong>you have rejected</strong>. Their future requests are
+          automatically declined. Click <strong>Unblock</strong> to allow them to request again.
+        </p>
+        <div id="rejectedCamsList" class="rejected-cams-list">
+          <!-- filled by renderRejectedCams() -->
+        </div>
+      </div>
+      <div class="settings-section" id="ignoredUsersSection">
+        <h3 class="settings-section-title">🔇 Ignored Users</h3>
+        <p class="settings-hint">
+          Ignored users' messages are hidden in public chat and private messages.
+          Their camera access to you is also revoked. Click <strong>Unignore</strong> to restore.
+        </p>
+        <div id="ignoredUsersList" class="rejected-cams-list">
+          <!-- filled by renderIgnoredUsers() -->
+        </div>
       </div>
     </div>
 
-    <!-- Ignored users — always shown, JS fills the list -->
-    <div class="settings-section" id="ignoredUsersSection">
-      <h3 class="settings-section-title">🔇 Ignored Users</h3>
-      <p class="settings-hint">
-        Ignored users' messages are hidden in public chat and private messages.
-        Their camera access to you is also revoked. Click <strong>Unignore</strong> to restore.
-      </p>
-      <div id="ignoredUsersList" class="rejected-cams-list">
-        <!-- filled by renderIgnoredUsers() -->
+    <!-- Tab: Notifiche -->
+    <div class="settings-tab-panel hidden" id="settingsPanelNotifications" role="tabpanel" aria-labelledby="settingsTabNotifications">
+      <div class="settings-section">
+        <h3 class="settings-section-title">🔔 Suoni</h3>
+        <label class="settings-label settings-check">
+          <input type="checkbox" id="settingsSoundChat" checked>
+          <span>Suono per nuovi messaggi in chat</span>
+        </label>
+        <label class="settings-label settings-check">
+          <input type="checkbox" id="settingsSoundPM" checked>
+          <span>Suono per messaggi privati</span>
+        </label>
+      </div>
+      <div class="settings-section">
+        <h3 class="settings-section-title">🖼️ Immagini in chat</h3>
+        <label class="settings-label settings-check">
+          <input type="checkbox" id="settingsAutoLoadImages" checked>
+          <span>Carica automaticamente le immagini inviate dagli utenti</span>
+        </label>
+        <p class="settings-hint">Se disattivato, le immagini restano nascoste fino al click.</p>
       </div>
     </div>
 
-    <!-- Language & Theme section -->
+    <!-- Language & Theme section (sempre visibile) -->
     <div class="settings-section">
       <h3 class="settings-section-title">🌐 Language &amp; Theme</h3>
 
@@ -701,23 +730,6 @@
         <option value="blue">🔵 Blue</option>
         <option value="purple">🟣 Purple</option>
       </select>
-    </div>
-
-    <!-- Chat & Notifications -->
-    <div class="settings-section">
-      <h3 class="settings-section-title">💬 Chat &amp; Notifications</h3>
-      <label class="settings-label settings-check">
-        <input type="checkbox" id="settingsAutoLoadImages" checked>
-        <span>Auto-display images in chat</span>
-      </label>
-      <label class="settings-label settings-check">
-        <input type="checkbox" id="settingsSoundChat" checked>
-        <span>Sound for new chat messages</span>
-      </label>
-      <label class="settings-label settings-check">
-        <input type="checkbox" id="settingsSoundPM" checked>
-        <span>Sound for private messages</span>
-      </label>
     </div>
 
     <!-- Webcam & Audio section -->

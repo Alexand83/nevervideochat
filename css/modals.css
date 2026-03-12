@@ -343,6 +343,33 @@
 /* ── SETTINGS MODAL specific ── */
 .settings-modal { max-width: 420px; }
 
+/* Settings tab bar */
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: var(--s4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.settings-tab {
+  flex: 1;
+  padding: var(--s2) var(--s3);
+  font-size: var(--fz-xs);
+  font-weight: 600;
+  color: var(--tx2);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--tf), border-color var(--tf);
+}
+.settings-tab:hover { color: var(--tx1); }
+.settings-tab.active {
+  color: var(--accent-h);
+  border-bottom-color: var(--accent);
+}
+.settings-tab-panel { margin-bottom: var(--s4); }
+.settings-tab-panel.hidden { display: none; }
+
 .settings-section { margin-bottom: var(--s5); }
 
 .settings-section-title {

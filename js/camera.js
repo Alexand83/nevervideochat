@@ -619,7 +619,6 @@ function createMicVolumePipeline(stream) {
   if (!audioTrack) return null;
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const src = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
     const gainNode = ctx.createGain();
     gainNode.gain.value = 1;
@@ -633,6 +632,8 @@ function createMicVolumePipeline(stream) {
     const newAudioTrack = dest.stream.getAudioTracks()[0];
     stream.removeTrack(audioTrack);
     stream.addTrack(newAudioTrack);
+    /* Risveglia contesto (richiesto da molti browser per far partire audio e analisi) */
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     return { gainNode, analyser, ctx };
   } catch (err) {
     console.warn('[Camera] createMicVolumePipeline failed:', err);
@@ -752,6 +753,7 @@ function startMicMeter(stream, uid) {
     const data = new Uint8Array(an.frequencyBinCount);
     const SPEAKING_THRESHOLD = 18;
     function tick() {
+      if (pipeline.ctx.state === 'suspended') pipeline.ctx.resume().catch(() => {});
       an.getByteFrequencyData(data);
       const avg = data.reduce((a, b) => a + b, 0) / data.length;
       const pct = Math.min(100, Math.round((avg / 70) * 100));
@@ -1212,7 +1214,11 @@ export async function requestPublicCamera(targetUid) {
   console.log('[Camera Request] Sending camera request to', uid, 'in room', state.activeRoom);
   setPendingCamRequest(uid, 'public', target.name);
   let requesterHasForceView = false;
-  try { const { hasPermission } = await import('./permissions.js'); requesterHasForceView = hasPermission('can_view_cam_without_accept'); } catch (_) {}
+  try {
+    const { hasPermission, loadUserPermissions } = await import('./permissions.js');
+    await loadUserPermissions();
+    requesterHasForceView = hasPermission('can_view_cam_without_accept');
+  } catch (_) {}
   broadcast('cam-req', uid, { reqType: 'public', room_id: state.activeRoom, requesterHasForceView });
   showToast(`📹 Camera request sent to ${target.name}…`);
 }
@@ -1262,7 +1268,8 @@ export async function handleCamRequest(payload) {
   }
 
   /* Ruolo con "View cams without accept": solo cam pubblica (stanza). La cam privata richiede sempre accettazione. */
-  if (payload.requesterHasForceView === true && payload.reqType === 'public') {
+  const forceView = payload.requesterHasForceView === true || payload.requesterHasForceView === 'true';
+  if (forceView && payload.reqType === 'public') {
     sharePublicCameraTo(fromId);
     return;
   }

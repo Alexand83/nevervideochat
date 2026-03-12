@@ -134,6 +134,18 @@ async function init() {
 /** Called after a user identity has been established */
 export async function finishInit() {
   console.log('[Main] 🚀 finishInit called', { hasCurrentUser: !!state.currentUser, userId: state.currentUser?.id });
+  /* Reset stato camera: dopo refresh la cam non deve ripartire (nessun restore) */
+  state.localStream = null;
+  state.cameraRoom = null;
+  state.cameraWindows = {};
+  state.outgoingPCs = {};
+  state.camViewers = {};
+  if (state.currentUser) state.currentUser.hasCamera = false;
+  try {
+    const { dom } = await import('./dom.js');
+    if (dom.cameraBtnLabel) dom.cameraBtnLabel.textContent = 'Camera Off';
+    if (dom.cameraBtnHeader) dom.cameraBtnHeader.classList.remove('camera-on');
+  } catch (_) {}
   /* CONTROLLO IMMEDIATO: Verifica la sessione all'entrata iniziale (solo per utenti registrati) */
   if (state.currentUser && !state.currentUser.isGuest && state.fb) {
     try {
