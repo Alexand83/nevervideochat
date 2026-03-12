@@ -32,10 +32,22 @@ export function applyRichTextSettings(settings) {
   }
   if (dom.colorPicker) dom.colorPicker.value = state.currentColor;
   if (dom.fontSizeSelect) dom.fontSizeSelect.value = state.fontSize;
+  syncMsgInputRichTextStyle();
 }
 
 function persistRichTextToLocalStorage() {
   saveDeviceSettings({ ...loadDeviceSettings(), isBold: state.isBold, currentColor: state.currentColor, fontSize: state.fontSize });
+}
+
+/** Mappa valore toolbar (1–5) a px per l’input: così il testo digitato eredita colore/dimensione/grassetto. */
+const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
+
+/** Applica colore, grandezza e grassetto allo stile dell’area messaggio così ciò che si scrive corrisponde alla toolbar. */
+function syncMsgInputRichTextStyle() {
+  if (!dom.msgInput) return;
+  dom.msgInput.style.color = state.currentColor || '';
+  dom.msgInput.style.fontSize = FONT_SIZE_PX[state.fontSize] || '14px';
+  dom.msgInput.style.fontWeight = state.isBold ? 'bold' : 'normal';
 }
 
 export function initToolbar() {
@@ -44,16 +56,19 @@ export function initToolbar() {
     dom.boldBtn.setAttribute('aria-pressed', String(state.isBold));
     dom.boldBtn.classList.toggle('active', state.isBold);
     persistRichTextToLocalStorage();
+    syncMsgInputRichTextStyle();
     dom.msgInput.focus(); document.execCommand('bold');
   });
   dom.colorPicker.addEventListener('input', e => {
     state.currentColor = e.target.value;
     persistRichTextToLocalStorage();
+    syncMsgInputRichTextStyle();
     dom.msgInput.focus(); document.execCommand('foreColor', false, state.currentColor);
   });
   dom.fontSizeSelect.addEventListener('change', e => {
     state.fontSize = e.target.value;
     persistRichTextToLocalStorage();
+    syncMsgInputRichTextStyle();
     dom.msgInput.focus();
     
     /* Enable CSS styling */
