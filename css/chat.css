@@ -222,6 +222,7 @@
   flex: 1;
   min-width: 0;
 }
+/* Rich text (colore, grandezza, grassetto) nei messaggi: gli span con style hanno priorità */
 .msg-text:empty { display: none; }
 
 /* Images inside bubble */

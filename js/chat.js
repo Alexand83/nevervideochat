@@ -312,6 +312,15 @@ export async function sendMessage() {
   const hasImage = !!state.pendingImage;
   if (!hasText && !hasImage) return;
   if (!hasText) html = '';
+
+  /* Se il messaggio è solo testo (nessun span/font/b/strong), avvolgi con lo stile rich-text corrente così nel feed si vede colore/dimensione/grassetto */
+  const hasRichTags = /<(span|font)[\s>]|<b[\s>]|<\/b>|<strong[\s>]|<\/strong>/i.test(html);
+  if (hasText && html && !hasRichTags) {
+    const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
+    const px = FONT_SIZE_PX[state.fontSize] || '14px';
+    const style = `color:${state.currentColor || 'inherit'};font-size:${px};font-weight:${state.isBold ? 'bold' : 'normal'};`;
+    html = `<span style="${style}">${html}</span>`;
+  }
   
   /* Security: Validate message length to prevent DoS */
   const { MAX_MESSAGE_LENGTH } = await import('./config.js');
