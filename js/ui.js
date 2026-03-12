@@ -50,6 +50,17 @@ function syncMsgInputRichTextStyle() {
   dom.msgInput.style.fontWeight = state.isBold ? 'bold' : 'normal';
 }
 
+/** Dopo execCommand fontSize il browser crea span/font senza colore: riapplica colore e grassetto a tutti gli elementi con stile. */
+function applyColorAndBoldToRichNodes() {
+  if (!dom.msgInput) return;
+  const color = state.currentColor || '';
+  const weight = state.isBold ? 'bold' : 'normal';
+  dom.msgInput.querySelectorAll('span[style], font').forEach(el => {
+    el.style.color = color;
+    el.style.fontWeight = weight;
+  });
+}
+
 export function initToolbar() {
   dom.boldBtn.addEventListener('click', () => {
     state.isBold = !state.isBold;
@@ -79,22 +90,23 @@ export function initToolbar() {
     const execValue = state.fontSize === '5' ? '7' : state.fontSize;
     document.execCommand('fontSize', false, execValue);
     
-    /* For X-Large, immediately replace the <font size="7"> with a <span style="font-size: 24px"> */
-    if (state.fontSize === '5') {
-      /* Use requestAnimationFrame to ensure the font tag is created first */
-      requestAnimationFrame(() => {
+    /* execCommand crea span/font senza colore: riapplica colore e grassetto così non torna bianco */
+    requestAnimationFrame(() => {
+      if (state.fontSize === '5') {
         const fontTags = dom.msgInput.querySelectorAll('font[size="7"]');
         fontTags.forEach(font => {
-          /* Only replace if it doesn't already have a style override */
           if (!font.style.fontSize) {
             const span = document.createElement('span');
             span.style.fontSize = '24px';
+            span.style.color = state.currentColor || '';
+            span.style.fontWeight = state.isBold ? 'bold' : 'normal';
             span.innerHTML = font.innerHTML;
             font.parentNode.replaceChild(span, font);
           }
         });
-      });
-    }
+      }
+      applyColorAndBoldToRichNodes();
+    });
   });
   dom.msgInput.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); dom.boldBtn.click(); }
