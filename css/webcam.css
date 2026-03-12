@@ -141,14 +141,9 @@
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
 }
-.cam-win-footer .cam-follow-btn {
-  display: none;
-}
-.cam-window.cam-has-follow .cam-win-footer {
+/* Pulsante "Ti segue" sempre visibile nella propria cam; griglia a 5 colonne */
+.cam-win-footer:has(.cam-follow-btn) {
   grid-template-columns: auto auto auto auto 1fr;  /* [mic][video][device][ti-segue] [volume=resto] */
-}
-.cam-window.cam-has-follow .cam-follow-btn {
-  display: flex;
 }
 .cam-follow-btn[aria-pressed="true"] {
   color: var(--accent-h);

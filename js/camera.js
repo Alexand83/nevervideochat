@@ -137,7 +137,11 @@ function stopFollowOwnCamera(uid) {
 
 function toggleFollowOwnCamera(uid) {
   const cw = state.cameraWindows[uid];
-  if (!cw || !HAS_FACE_DETECTOR || !cw.followCanvas) return;
+  if (!cw) return;
+  if (!HAS_FACE_DETECTOR || !cw.followCanvas) {
+    showToast('L\'effetto "Ti segue" richiede Chrome o un browser che supporta il rilevamento del volto.');
+    return;
+  }
   if (cw.followEnabled) {
     stopFollowOwnCamera(uid);
   } else {
@@ -253,9 +257,8 @@ export function createCameraWindow(uid, stream, name, isOwn) {
   const remoteSenderVideoOff = !isOwn && !!state.remoteVideoOffState?.[uid];
   state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true, videoOff: false, videoHiddenByMe: false, remoteSenderVideoOff };
 
-  /* Auto-follow: prepara canvas e mostra pulsante solo se FaceDetector supportato */
+  /* Auto-follow: prepara canvas solo se FaceDetector supportato (il pulsante è sempre nel footer) */
   if (isOwn && HAS_FACE_DETECTOR) {
-    win.classList.add('cam-has-follow');
     const wrap = win.querySelector('.cam-win-video-wrap');
     if (wrap) {
       const followCanvas = document.createElement('canvas');
