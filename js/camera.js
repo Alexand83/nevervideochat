@@ -2209,6 +2209,9 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
   /* ── Store reference ── */
   state.cameraWindows[uid] = { el: targetSlot, stream, isOwn, micEnabled: true, isEventsGrid: true };
 
+  /* CRITICO: per la propria cam in Eventi avvia il mic meter: tiene vivo l'AudioContext (altrimenti si sospende e il mic si stacca dopo ~0.5s) */
+  if (isOwn) startMicMeter(stream, uid);
+
   /* ── Update grid layout ── */
   import('./rooms.js').then(({ updateEventsCamGrid }) => updateEventsCamGrid());
 }
