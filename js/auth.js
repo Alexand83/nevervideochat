@@ -496,9 +496,9 @@ function switchSettingsTab(tabId) {
     t.classList.toggle('active', t.dataset.tab === tabId);
     t.setAttribute('aria-selected', t.dataset.tab === tabId ? 'true' : 'false');
   });
+  const panelId = `settingsPanel${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`;
   panels?.forEach(p => {
-    const show = (p.id === 'settingsPanelBlocked' && tabId === 'blocked') || (p.id === 'settingsPanelNotifications' && tabId === 'notifications');
-    p.classList.toggle('hidden', !show);
+    p.classList.toggle('hidden', p.id !== panelId);
   });
 }
 
@@ -581,7 +581,7 @@ function openSettingsModal() {
   
   renderRejectedCams();
   renderIgnoredUsers();
-  switchSettingsTab('blocked');
+  switchSettingsTab('general');
   dom.settingsModal.hidden = false;
 }
 

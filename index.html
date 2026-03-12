@@ -660,35 +660,34 @@
 
     <!-- Tab bar -->
     <div class="settings-tabs" role="tablist">
-      <button type="button" class="settings-tab active" id="settingsTabBlocked" role="tab" aria-selected="true" data-tab="blocked">Blocked &amp; Ignored</button>
+      <button type="button" class="settings-tab active" id="settingsTabGeneral" role="tab" aria-selected="true" data-tab="general">Generale</button>
       <button type="button" class="settings-tab" id="settingsTabNotifications" role="tab" aria-selected="false" data-tab="notifications">Notifiche</button>
+      <button type="button" class="settings-tab" id="settingsTabWebcam" role="tab" aria-selected="false" data-tab="webcam">Webcam / Audio</button>
+      <button type="button" class="settings-tab" id="settingsTabBlocked" role="tab" aria-selected="false" data-tab="blocked">Ignorati o bloccati</button>
     </div>
 
-    <!-- Tab: Blocked & Ignored -->
-    <div class="settings-tab-panel" id="settingsPanelBlocked" role="tabpanel" aria-labelledby="settingsTabBlocked">
-      <div class="settings-section" id="rejectedCamsSection">
-        <h3 class="settings-section-title">🚫 Blocked Camera Senders</h3>
-        <p class="settings-hint">
-          Users whose camera requests <strong>you have rejected</strong>. Their future requests are
-          automatically declined. Click <strong>Unblock</strong> to allow them to request again.
-        </p>
-        <div id="rejectedCamsList" class="rejected-cams-list">
-          <!-- filled by renderRejectedCams() -->
-        </div>
-      </div>
-      <div class="settings-section" id="ignoredUsersSection">
-        <h3 class="settings-section-title">🔇 Ignored Users</h3>
-        <p class="settings-hint">
-          Ignored users' messages are hidden in public chat and private messages.
-          Their camera access to you is also revoked. Click <strong>Unignore</strong> to restore.
-        </p>
-        <div id="ignoredUsersList" class="rejected-cams-list">
-          <!-- filled by renderIgnoredUsers() -->
-        </div>
+    <!-- Tab: Generale — solo Lingua e Tema -->
+    <div class="settings-tab-panel" id="settingsPanelGeneral" role="tabpanel" aria-labelledby="settingsTabGeneral">
+      <div class="settings-section">
+        <h3 class="settings-section-title">🌐 Lingua e tema</h3>
+        <label class="settings-label" for="languageSelect">Lingua</label>
+        <select class="settings-select" id="languageSelect">
+          <option value="it">🇮🇹 Italiano</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="es">🇪🇸 Español</option>
+          <option value="de">🇩🇪 Deutsch</option>
+        </select>
+        <label class="settings-label" for="themeSelect">Tema</label>
+        <select class="settings-select" id="themeSelect">
+          <option value="dark">🌙 Dark</option>
+          <option value="light">☀️ Light</option>
+          <option value="blue">🔵 Blue</option>
+          <option value="purple">🟣 Purple</option>
+        </select>
       </div>
     </div>
 
-    <!-- Tab: Notifiche -->
+    <!-- Tab: Notifiche — suoni e caricamento immagini -->
     <div class="settings-tab-panel hidden" id="settingsPanelNotifications" role="tabpanel" aria-labelledby="settingsTabNotifications">
       <div class="settings-section">
         <h3 class="settings-section-title">🔔 Suoni</h3>
@@ -705,54 +704,56 @@
         <h3 class="settings-section-title">🖼️ Immagini in chat</h3>
         <label class="settings-label settings-check">
           <input type="checkbox" id="settingsAutoLoadImages" checked>
-          <span>Carica automaticamente le immagini inviate dagli utenti</span>
+          <span>Caricamento automatico delle immagini inviate dagli utenti</span>
         </label>
         <p class="settings-hint">Se disattivato, le immagini restano nascoste fino al click.</p>
       </div>
     </div>
 
-    <!-- Language & Theme section (sempre visibile) -->
-    <div class="settings-section">
-      <h3 class="settings-section-title">🌐 Language &amp; Theme</h3>
-
-      <label class="settings-label" for="languageSelect">Language</label>
-      <select class="settings-select" id="languageSelect">
-        <option value="it">🇮🇹 Italiano</option>
-        <option value="en">🇬🇧 English</option>
-        <option value="es">🇪🇸 Español</option>
-        <option value="de">🇩🇪 Deutsch</option>
-      </select>
-
-      <label class="settings-label" for="themeSelect">Theme</label>
-      <select class="settings-select" id="themeSelect">
-        <option value="dark">🌙 Dark</option>
-        <option value="light">☀️ Light</option>
-        <option value="blue">🔵 Blue</option>
-        <option value="purple">🟣 Purple</option>
-      </select>
+    <!-- Tab: Webcam / Audio -->
+    <div class="settings-tab-panel hidden" id="settingsPanelWebcam" role="tabpanel" aria-labelledby="settingsTabWebcam">
+      <div class="settings-section">
+        <h3 class="settings-section-title">📷 Webcam e microfono</h3>
+        <label class="settings-label" for="cameraDeviceSelect">Camera</label>
+        <select class="settings-select" id="cameraDeviceSelect">
+          <option value="">Default camera</option>
+        </select>
+        <label class="settings-label" for="micDeviceSelect">Microfono</label>
+        <select class="settings-select" id="micDeviceSelect">
+          <option value="">Default microphone</option>
+        </select>
+        <button class="auth-btn-ghost settings-detect-btn" id="detectDevicesBtn" type="button">
+          🔍 Detect Devices
+        </button>
+        <p class="settings-hint" id="detectDevicesHint">
+          Click "Detect Devices" to list your cameras and microphones.<br>
+          Browser permission for camera/mic is required.
+        </p>
+      </div>
     </div>
 
-    <!-- Webcam & Audio section -->
-    <div class="settings-section">
-      <h3 class="settings-section-title">📷 Webcam &amp; Audio</h3>
-
-      <label class="settings-label" for="cameraDeviceSelect">Camera</label>
-      <select class="settings-select" id="cameraDeviceSelect">
-        <option value="">Default camera</option>
-      </select>
-
-      <label class="settings-label" for="micDeviceSelect">Microphone</label>
-      <select class="settings-select" id="micDeviceSelect">
-        <option value="">Default microphone</option>
-      </select>
-
-      <button class="auth-btn-ghost settings-detect-btn" id="detectDevicesBtn" type="button">
-        🔍 Detect Devices
-      </button>
-      <p class="settings-hint" id="detectDevicesHint">
-        Click "Detect Devices" to list your cameras and microphones.<br>
-        Browser permission for camera/mic is required.
-      </p>
+    <!-- Tab: Ignorati o bloccati -->
+    <div class="settings-tab-panel hidden" id="settingsPanelBlocked" role="tabpanel" aria-labelledby="settingsTabBlocked">
+      <div class="settings-section" id="rejectedCamsSection">
+        <h3 class="settings-section-title">🚫 Richieste cam bloccate</h3>
+        <p class="settings-hint">
+          Utenti le cui richieste di camera <strong>hai rifiutato</strong>. Le prossime richieste vengono
+          rifiutate automaticamente. Clicca <strong>Unblock</strong> per consentirle di nuovo.
+        </p>
+        <div id="rejectedCamsList" class="rejected-cams-list">
+          <!-- filled by renderRejectedCams() -->
+        </div>
+      </div>
+      <div class="settings-section" id="ignoredUsersSection">
+        <h3 class="settings-section-title">🔇 Utenti ignorati</h3>
+        <p class="settings-hint">
+          I messaggi degli utenti ignorati sono nascosti in chat pubblica e privata.
+          Anche l'accesso alla loro camera verso di te è revocato. Clicca <strong>Unignore</strong> per ripristinare.
+        </p>
+        <div id="ignoredUsersList" class="rejected-cams-list">
+          <!-- filled by renderIgnoredUsers() -->
+        </div>
+      </div>
     </div>
 
     <!-- Save -->
