@@ -68,22 +68,11 @@ export function loadDeviceSettings() {
 export function saveDeviceSettings(settings) {
   localStorage.setItem('nvc_device_settings', JSON.stringify(settings));
 }
-/** Profilo video ottimizzato per connessioni scadenti: risoluzione e fps contenuti così tutti riescono a vedere. */
-const VIDEO_CONSTRAINTS_LOW = {
-  width:  { ideal: 640, max: 1280 },
-  height: { ideal: 360, max: 720 },
-  frameRate: { ideal: 15, max: 24 },
-};
-
 export function getMediaConstraints() {
   const s = state.settings || {};
-  /* ideal invece di exact: se il dispositivo salvato non c'è più (mic/cam disconnessi) il browser usa un altro e audio/video partono */
-  const videoBase = s.cameraId
-    ? { deviceId: { ideal: s.cameraId }, ...VIDEO_CONSTRAINTS_LOW }
-    : VIDEO_CONSTRAINTS_LOW;
-  const audioBase = s.micId ? { deviceId: { ideal: s.micId } } : true;
+  /* Niente limiti risoluzione/fps: massima compatibilità. ideal per deviceId così se il dispositivo non c'è il browser ne sceglie un altro. */
   return {
-    video: videoBase,
-    audio: audioBase,
+    video: s.cameraId ? { deviceId: { ideal: s.cameraId } } : true,
+    audio: s.micId ? { deviceId: { ideal: s.micId } } : true,
   };
 }
