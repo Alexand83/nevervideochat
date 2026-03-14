@@ -931,6 +931,21 @@ async function initRemoteVolumeControl(uid) {
       remoteGain.connect(remoteCtx.destination);
       video.muted = true; /* audio da Web Audio, non dal video */
 
+      /* I browser richiedono un gesto utente per far partire l'audio: al primo click sulla finestra cam remota riprendi il contesto */
+      if (remoteCtx.state === 'suspended' && cw.el) {
+        const resumeOnce = () => {
+          remoteCtx.resume().then(() => {
+            showToast('🔊 Audio attivato');
+          }).catch(() => {});
+          cw.el.removeEventListener('click', resumeOnce);
+          cw.el.removeEventListener('touchstart', resumeOnce);
+        };
+        cw.el.addEventListener('click', resumeOnce, { once: true });
+        cw.el.addEventListener('touchstart', resumeOnce, { once: true });
+        /* Fallback: anche al primo click ovunque sulla pagina (es. chat) riprendi tutti i contesti sospesi */
+        scheduleResumeRemoteAudioOnce();
+      }
+
       /* stesso stream per indicatore "sta parlando" + tick tiene vivo il contesto (altrimenti audio si stacca dopo ~1s) */
       analyser = remoteCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -1012,6 +1027,23 @@ async function initRemoteVolumeControl(uid) {
       document.addEventListener('touchend', end);
     });
   }
+}
+
+let _remoteAudioResumeScheduled = false;
+function scheduleResumeRemoteAudioOnce() {
+  if (_remoteAudioResumeScheduled) return;
+  _remoteAudioResumeScheduled = true;
+  const handler = () => {
+    Object.keys(state.cameraWindows || {}).forEach(uid => {
+      const cw = state.cameraWindows[uid];
+      const ctx = cw?.remoteVolumeCtx;
+      if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    });
+    document.removeEventListener('click', handler);
+    document.removeEventListener('touchstart', handler);
+  };
+  document.addEventListener('click', handler, { once: true });
+  document.addEventListener('touchstart', handler, { once: true });
 }
 
 function closeRemoteVolumeContext(uid) {
@@ -1372,6 +1404,15 @@ export async function sharePublicCameraTo(toUid) {
       const msSince = Date.now() - state.cameraClosedAt;
       if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
       state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
+      /* Se per qualche motivo non c'è audio (dispositivo non disponibile ecc.), riprova solo il microfono e aggiungilo */
+      if (!state.localStream.getAudioTracks().length) {
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          const audioTrack = audioStream.getAudioTracks()[0];
+          if (audioTrack) state.localStream.addTrack(audioTrack);
+          /* non fare stop sul track: è ora condiviso con localStream */
+        } catch (e) { console.warn('[Camera] Fallback audio request failed:', e); }
+      }
       state.micPipeline = (await createMicVolumePipeline(state.localStream)) || null;
       state.currentUser.hasCamera = true;
       state.cameraRoom = state.activeRoom;
