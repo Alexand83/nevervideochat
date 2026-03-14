@@ -68,10 +68,21 @@ export function loadDeviceSettings() {
 export function saveDeviceSettings(settings) {
   localStorage.setItem('nvc_device_settings', JSON.stringify(settings));
 }
+/** Profilo video ottimizzato per connessioni scadenti: risoluzione e fps contenuti così tutti riescono a vedere. */
+const VIDEO_CONSTRAINTS_LOW = {
+  width:  { ideal: 640, max: 1280 },
+  height: { ideal: 360, max: 720 },
+  frameRate: { ideal: 15, max: 24 },
+};
+
 export function getMediaConstraints() {
   const s = state.settings || {};
+  const videoBase = s.cameraId
+    ? { deviceId: { exact: s.cameraId }, ...VIDEO_CONSTRAINTS_LOW }
+    : VIDEO_CONSTRAINTS_LOW;
+  const audioBase = s.micId ? { deviceId: { exact: s.micId } } : true;
   return {
-    video: s.cameraId ? { deviceId: { exact: s.cameraId } } : true,
-    audio: s.micId    ? { deviceId: { exact: s.micId    } } : true,
+    video: videoBase,
+    audio: audioBase,
   };
 }

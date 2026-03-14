@@ -115,7 +115,7 @@
   background: var(--bg2);
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: auto auto auto 1fr;  /* [mic][video][device] [volume=resto] */
+  grid-template-columns: auto auto auto 1fr auto;  /* [mic][video][device][volume][qualità] */
   align-items: center;
   gap: var(--s2);
   flex-shrink: 0;
@@ -125,6 +125,24 @@
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+}
+.cam-quality-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-shrink: 0;
+  min-width: 0;
+}
+.cam-quality-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tx1);
+  white-space: nowrap;
+}
+.cam-quality-btn {
+  font-size: 10px;
+  padding: 4px 6px;
+  min-width: 0;
 }
 .cam-win-footer-remote {
   grid-template-columns: auto auto 1fr;  /* [hide][mute] [volume=resto] */

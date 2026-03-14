@@ -18,6 +18,10 @@ function camCount() { return Object.keys(state.cameraWindows).length; }
 /** Per evitare XSS/breakout in id HTML: solo caratteri sicuri */
 function safeId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '') || 'u'; }
 
+/** Qualità video adattiva: livello corrente e flag "forzata bassa" (pulsante Riduci qualità) */
+let currentEncodingLevel = 'low';
+let forceLowQuality = false;
+
 /** True se la cam è attiva nella stanza (per obbligare a disattivarla prima della videochiamata privata). */
 export function isRoomCameraActive() {
   return !!(state.localStream && state.cameraRoom != null);
@@ -79,6 +83,10 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       <div class="mic-volume-section mic-volume-vertical" id="mic-volume-wrap-${safeUid}" title="Volume microfono: trascina la pallina">
         <div class="mic-volume-track"><div class="mic-volume-fill" id="mic-fill-${safeUid}"></div><div class="mic-volume-thumb" id="mic-thumb-${safeUid}"></div></div>
       </div>
+      <span class="cam-quality-wrap" id="cam-quality-wrap-${safeUid}">
+        <span class="cam-quality-label" id="cam-quality-label-${safeUid}" title="Qualità video inviata">Bassa</span>
+        <button type="button" class="cam-ctrl-btn cam-quality-btn" id="cam-quality-btn-${safeUid}" title="Riduci qualità per connessioni lente">Riduci qualità</button>
+      </span>
     </div>` : `
     <div class="cam-win-footer cam-win-footer-remote">
       <button class="cam-ctrl-btn cam-remote-hide-video-btn" id="cam-remote-hide-video-${safeUid}" type="button" title="Nascondi video" aria-label="Nascondi video" aria-pressed="false">
@@ -260,6 +268,28 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       });
       document.addEventListener('click', () => { if (vPanel) vPanel.hidden = true; });
     }
+    updateCamQualityUI(currentEncodingLevel);
+    const qualityBtn = $(`cam-quality-btn-${safeId(uid)}`);
+    if (qualityBtn) {
+      qualityBtn.addEventListener('click', () => {
+        forceLowQuality = !forceLowQuality;
+        if (forceLowQuality) {
+          Object.keys(state.outgoingPCs).forEach(peerId => {
+            const pc = state.outgoingPCs[peerId];
+            clearEncodingRampTimer(pc);
+            applyVideoEncoding(pc, 'low');
+          });
+          updateCamQualityUI('low');
+          showToast('📉 Qualità video ridotta per connessioni lente.');
+        } else {
+          Object.keys(state.outgoingPCs).forEach(peerId => {
+            applyVideoEncoding(state.outgoingPCs[peerId], currentEncodingLevel);
+          });
+          updateCamQualityUI(currentEncodingLevel);
+          showToast('📈 Ripristinato aumento automatico qualità.');
+        }
+      });
+    }
   } else {
     /* Cam remota: pulsante "Nascondi video" (solo audio) */
     const hideVideoBtn = $(`cam-remote-hide-video-${safeId(uid)}`);
@@ -310,6 +340,7 @@ export function revokeViewer(viewerUid) {
   const uid  = String(viewerUid);
   const name = state.camViewers[uid] || findUser(uid)?.name || 'User';
   if (state.outgoingPCs[uid]) {
+    clearEncodingRampTimer(state.outgoingPCs[uid]);
     try { state.outgoingPCs[uid].close(); } catch {}
     delete state.outgoingPCs[uid];
   }
@@ -388,6 +419,7 @@ export async function closeCameraWindow(uid) {
       state.cameraClosedAt = Date.now();
       state.cameraRoom = null;
       Object.keys(state.outgoingPCs).forEach(peerId => {
+        clearEncodingRampTimer(state.outgoingPCs[peerId]);
         state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
       });
       state.currentUser.hasCamera = false;
@@ -421,6 +453,7 @@ export async function closeCameraWindow(uid) {
     state.cameraClosedAt = Date.now();
     state.cameraRoom = null;
     Object.keys(state.outgoingPCs).forEach(peerId => {
+      clearEncodingRampTimer(state.outgoingPCs[peerId]);
       state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
     });
     state.currentUser.hasCamera = false;
@@ -457,6 +490,7 @@ export function resetCameraStateOnDisconnect() {
   state.cameraRoom = null;
   state.cameraClosedAt = 0;
   for (const uid of Object.keys(state.outgoingPCs)) {
+    clearEncodingRampTimer(state.outgoingPCs[uid]);
     try { state.outgoingPCs[uid].close(); } catch (_) {}
     delete state.outgoingPCs[uid];
   }
@@ -597,6 +631,7 @@ export async function toggleOwnCamera() {
       state.cameraClosedAt = Date.now();
       state.cameraRoom = null;
       Object.keys(state.outgoingPCs).forEach(peerId => {
+        clearEncodingRampTimer(state.outgoingPCs[peerId]);
         state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
       });
       state.currentUser.hasCamera = false;
@@ -1350,6 +1385,7 @@ export async function sharePublicCameraTo(toUid) {
     if (state.outgoingPCs[toUid]) {
       console.log('[WebRTC-FLOW] OUTGOING: close existing for', (toUid || '').slice(0, 8) + '…');
       const oldPc = state.outgoingPCs[toUid];
+      clearEncodingRampTimer(oldPc);
       oldPc.close();
       delete state.outgoingPCs[toUid];
     }
@@ -1368,10 +1404,13 @@ export async function sharePublicCameraTo(toUid) {
     };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    applyVideoEncoding(pc, 'low');
+    updateCamQualityUI('low');
+    startEncodingRampUp(pc, toUid);
     console.log('[WebRTC-FLOW] OUTGOING: send offer to', (toUid || '').slice(0, 8) + '…', 'sdpLen=', offer.sdp?.length);
     broadcast('webrtc', toUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'public', room_id: state.cameraRoom });
     broadcast('cam-accepted', toUid, {});
-    
+
     const viewerUser = findUser(toUid);
     state.camViewers[toUid] = viewerUser?.username || viewerUser?.name || toUid;
     refreshViewersPanel(state.currentUser.id);
@@ -1388,6 +1427,7 @@ export async function sharePublicCameraTo(toUid) {
           .catch(err => console.warn('[WebRTC] ICE restart offer failed:', err));
       }
       if (['disconnected','failed','closed'].includes(pc.connectionState)) {
+        clearEncodingRampTimer(pc);
         delete state.camViewers[toUid]; refreshViewersPanel(state.currentUser?.id);
       }
     });
@@ -1395,6 +1435,68 @@ export async function sharePublicCameraTo(toUid) {
       console.log('[WebRTC] Outgoing ICE connection state changed:', pc.iceConnectionState, 'for', toUid);
     });
   } catch (err) { showToast('⚠️ Could not share camera: ' + err.message); }
+}
+
+/* ── Qualità video adattiva: partenza bassa per connessioni scadenti, ramp-up se la connessione regge ── */
+const ENCODING_PROFILES = {
+  low:    { maxBitrate: 250000, scaleResolutionDownBy: 2   },
+  medium: { maxBitrate: 450000, scaleResolutionDownBy: 1.5 },
+  high:   { maxBitrate: 700000, scaleResolutionDownBy: 1   },
+};
+const RAMP_UP_INTERVAL_MS = 15000;
+
+function applyVideoEncoding(pc, profile) {
+  const p = ENCODING_PROFILES[profile] || ENCODING_PROFILES.low;
+  try {
+    pc.getSenders().forEach(sender => {
+      if (sender.track?.kind !== 'video') return;
+      sender.getParameters().then(params => {
+        if (!params.encodings?.length) params.encodings = [{}];
+        params.encodings[0].maxBitrate = p.maxBitrate;
+        params.encodings[0].scaleResolutionDownBy = p.scaleResolutionDownBy;
+        return sender.setParameters(params);
+      }).catch(() => {});
+    });
+  } catch (_) {}
+}
+
+function clearEncodingRampTimer(pc) {
+  if (pc?._encodingRampTimer) { clearInterval(pc._encodingRampTimer); pc._encodingRampTimer = null; }
+}
+
+const QUALITY_LABELS = { low: 'Bassa', medium: 'Media', high: 'Alta' };
+
+function updateCamQualityUI(level) {
+  currentEncodingLevel = level;
+  const uid = state.currentUser?.id;
+  if (!uid) return;
+  const id = safeId(uid);
+  const labelEl = document.getElementById(`cam-quality-label-${id}`);
+  if (labelEl) labelEl.textContent = QUALITY_LABELS[level] || 'Bassa';
+  const btnEl = document.getElementById(`cam-quality-btn-${id}`);
+  if (btnEl) {
+    btnEl.textContent = forceLowQuality ? 'Ripristina qualità auto' : 'Riduci qualità';
+    btnEl.title = forceLowQuality ? 'Ripristina aumento automatico qualità' : 'Riduci qualità per connessioni lente';
+  }
+}
+
+function startEncodingRampUp(pc, peerId) {
+  if (pc._encodingRampTimer) return;
+  let level = 0;
+  const levels = ['low', 'medium', 'high'];
+  pc._encodingRampTimer = setInterval(() => {
+    if (pc.connectionState === 'closed') {
+      clearEncodingRampTimer(pc);
+      return;
+    }
+    if (forceLowQuality) return;
+    if (pc.connectionState !== 'connected') return;
+    level = Math.min(level + 1, levels.length - 1);
+    const profile = levels[level];
+    applyVideoEncoding(pc, profile);
+    updateCamQualityUI(profile);
+    if (level >= levels.length - 1) clearEncodingRampTimer(pc);
+  }, RAMP_UP_INTERVAL_MS);
 }
 
 /* Filtro anti-replay Firebase: child_added consegna tutti i messaggi passati → scarta webrtc scritti prima della nostra connessione */
@@ -1894,6 +1996,8 @@ async function startPrivateCall(targetUid) {
     dom.vcallAvatar.style.background = avatarColor(target?.name || '?');
     dom.remotePlaceholder.style.display = ''; dom.vcallWin.hidden = false;
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+    applyVideoEncoding(pc, 'low');
+    startEncodingRampUp(pc, targetUid);
     broadcast('webrtc', targetUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'private' });
   } catch (err) { showToast('⚠️ Could not start call: ' + err.message); }
 }
@@ -1916,7 +2020,7 @@ export function initCallControls() {
 
 export function endCall(notify = true) {
   if (notify && state.activeCallUID) broadcast('call-ended', state.activeCallUID, {});
-  state.privatePeer?.close(); state.privatePeer = null;
+  if (state.privatePeer) { clearEncodingRampTimer(state.privatePeer); state.privatePeer.close(); state.privatePeer = null; }
   dom.vcallWin.hidden = true;
   dom.remoteVideoEl.srcObject = null; dom.localVideoEl.srcObject = null;
   dom.remotePlaceholder.style.display = '';

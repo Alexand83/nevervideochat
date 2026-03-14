@@ -38,10 +38,12 @@ export const ICE_SERVERS = {
     { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   ],
   iceCandidatePoolSize: 10,
+  bundlePolicy: 'max-bundle',
+  rtcpMuxPolicy: 'require',
 };
 
-/** Se true, la PC in entrata (viewer) usa solo relay (TURN). Utile se la cam resta nera per NAT simmetrico. */
-export const VIDEO_ICE_RELAY_ONLY = false;
+/** Se true, chi vede la cam (viewer) usa solo relay (TURN): funziona anche dietro NAT/firewall senza configurare nulla. */
+export const VIDEO_ICE_RELAY_ONLY = true;
 
 export const EMOJI_CATEGORIES = {
   '😊': ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'],
