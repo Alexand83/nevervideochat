@@ -225,13 +225,13 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       /* Controlla immediatamente */
       checkStreamHealth();
 
-      /* Placeholder "Solo voce" quando il remoto disattiva il video + sync periodico */
+      /* Placeholder "Solo voce" solo quando abbiamo un track video disabilitato; se non c'è ancora video non mostrare "solo voce" (evita flash nero + solo voce) */
       function syncRemoteVideoPlaceholder() {
         if (!state.cameraWindows[uid]) return;
         const cw = state.cameraWindows[uid];
         const stream = cw?.stream;
         const videoTrack = stream?.getVideoTracks()[0];
-        cw.videoOff = !videoTrack || !videoTrack.enabled;
+        cw.videoOff = videoTrack ? !videoTrack.enabled : false;
         updateRemoteVideoVisibility(uid);
       }
       syncRemoteVideoPlaceholder();
@@ -1404,7 +1404,8 @@ export async function sharePublicCameraTo(toUid) {
     };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    applyVideoEncoding(pc, 'low');
+    /* Ritardo breve così la negoziazione non viene disturbata (evita audio/video che non partono) */
+    setTimeout(() => { applyVideoEncoding(pc, 'low'); }, 400);
     updateCamQualityUI('low');
     startEncodingRampUp(pc, toUid);
     console.log('[WebRTC-FLOW] OUTGOING: send offer to', (toUid || '').slice(0, 8) + '…', 'sdpLen=', offer.sdp?.length);
@@ -1453,7 +1454,6 @@ function applyVideoEncoding(pc, profile) {
       sender.getParameters().then(params => {
         if (!params.encodings?.length) params.encodings = [{}];
         params.encodings[0].maxBitrate = p.maxBitrate;
-        params.encodings[0].scaleResolutionDownBy = p.scaleResolutionDownBy;
         return sender.setParameters(params);
       }).catch(() => {});
     });
@@ -1996,7 +1996,7 @@ async function startPrivateCall(targetUid) {
     dom.vcallAvatar.style.background = avatarColor(target?.name || '?');
     dom.remotePlaceholder.style.display = ''; dom.vcallWin.hidden = false;
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
-    applyVideoEncoding(pc, 'low');
+    setTimeout(() => { applyVideoEncoding(pc, 'low'); }, 400);
     startEncodingRampUp(pc, targetUid);
     broadcast('webrtc', targetUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'private' });
   } catch (err) { showToast('⚠️ Could not start call: ' + err.message); }

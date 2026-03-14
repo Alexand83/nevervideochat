@@ -77,10 +77,11 @@ const VIDEO_CONSTRAINTS_LOW = {
 
 export function getMediaConstraints() {
   const s = state.settings || {};
+  /* ideal invece di exact: se il dispositivo salvato non c'è più (mic/cam disconnessi) il browser usa un altro e audio/video partono */
   const videoBase = s.cameraId
-    ? { deviceId: { exact: s.cameraId }, ...VIDEO_CONSTRAINTS_LOW }
+    ? { deviceId: { ideal: s.cameraId }, ...VIDEO_CONSTRAINTS_LOW }
     : VIDEO_CONSTRAINTS_LOW;
-  const audioBase = s.micId ? { deviceId: { exact: s.micId } } : true;
+  const audioBase = s.micId ? { deviceId: { ideal: s.micId } } : true;
   return {
     video: videoBase,
     audio: audioBase,

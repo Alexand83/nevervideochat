@@ -42,8 +42,8 @@ export const ICE_SERVERS = {
   rtcpMuxPolicy: 'require',
 };
 
-/** Se true, chi vede la cam (viewer) usa solo relay (TURN): funziona anche dietro NAT/firewall senza configurare nulla. */
-export const VIDEO_ICE_RELAY_ONLY = true;
+/** Se true, chi vede la cam usa solo relay (TURN). Impostare false se audio/video non partono (alcune reti/browser). */
+export const VIDEO_ICE_RELAY_ONLY = false;
 
 export const EMOJI_CATEGORIES = {
   '😊': ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'],
