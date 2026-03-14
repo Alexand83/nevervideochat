@@ -125,11 +125,16 @@ export function createCameraWindow(uid, stream, name, isOwn) {
   state.cameraWindows[uid] = { el: win, stream, isOwn, micEnabled: true, videoOff: false, videoHiddenByMe: false, remoteSenderVideoOff };
 
   const videoEl = $(`cam-vid-${safeUid}`);
+  const placeholderEl = $(`cam-solo-voce-${safeUid}`);
   if (videoEl) {
     videoEl.srcObject = null; videoEl.srcObject = stream;
     if (!isOwn) {
       videoEl.muted = true;
       videoEl.volume = 1;
+    } else {
+      /* Propria cam: placeholder "Solo voce" nascosto finché l'utente non disattiva il video; video sempre visibile */
+      if (placeholderEl) { placeholderEl.hidden = true; placeholderEl.style.display = 'none'; }
+      videoEl.style.display = 'block';
     }
     videoEl.play().then(() => {
       if (!isOwn) {
@@ -137,6 +142,19 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         initRemoteVolumeControl(uid);
       }
     }).catch(() => {});
+    /* Propria cam: forza primo frame (evita schermo nero se il browser ritarda il rendering) */
+    if (isOwn && stream?.getVideoTracks?.()?.length) {
+      const forceFirstFrame = () => {
+        if (!state.cameraWindows[uid]?.stream || state.cameraWindows[uid].stream !== stream) return;
+        if (videoEl.videoWidth > 0) return;
+        videoEl.srcObject = null;
+        videoEl.srcObject = stream;
+        videoEl.play().catch(() => {});
+      };
+      videoEl.addEventListener('loadeddata', forceFirstFrame, { once: true });
+      videoEl.addEventListener('canplay', forceFirstFrame, { once: true });
+      setTimeout(forceFirstFrame, 400);
+    }
     if (!isOwn) {
       /* Indicatore "sta parlando" e volume: avvia subito se c'è audio, così il bordo si illumina anche se play() è in ritardo */
       if (stream?.getAudioTracks?.()?.length) {
@@ -225,13 +243,13 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       /* Controlla immediatamente */
       checkStreamHealth();
 
-      /* Placeholder "Solo voce" solo quando abbiamo un track video disabilitato; se non c'è ancora video non mostrare "solo voce" (evita flash nero + solo voce) */
+      /* Placeholder "Solo voce" quando il remoto disattiva il video + sync periodico */
       function syncRemoteVideoPlaceholder() {
         if (!state.cameraWindows[uid]) return;
         const cw = state.cameraWindows[uid];
         const stream = cw?.stream;
         const videoTrack = stream?.getVideoTracks()[0];
-        cw.videoOff = videoTrack ? !videoTrack.enabled : false;
+        cw.videoOff = !videoTrack || !videoTrack.enabled;
         updateRemoteVideoVisibility(uid);
       }
       syncRemoteVideoPlaceholder();
@@ -273,8 +291,21 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     if (qualityBtn) {
       qualityBtn.addEventListener('click', () => {
         forceLowQuality = !forceLowQuality;
-        updateCamQualityUI(forceLowQuality ? 'low' : currentEncodingLevel);
-        showToast(forceLowQuality ? '📉 Qualità: priorità connessione (encoding non applicato).' : '📈 Qualità ripristinata.');
+        if (forceLowQuality) {
+          Object.keys(state.outgoingPCs).forEach(peerId => {
+            const pc = state.outgoingPCs[peerId];
+            clearEncodingRampTimer(pc);
+            applyVideoEncoding(pc, 'low');
+          });
+          updateCamQualityUI('low');
+          showToast('📉 Qualità video ridotta per connessioni lente.');
+        } else {
+          Object.keys(state.outgoingPCs).forEach(peerId => {
+            applyVideoEncoding(state.outgoingPCs[peerId], currentEncodingLevel);
+          });
+          updateCamQualityUI(currentEncodingLevel);
+          showToast('📈 Ripristinato aumento automatico qualità.');
+        }
       });
     }
   } else {
@@ -918,29 +949,6 @@ async function initRemoteVolumeControl(uid) {
       remoteGain.connect(remoteCtx.destination);
       video.muted = true; /* audio da Web Audio, non dal video */
 
-      /* I browser richiedono un gesto utente per far partire l'audio: al primo click riprendi il contesto */
-      if (remoteCtx.state === 'suspended' && cw.el) {
-        const resumeOnce = () => {
-          remoteCtx.resume().then(() => {
-            video.muted = true; /* audio da Web Audio */
-            showToast('🔊 Audio attivato');
-          }).catch(() => {});
-          cw.el.removeEventListener('click', resumeOnce);
-          cw.el.removeEventListener('touchstart', resumeOnce);
-        };
-        cw.el.addEventListener('click', resumeOnce, { once: true });
-        cw.el.addEventListener('touchstart', resumeOnce, { once: true });
-        scheduleResumeRemoteAudioOnce();
-        /* Fallback: se dopo 1.5s il contesto è ancora sospeso (nessun click), fai sentire l'audio dal video così l'altra persona si sente senza cliccare */
-        setTimeout(() => {
-          if (!state.cameraWindows[uid] || cw.remoteVolumeCtx !== remoteCtx) return;
-          if (remoteCtx.state === 'suspended') {
-            video.muted = false;
-            showToast('🔊 Audio attivo (dal video)');
-          }
-        }, 1500);
-      }
-
       /* stesso stream per indicatore "sta parlando" + tick tiene vivo il contesto (altrimenti audio si stacca dopo ~1s) */
       analyser = remoteCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -1024,23 +1032,6 @@ async function initRemoteVolumeControl(uid) {
   }
 }
 
-let _remoteAudioResumeScheduled = false;
-function scheduleResumeRemoteAudioOnce() {
-  if (_remoteAudioResumeScheduled) return;
-  _remoteAudioResumeScheduled = true;
-  const handler = () => {
-    Object.keys(state.cameraWindows || {}).forEach(uid => {
-      const cw = state.cameraWindows[uid];
-      const ctx = cw?.remoteVolumeCtx;
-      if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
-    });
-    document.removeEventListener('click', handler);
-    document.removeEventListener('touchstart', handler);
-  };
-  document.addEventListener('click', handler, { once: true });
-  document.addEventListener('touchstart', handler, { once: true });
-}
-
 function closeRemoteVolumeContext(uid) {
   const cw = state.cameraWindows[uid];
   if (!cw) return;
@@ -1102,10 +1093,10 @@ function toggleSoloVoce(uid) {
   if (videoTrack) videoTrack.enabled = !cw.videoOff;
   if (cw.videoOff) {
     videoEl.style.display = 'none';
-    if (placeholder) placeholder.hidden = false;
+    if (placeholder) { placeholder.hidden = false; placeholder.style.display = ''; }
   } else {
     videoEl.style.display = '';
-    if (placeholder) placeholder.hidden = true;
+    if (placeholder) { placeholder.hidden = true; placeholder.style.display = 'none'; }
   }
   updateVideoToggleButton(uid);
   /* Notifica i viewer così mostrano placeholder "Solo voce" invece di schermo nero */
@@ -1399,15 +1390,6 @@ export async function sharePublicCameraTo(toUid) {
       const msSince = Date.now() - state.cameraClosedAt;
       if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
       state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
-      /* Se per qualche motivo non c'è audio (dispositivo non disponibile ecc.), riprova solo il microfono e aggiungilo */
-      if (!state.localStream.getAudioTracks().length) {
-        try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-          const audioTrack = audioStream.getAudioTracks()[0];
-          if (audioTrack) state.localStream.addTrack(audioTrack);
-          /* non fare stop sul track: è ora condiviso con localStream */
-        } catch (e) { console.warn('[Camera] Fallback audio request failed:', e); }
-      }
       state.micPipeline = (await createMicVolumePipeline(state.localStream)) || null;
       state.currentUser.hasCamera = true;
       state.cameraRoom = state.activeRoom;
@@ -1427,9 +1409,8 @@ export async function sharePublicCameraTo(toUid) {
     }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.outgoingPCs[toUid] = pc;
-    state.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
     const tracks = state.localStream.getTracks().filter(t => t.readyState === 'live');
-    console.log('[WebRTC-FLOW] OUTGOING: add', tracks.length, 'tracks (audio:', state.localStream.getAudioTracks().length, ') to', (toUid || '').slice(0, 8) + '…');
+    console.log('[WebRTC-FLOW] OUTGOING: add', tracks.length, 'tracks to', (toUid || '').slice(0, 8) + '…');
     tracks.forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
@@ -1441,7 +1422,9 @@ export async function sharePublicCameraTo(toUid) {
     };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    applyVideoEncoding(pc, 'low');
     updateCamQualityUI('low');
+    startEncodingRampUp(pc, toUid);
     console.log('[WebRTC-FLOW] OUTGOING: send offer to', (toUid || '').slice(0, 8) + '…', 'sdpLen=', offer.sdp?.length);
     broadcast('webrtc', toUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'public', room_id: state.cameraRoom });
     broadcast('cam-accepted', toUid, {});
@@ -1488,6 +1471,7 @@ function applyVideoEncoding(pc, profile) {
       sender.getParameters().then(params => {
         if (!params.encodings?.length) params.encodings = [{}];
         params.encodings[0].maxBitrate = p.maxBitrate;
+        params.encodings[0].scaleResolutionDownBy = p.scaleResolutionDownBy;
         return sender.setParameters(params);
       }).catch(() => {});
     });
@@ -2030,6 +2014,8 @@ async function startPrivateCall(targetUid) {
     dom.vcallAvatar.style.background = avatarColor(target?.name || '?');
     dom.remotePlaceholder.style.display = ''; dom.vcallWin.hidden = false;
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+    applyVideoEncoding(pc, 'low');
+    startEncodingRampUp(pc, targetUid);
     broadcast('webrtc', targetUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'private' });
   } catch (err) { showToast('⚠️ Could not start call: ' + err.message); }
 }

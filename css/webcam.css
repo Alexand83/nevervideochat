@@ -348,6 +348,9 @@
   color: var(--tx2);
   gap: var(--s2);
 }
+.cam-solo-voce-placeholder[hidden] {
+  display: none !important;
+}
 .cam-solo-voce-placeholder .cam-solo-voce-icon {
   font-size: 48px;
   opacity: 0.8;
