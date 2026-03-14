@@ -918,10 +918,11 @@ async function initRemoteVolumeControl(uid) {
       remoteGain.connect(remoteCtx.destination);
       video.muted = true; /* audio da Web Audio, non dal video */
 
-      /* I browser richiedono un gesto utente per far partire l'audio: al primo click sulla finestra cam remota riprendi il contesto */
+      /* I browser richiedono un gesto utente per far partire l'audio: al primo click riprendi il contesto */
       if (remoteCtx.state === 'suspended' && cw.el) {
         const resumeOnce = () => {
           remoteCtx.resume().then(() => {
+            video.muted = true; /* audio da Web Audio */
             showToast('🔊 Audio attivato');
           }).catch(() => {});
           cw.el.removeEventListener('click', resumeOnce);
@@ -929,8 +930,15 @@ async function initRemoteVolumeControl(uid) {
         };
         cw.el.addEventListener('click', resumeOnce, { once: true });
         cw.el.addEventListener('touchstart', resumeOnce, { once: true });
-        /* Fallback: anche al primo click ovunque sulla pagina (es. chat) riprendi tutti i contesti sospesi */
         scheduleResumeRemoteAudioOnce();
+        /* Fallback: se dopo 1.5s il contesto è ancora sospeso (nessun click), fai sentire l'audio dal video così l'altra persona si sente senza cliccare */
+        setTimeout(() => {
+          if (!state.cameraWindows[uid] || cw.remoteVolumeCtx !== remoteCtx) return;
+          if (remoteCtx.state === 'suspended') {
+            video.muted = false;
+            showToast('🔊 Audio attivo (dal video)');
+          }
+        }, 1500);
       }
 
       /* stesso stream per indicatore "sta parlando" + tick tiene vivo il contesto (altrimenti audio si stacca dopo ~1s) */
@@ -1419,8 +1427,9 @@ export async function sharePublicCameraTo(toUid) {
     }
     const pc = new RTCPeerConnection(ICE_SERVERS);
     state.outgoingPCs[toUid] = pc;
+    state.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
     const tracks = state.localStream.getTracks().filter(t => t.readyState === 'live');
-    console.log('[WebRTC-FLOW] OUTGOING: add', tracks.length, 'tracks to', (toUid || '').slice(0, 8) + '…');
+    console.log('[WebRTC-FLOW] OUTGOING: add', tracks.length, 'tracks (audio:', state.localStream.getAudioTracks().length, ') to', (toUid || '').slice(0, 8) + '…');
     tracks.forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
