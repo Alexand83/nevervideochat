@@ -456,6 +456,20 @@ export async function checkSessionInvalid() {
       showDisconnectedOverlay();
       return true;
     }
+    /* Se abbiamo ancora currentUser ma un'altra sessione ha fatto login (active_sessions),
+       Firestore può dare permission-denied in scrittura: verifica e mostra overlay. */
+    if (user && !state.currentUser.isGuest) {
+      const token = await user.getIdToken(true).catch(() => null);
+      if (token) {
+        const { getSavedSessionId, createSessionId } = await import('./auth.js');
+        const sessionId = getSavedSessionId() || createSessionId(token);
+        const isValid = await isSessionValid(state.currentUser.id, sessionId);
+        if (!isValid) {
+          showDisconnectedOverlay(true);
+          return true;
+        }
+      }
+    }
     return false;
   } catch (_) {
     return false;
