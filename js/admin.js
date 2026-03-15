@@ -767,6 +767,7 @@ async function banUser(userId, userName) {
       banned_by: String(state.currentUser.id),
       banned_at: new Date(),
     }, { merge: true });
+    state.bannedUserIds?.add?.(String(userId));
     
     /* Broadcast ban event */
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin' });
@@ -878,6 +879,7 @@ async function unbanUser(userId) {
     snap.docs.forEach(d => batch.delete(d.ref));
     if (snap.docs.length) {
       await batch.commit();
+      state.bannedUserIds?.delete?.(String(userId));
       broadcast('user-unbanned', userId, {});
       await clearBroadcastHistory();
     }

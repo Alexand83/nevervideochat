@@ -730,6 +730,7 @@ export async function connectFirebase() {
       .on('broadcast', { event: 'user-unbanned' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
         delete state.bannedUsers[targetId];
+        state.bannedUserIds?.delete?.(String(targetId));
         if (String(targetId) === String(state.currentUser?.id)) {
           const { hideKickBanOverlay } = await import('./kick-ban.js');
           hideKickBanOverlay();

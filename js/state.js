@@ -54,6 +54,7 @@ export const state = {
   mutedUsers:         {},  /* { userId: { room_id: null|string, expires_at: string|null } } */
   kickedUsers:        {},  /* { userId: { [roomId]: expires_at } } */
   bannedUsers:        {},  /* { userId: { expires_at: string|null } } */
+  bannedUserIds:      new Set(),  /* Set di user_id bannati (per filtrare dalla lista anche se presenza fantasma) */
 
   /* Quote reply context */
   replyTo: null,

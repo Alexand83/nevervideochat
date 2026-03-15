@@ -39,12 +39,18 @@ export function renderUsers() {
   const room     = state.rooms[roomId];
   /* For the active room, show users tracked in that room's presence.
      Fall back to global state.users for backward compatibility.       */
-  const roomUsers = room ? Object.values(room.users || {}) : state.users.filter(u => u?.online);
-
+  let roomUsers = room ? Object.values(room.users || {}) : state.users.filter(u => u?.online);
+  const bannedIds = state.bannedUserIds || new Set();
+  const filteredOut = roomUsers.filter(u => u && bannedIds.has(String(u.id)));
+  if (filteredOut.length) {
+    roomUsers = roomUsers.filter(u => !u || !bannedIds.has(String(u.id)));
+    console.log('[Users] Filtered out banned users (ghost presence):', filteredOut.map(u => ({ id: u.id, name: u.name })));
+  }
   console.log('[Users] renderUsers called:', {
     roomId,
     hasRoom: !!room,
     roomUsersCount: roomUsers.length,
+    userIdsInRoom: roomUsers.map(u => u?.id),
     stateUsersCount: state.users.length,
     hasCurrentUser: !!state.currentUser,
     currentUserId: state.currentUser?.id
@@ -248,9 +254,11 @@ export function syncPresence(presenceState, roomId) {
 
   const myId = String(state.currentUser.id);
 
-  /* Update room-local users map - NON resettare completamente, preserva hasCamera se già presente */
+  const bannedIds = state.bannedUserIds || new Set();
+  /* Update room-local users map - NON resettare completamente, preserva hasCamera se già presente. Salta utenti bannati (presenza fantasma). */
   Object.entries(presenceState).forEach(([uid, presences]) => {
     if (String(uid) === myId) return;
+    if (bannedIds.has(String(uid))) return;
     const info = presences[0];
     /* info.name è il display_name dalla presenza */
     const existingUser = room.users[String(uid)];

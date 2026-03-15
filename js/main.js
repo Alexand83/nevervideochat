@@ -220,6 +220,7 @@ export async function finishInit() {
     await loadCurrentUserRole();
 
     await loadUserRestrictions(state.currentUser.id);
+    await loadBannedUserIds();
     
     /* Check if user is banned - if so, show ban overlay and stop initialization */
     const { checkIsBanned } = await import('./users.js');
@@ -371,6 +372,30 @@ async function loadUserRestrictions(userId) {
   } catch (err) {
     console.error('[Main] Load restrictions error:', err);
     /* On error we already cleared state above — user is not restricted until DB says so */
+  }
+}
+
+/* ── Carica l'elenco di tutti gli user_id bannati (per non mostrarli in lista anche se presenza fantasma) ── */
+async function loadBannedUserIds() {
+  if (!state.fb) return;
+  try {
+    const now = new Date();
+    const snap = await state.fb.firestore.collection('banned_users').get();
+    state.bannedUserIds = new Set();
+    snap.docs.forEach(d => {
+      const data = d.data();
+      const uid = data.user_id;
+      if (!uid) return;
+      const expVal = data.expires_at;
+      const exp = expVal ? (expVal.toDate ? expVal.toDate() : new Date(expVal)) : null;
+      if (!exp || exp > now) state.bannedUserIds.add(String(uid));
+    });
+    if (state.bannedUserIds.size) {
+      console.log('[Main] Loaded banned user IDs (hidden from list):', [...state.bannedUserIds]);
+    }
+  } catch (err) {
+    console.error('[Main] Load banned user IDs error:', err);
+    state.bannedUserIds = new Set();
   }
 }
 
