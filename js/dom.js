@@ -34,6 +34,7 @@ export const dom = {
   typingTxt:      $('typingTxt'),
 
   /* Chat input */
+  chatInputArea:    $('chatInputArea'),
   msgInput:         $('msgInput'),
   sendBtn:          $('sendBtn'),
   boldBtn:          $('boldBtn'),

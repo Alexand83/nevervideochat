@@ -11,7 +11,7 @@ import { applyAuthIdentity, getOrCreateGuestIdentity,
          initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser, loadUserSettingsFromProfile } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
 import { renderUsers, setOpenContextMenu } from './users.js';
-import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate } from './chat.js';
+import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js';
 import { setPChatDeps } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js?v=20260318';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
@@ -106,6 +106,7 @@ async function init() {
   });
   /* 1. Init UI subsystems */
   initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording();
+  initMentionDropdown();
   initContextMenu(); initCameraSystem(); initCallControls();
   initMobilePanel(); initPanelResize();
   initAuthModal(); initProfileModal(); initSettingsModal();

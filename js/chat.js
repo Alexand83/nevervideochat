@@ -80,6 +80,16 @@ export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, qu
     if (_renderRoomTabs) _renderRoomTabs();
   }
 
+  /* Notifica se qualcuno ti ha menzionato (anche se sei in un'altra stanza) */
+  if (userId !== 'me' && userId !== state.currentUser?.id && isMessageMentioningMe(msg.html)) {
+    const fromName = msg.username || findUser(msg.userId)?.name || 'Qualcuno';
+    const roomName = state.rooms[rId]?.name || rId;
+    const inOtherRoom = rId !== state.activeRoom;
+    showToast(inOtherRoom
+      ? `📩 ${fromName} ti ha menzionato in #${roomName}`
+      : `📩 ${fromName} ti ha menzionato nella chat`);
+  }
+
   /* Only render if this is the active room */
   if (rId === state.activeRoom) {
     console.log('[Chat] Rendering message in active room:', { msgId: msg.id, userId: msg.userId });
@@ -230,6 +240,209 @@ export function clearReplyTo() {
   if (dom.replyPreviewBar) dom.replyPreviewBar.hidden = true;
 }
 
+/* ── @mention: utenti in stanza (per dropdown e conversione) ── */
+function getRoomUsersForMention() {
+  const room = state.rooms[state.activeRoom];
+  if (!room?.users || !state.currentUser) return [];
+  const myId = String(state.currentUser.id);
+  return Object.entries(room.users)
+    .filter(([uid]) => String(uid) !== myId)
+    .map(([, u]) => ({
+      id: u.id,
+      name: (u.name || u.username || 'User').trim(),
+      username: (u.username || u.name || '').trim(),
+    }))
+    .filter(u => u.name || u.username);
+}
+
+/** Converte @DisplayName nel testo in <span class="mention" data-username="DisplayName">@DisplayName</span> */
+function convertMentionsInHtml(html) {
+  const users = getRoomUsersForMention();
+  if (!users.length) return html;
+  let out = html;
+  const byLen = [...users].sort((a, b) => (b.name?.length || 0) - (a.name?.length || 0));
+  for (const u of byLen) {
+    const name = (u.name || u.username || '').trim();
+    if (!name) continue;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`@(${escaped})(?![\\w])`, 'gi');
+    out = out.replace(re, (match) => {
+      const display = match.slice(1);
+      return `<span class="mention" data-username="${escHtml(display)}">@${escHtml(display)}</span>`;
+    });
+  }
+  return out;
+}
+
+/** True se il messaggio contiene una mention dell'utente corrente (per notifica) */
+function isMessageMentioningMe(html) {
+  if (!state.currentUser) return false;
+  const d = document.createElement('div');
+  d.innerHTML = html || '';
+  const mentions = d.querySelectorAll('.mention[data-username]');
+  const myName = (state.currentUser.name || '').trim();
+  const myUsername = (state.currentUser.username || '').trim();
+  for (const el of mentions) {
+    const name = (el.getAttribute('data-username') || '').trim();
+    if (name && (name === myName || name === myUsername)) return true;
+  }
+  const text = (d.textContent || '').trim();
+  if (myName && text.includes('@' + myName)) return true;
+  if (myUsername && myUsername !== myName && text.includes('@' + myUsername)) return true;
+  return false;
+}
+
+/* ── Mention dropdown: helper contenteditable ── */
+function getTextIndexFromSelection(container) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return 0;
+  const range = sel.getRangeAt(0).cloneRange();
+  range.selectNodeContents(container);
+  range.setEnd(sel.anchorNode, sel.anchorOffset);
+  return range.toString().length;
+}
+
+function getRangeForTextIndex(container, startIndex, endIndex) {
+  const range = document.createRange();
+  let current = 0;
+  let startSet = false;
+  let endSet = false;
+  function walk(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = (node.textContent || '').length;
+      const end = current + len;
+      if (!startSet && end > startIndex) {
+        range.setStart(node, Math.min(len, startIndex - current));
+        startSet = true;
+      }
+      if (!endSet && end >= endIndex) {
+        range.setEnd(node, Math.min(len, endIndex - current));
+        endSet = true;
+      }
+      current = end;
+      return;
+    }
+    if (node.nodeType === Node.ELEMENT_NODE && node.childNodes) {
+      for (const child of node.childNodes) {
+        if (endSet) return;
+        walk(child);
+      }
+    }
+  }
+  walk(container);
+  return range;
+}
+
+let mentionDropdownEl = null;
+let mentionStartIndex = -1;
+let mentionSelectedIndex = 0;
+
+export function initMentionDropdown() {
+  if (!dom.msgInput || !dom.chatInputArea) return;
+  mentionDropdownEl = document.createElement('div');
+  mentionDropdownEl.className = 'mention-dropdown';
+  mentionDropdownEl.setAttribute('role', 'listbox');
+  mentionDropdownEl.hidden = true;
+  dom.chatInputArea.appendChild(mentionDropdownEl);
+
+  function hideMentionDropdown() {
+    mentionDropdownEl.hidden = true;
+    mentionStartIndex = -1;
+  }
+
+  function insertMentionChoice(displayName) {
+    const input = dom.msgInput;
+    const text = input.textContent || '';
+    const query = mentionStartIndex >= 0 ? text.slice(mentionStartIndex + 1).split(/\s/)[0] || '' : '';
+    const from = mentionStartIndex;
+    const to = Math.min(from + 1 + query.length, text.length);
+    const range = getRangeForTextIndex(input, from, to);
+    if (range.collapsed) return;
+    range.deleteContents();
+    const toInsert = `@${displayName} `;
+    const textNode = document.createTextNode(toInsert);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.setEndAfter(textNode);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    hideMentionDropdown();
+    input.focus();
+  }
+
+  dom.msgInput.addEventListener('input', () => {
+    const text = dom.msgInput.textContent || '';
+    const idx = getTextIndexFromSelection(dom.msgInput);
+    const lastAt = text.lastIndexOf('@');
+    if (lastAt === -1 || idx <= lastAt) {
+      hideMentionDropdown();
+      return;
+    }
+    const query = text.slice(lastAt + 1).split(/\s/)[0] || '';
+    if (/\s/.test(query)) { hideMentionDropdown(); return; }
+    if (mentionStartIndex < 0) mentionStartIndex = lastAt;
+    const users = getRoomUsersForMention();
+    const q = query.toLowerCase();
+    const filtered = users.filter(u => {
+      const n = (u.name || '').toLowerCase();
+      const uu = (u.username || '').toLowerCase();
+      return n.startsWith(q) || uu.startsWith(q);
+    });
+    mentionSelectedIndex = 0;
+    if (filtered.length === 0) {
+      mentionDropdownEl.hidden = true;
+      return;
+    }
+    mentionDropdownEl.hidden = false;
+    mentionDropdownEl.innerHTML = '';
+    filtered.slice(0, 8).forEach((u, i) => {
+      const name = u.name || u.username || 'User';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mention-dropdown-item' + (i === 0 ? ' selected' : '');
+      btn.textContent = name;
+      btn.setAttribute('role', 'option');
+      btn.addEventListener('click', () => insertMentionChoice(name));
+      mentionDropdownEl.appendChild(btn);
+    });
+  });
+
+  dom.msgInput.addEventListener('keydown', (e) => {
+    if (!mentionDropdownEl || mentionDropdownEl.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); hideMentionDropdown(); return; }
+    if (e.key === 'Enter' && mentionDropdownEl.querySelectorAll('.mention-dropdown-item').length) {
+      e.preventDefault();
+      const items = mentionDropdownEl.querySelectorAll('.mention-dropdown-item');
+      const sel = items[mentionSelectedIndex];
+      if (sel) sel.click();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const items = mentionDropdownEl.querySelectorAll('.mention-dropdown-item');
+      if (items.length) {
+        mentionSelectedIndex = (mentionSelectedIndex + 1) % items.length;
+        items.forEach((it, i) => it.classList.toggle('selected', i === mentionSelectedIndex));
+      }
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const items = mentionDropdownEl.querySelectorAll('.mention-dropdown-item');
+      if (items.length) {
+        mentionSelectedIndex = (mentionSelectedIndex - 1 + items.length) % items.length;
+        items.forEach((it, i) => it.classList.toggle('selected', i === mentionSelectedIndex));
+      }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (mentionDropdownEl && !mentionDropdownEl.hidden && !mentionDropdownEl.contains(e.target) && e.target !== dom.msgInput) {
+      hideMentionDropdown();
+    }
+  });
+}
+
 /* ── Send a public message ── */
 export async function sendMessage() {
   /* Check if current user can send messages (not muted/banned) */
@@ -312,6 +525,9 @@ export async function sendMessage() {
   const hasImage = !!state.pendingImage;
   if (!hasText && !hasImage) return;
   if (!hasText) html = '';
+
+  /* Converti @nick in <span class="mention"> per evidenziare le mention */
+  html = convertMentionsInHtml(html);
 
   /* Se il messaggio è solo testo (nessun span/font/b/strong), avvolgi con lo stile rich-text corrente così nel feed si vede colore/dimensione/grassetto */
   const hasRichTags = /<(span|font)[\s>]|<b[\s>]|<\/b>|<strong[\s>]|<\/strong>/i.test(html);

@@ -225,6 +225,15 @@
 /* Rich text (colore, grandezza, grassetto) nei messaggi: gli span con style hanno priorità */
 .msg-text:empty { display: none; }
 
+/* @mention in messaggi */
+.msg-text .mention {
+  background: var(--accent-dim);
+  color: var(--accent-h);
+  padding: 1px 5px;
+  border-radius: var(--r1);
+  font-weight: 600;
+}
+
 /* Images inside bubble */
 .msg-bubble .msg-img {
   max-width: 280px;
@@ -243,6 +252,44 @@
   display: inline-block;
 }
 .msg-bubble .msg-img.msg-img-placeholder:hover { opacity: 1; background: var(--bg-hover); }
+
+/* Mention dropdown (sotto l'input quando digiti @) */
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-lg);
+  z-index: 100;
+  padding: var(--s1);
+}
+.mention-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  text-align: left;
+  border: none;
+  border-radius: var(--r2);
+  background: transparent;
+  color: var(--tx0);
+  font-size: var(--fz-sm);
+  cursor: pointer;
+  transition: background var(--tf);
+}
+.mention-dropdown-item:hover,
+.mention-dropdown-item.selected {
+  background: var(--bg-hover);
+}
+.mention-dropdown-item.selected {
+  background: var(--accent-dim);
+  color: var(--accent-h);
+}
 
 /* YouTube embed */
 .yt-embed-wrap {
