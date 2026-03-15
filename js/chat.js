@@ -223,8 +223,8 @@ export function renderMessage(msg) {
   replyBtn.addEventListener('click', () => setReplyTo(msg.userId, authorName, msg.html));
 
   actionsRow.append(reactBtn, replyBtn);
-  const canEdit = isMine || hasPermission('can_edit_messages');
-  const canDelete = isMine || hasPermission('can_delete_messages');
+  const canEdit = (isMine && hasPermission('can_edit_own_messages')) || (!isMine && hasPermission('can_edit_messages'));
+  const canDelete = (isMine && hasPermission('can_delete_own_messages')) || (!isMine && hasPermission('can_delete_messages'));
   if (canEdit) {
     const editBtn = document.createElement('button');
     editBtn.className = 'msg-action-btn msg-edit-btn';

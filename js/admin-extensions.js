@@ -91,6 +91,8 @@ export function openRoleEditModal(role = null) {
     
     const perms = role.permissions || {};
     document.getElementById('permCanPostMessages').checked = perms.can_post_messages !== false;
+    document.getElementById('permCanDeleteOwnMessages').checked = perms.can_delete_own_messages !== false;
+    document.getElementById('permCanEditOwnMessages').checked = perms.can_edit_own_messages !== false;
     document.getElementById('permCanDeleteMessages').checked = perms.can_delete_messages === true;
     document.getElementById('permCanEditMessages').checked = perms.can_edit_messages === true;
     document.getElementById('permCanMute').checked = perms.can_mute === true;
@@ -115,6 +117,8 @@ export function openRoleEditModal(role = null) {
       idField.removeAttribute('value'); /* Forza il reset */
     }
     document.getElementById('permCanPostMessages').checked = true;
+    document.getElementById('permCanDeleteOwnMessages').checked = true;
+    document.getElementById('permCanEditOwnMessages').checked = true;
     document.getElementById('permCanChangeAvatar').checked = true;
     document.getElementById('permCanChangeNickname').checked = true;
     console.log('[Admin] Form reset for new role. ID field value:', idField?.value);
@@ -168,6 +172,8 @@ export async function saveRole() {
     
     const permissions = {
       can_post_messages: document.getElementById('permCanPostMessages').checked,
+      can_delete_own_messages: document.getElementById('permCanDeleteOwnMessages').checked,
+      can_edit_own_messages: document.getElementById('permCanEditOwnMessages').checked,
       can_delete_messages: document.getElementById('permCanDeleteMessages').checked,
       can_edit_messages: document.getElementById('permCanEditMessages').checked,
       can_mute: document.getElementById('permCanMute').checked,

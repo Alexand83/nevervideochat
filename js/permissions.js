@@ -38,7 +38,14 @@ export async function loadUserPermissions() {
     if (role === 'owner') {
       userPermissions = getDefaultPermissions('owner');
     } else if (customRoleData && customRoleData.permissions) {
-      userPermissions = customRoleData.permissions;
+      const def = getDefaultPermissions('user');
+      userPermissions = {
+        ...def,
+        ...customRoleData.permissions,
+        /* Retrocompat: ruoli custom senza "own" possono ancora modificare/cancellare i propri messaggi */
+        can_edit_own_messages: customRoleData.permissions.can_edit_own_messages !== false,
+        can_delete_own_messages: customRoleData.permissions.can_delete_own_messages !== false,
+      };
     } else {
       userPermissions = getDefaultPermissions(userRole);
     }
@@ -57,6 +64,8 @@ function getDefaultPermissions(role) {
       can_ban: true,
       can_mute: true,
       can_kick: true,
+      can_delete_own_messages: true,
+      can_edit_own_messages: true,
       can_delete_messages: true,
       can_edit_messages: true,
       can_manage_rooms: true,
@@ -74,6 +83,8 @@ function getDefaultPermissions(role) {
       can_ban: true,
       can_mute: true,
       can_kick: true,
+      can_delete_own_messages: true,
+      can_edit_own_messages: true,
       can_delete_messages: true,
       can_edit_messages: true,
       can_manage_rooms: true,
@@ -91,6 +102,8 @@ function getDefaultPermissions(role) {
       can_ban: false,
       can_mute: true,
       can_kick: true,
+      can_delete_own_messages: true,
+      can_edit_own_messages: true,
       can_delete_messages: true,
       can_edit_messages: false,
       can_manage_rooms: false,
@@ -108,6 +121,8 @@ function getDefaultPermissions(role) {
       can_ban: false,
       can_mute: false,
       can_kick: false,
+      can_delete_own_messages: true,
+      can_edit_own_messages: true,
       can_delete_messages: false,
       can_edit_messages: false,
       can_manage_rooms: false,
