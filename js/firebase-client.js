@@ -370,7 +370,6 @@ export function subscribeMessages(roomId, onInsert) {
         }
         if (change.type !== 'added') return;
         const d = change.doc.data();
-        const id = change.doc.id;
         const created = d.created_at?.toDate?.()?.getTime?.() || (typeof d.created_at === 'string' ? new Date(d.created_at).getTime() : 0);
         if (created <= connectTime - 2000) return;
         const m = { id, ...mapTimestamp(d), created_at: d.created_at?.toDate?.()?.toISOString?.() || d.created_at };
