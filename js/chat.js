@@ -5,6 +5,7 @@ import { state }          from './state.js';
 import { dom }            from './dom.js';
 import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml, safeAvatarUrl } from './utils.js';
 import { findUser, ensureUser, stopTyping } from './users.js';
+import { hasPermission } from './permissions.js';
 
 /* Forward refs — set by main.js to avoid circular deps */
 let _openContextMenu = null;
@@ -141,6 +142,11 @@ export function renderMessage(msg) {
 
   const timeEl = document.createElement('span');
   timeEl.className = 'msg-time'; timeEl.textContent = fmtTime(msg.ts);
+  if (msg.edited_at) {
+    const editedSpan = document.createElement('span');
+    editedSpan.className = 'msg-edited'; editedSpan.textContent = ' (modificato)';
+    timeEl.appendChild(editedSpan);
+  }
 
   if (user.isGuest && !isMine) {
     const gt = document.createElement('span');
@@ -215,13 +221,141 @@ export function renderMessage(msg) {
   replyBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/></svg> Reply`;
   const authorName = isMine ? 'You' : displayName;
   replyBtn.addEventListener('click', () => setReplyTo(msg.userId, authorName, msg.html));
-  
+
   actionsRow.append(reactBtn, replyBtn);
+  const canEdit = isMine || hasPermission('can_edit_messages');
+  const canDelete = isMine || hasPermission('can_delete_messages');
+  if (canEdit) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'msg-action-btn msg-edit-btn';
+    editBtn.textContent = 'Modifica';
+    editBtn.title = 'Modifica messaggio';
+    editBtn.addEventListener('click', () => startEditMessage(msg.id));
+    actionsRow.appendChild(editBtn);
+  }
+  if (canDelete) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'msg-action-btn msg-delete-btn';
+    deleteBtn.textContent = 'Elimina';
+    deleteBtn.title = 'Elimina messaggio';
+    deleteBtn.addEventListener('click', () => confirmDeleteMessage(msg.id));
+    actionsRow.appendChild(deleteBtn);
+  }
   content.append(meta, bubble, actionsRow);
   group.append(avatar, content);
   group.dataset.msgId = msg.id;
   dom.msgsContainer.appendChild(group);
   scrollToBottom();
+}
+
+/* ── Modifica messaggio (inline: bubble div diventa editabile, poi Salva) ── */
+async function startEditMessage(msgId) {
+  const { loadUserPermissions } = await import('./permissions.js');
+  await loadUserPermissions();
+  let roomId = null;
+  let msg = null;
+  for (const rid of Object.keys(state.rooms || {})) {
+    msg = state.rooms[rid].messages.find(m => m.id === msgId);
+    if (msg) { roomId = rid; break; }
+  }
+  if (!msg || !roomId || !state.fb) return;
+  const group = dom.msgsContainer?.querySelector(`[data-msg-id="${msgId}"]`);
+  const textDiv = group?.querySelector('.msg-text');
+  const actionsRow = group?.querySelector('.msg-actions');
+  if (!group || !textDiv || !actionsRow) return;
+  const currentHtml = msg.html || '';
+  const plainText = (() => { const d = document.createElement('div'); d.innerHTML = currentHtml; return d.textContent || ''; })();
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-edit-wrap';
+  const textarea = document.createElement('textarea');
+  textarea.className = 'msg-edit-input';
+  textarea.rows = 3;
+  textarea.value = plainText;
+  const btnRow = document.createElement('div');
+  btnRow.className = 'msg-edit-actions';
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'msg-edit-save';
+  saveBtn.textContent = 'Salva';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'msg-edit-cancel';
+  cancelBtn.textContent = 'Annulla';
+  const finish = () => {
+    if (wrap.parentNode) wrap.remove();
+    if (textDiv.parentNode) textDiv.hidden = false;
+    actionsRow.hidden = false;
+  };
+  saveBtn.addEventListener('click', async () => {
+    const { MAX_MESSAGE_LENGTH } = await import('./config.js');
+    const newText = textarea.value.trim();
+    if (!newText) { finish(); return; }
+    if (newText.length > MAX_MESSAGE_LENGTH) {
+      showToast(`⚠️ Messaggio troppo lungo (max ${MAX_MESSAGE_LENGTH} caratteri).`);
+      return;
+    }
+    const newHtml = sanitiseHtml(newText);
+    const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
+    const px = FONT_SIZE_PX[state.fontSize] || '14px';
+    const style = `color:${state.currentColor || 'inherit'};font-size:${px};font-weight:${state.isBold ? 'bold' : 'normal'};`;
+    const wrappedHtml = `<span style="${style}">${newHtml}</span>`;
+    try {
+      await state.fb.firestore.collection('messages').doc(msgId).update({
+        content: wrappedHtml,
+        edited_at: new Date(),
+      });
+      msg.html = wrappedHtml;
+      msg.edited_at = Date.now();
+      textDiv.innerHTML = processHtml(wrappedHtml);
+      const timeEl = group.querySelector('.msg-time');
+      if (timeEl && !timeEl.querySelector('.msg-edited')) {
+        const ed = document.createElement('span');
+        ed.className = 'msg-edited'; ed.textContent = ' (modificato)';
+        timeEl.appendChild(ed);
+      }
+      showToast('Messaggio modificato.');
+    } catch (err) {
+      showToast('⚠️ Impossibile modificare: ' + (err.message || 'errore'));
+    }
+    finish();
+  });
+  cancelBtn.addEventListener('click', finish);
+  btnRow.append(saveBtn, cancelBtn);
+  wrap.append(textarea, btnRow);
+  textDiv.hidden = true;
+  actionsRow.hidden = true;
+  textDiv.parentNode.insertBefore(wrap, textDiv);
+  textarea.focus();
+});
+
+/* ── Elimina messaggio (conferma poi rimozione da Firestore e da UI) ── */
+function confirmDeleteMessage(msgId) {
+  if (!confirm('Eliminare questo messaggio?')) return;
+  deleteMessage(msgId);
+}
+
+export async function deleteMessage(msgId) {
+  let roomId = null;
+  let msg = null;
+  for (const rid of Object.keys(state.rooms || {})) {
+    msg = state.rooms[rid].messages.find(m => m.id === msgId);
+    if (msg) { roomId = rid; break; }
+  }
+  if (!msg || !roomId || !state.fb) {
+    showToast('Messaggio non trovato.');
+    return;
+  }
+  try {
+    await state.fb.firestore.collection('messages').doc(msgId).delete();
+    const room = state.rooms[roomId];
+    const idx = room.messages.findIndex(m => m.id === msgId);
+    if (idx !== -1) room.messages.splice(idx, 1);
+    const group = dom.msgsContainer?.querySelector(`[data-msg-id="${msgId}"]`);
+    if (group) group.remove();
+    showToast('Messaggio eliminato.');
+  } catch (err) {
+    showToast('⚠️ Impossibile eliminare: ' + (err.message || 'errore'));
+  }
 }
 
 /* ── Reply/quote state ── */

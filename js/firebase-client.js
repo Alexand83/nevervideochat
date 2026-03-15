@@ -6,7 +6,7 @@ import { firebaseConfig, FIREBASE_RTDB_URL } from './firebase-config.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { showToast, playNotificationSound } from './utils.js';
+import { showToast, playNotificationSound, processHtml } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js';
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
@@ -327,17 +327,43 @@ export function subscribeMessages(roomId, onInsert) {
     .orderBy('created_at', 'asc')
     .onSnapshot((snap) => {
       snap.docChanges().forEach(change => {
+        const id = change.doc.id;
+        const room = state.rooms[roomId];
+        if (change.type === 'removed') {
+          const idx = room?.messages?.findIndex(m => m.id === id) ?? -1;
+          if (idx !== -1) room.messages.splice(idx, 1);
+          if (roomId === state.activeRoom && dom.msgsContainer) {
+            const group = dom.msgsContainer.querySelector(`[data-msg-id="${id}"]`);
+            if (group) group.remove();
+          }
+          return;
+        }
         if (change.type === 'modified') {
           const d = change.doc.data();
-          const id = change.doc.id;
-          const reactions = d.reactions || {};
-          const room = state.rooms[roomId];
           const msg = room?.messages?.find(m => m.id === id);
           if (msg) {
-            msg.reactions = reactions;
+            msg.reactions = d.reactions || {};
+            if (d.content !== undefined) {
+              const { html } = extractQuote(d.content);
+              msg.html = html;
+              msg.edited_at = d.edited_at?.toDate?.()?.getTime?.() ?? (typeof d.edited_at === 'string' ? new Date(d.edited_at).getTime() : null);
+              if (roomId === state.activeRoom && dom.msgsContainer) {
+                const group = dom.msgsContainer.querySelector(`[data-msg-id="${id}"]`);
+                const textDiv = group?.querySelector('.msg-text');
+                if (group && textDiv) {
+                  textDiv.innerHTML = processHtml(html);
+                  const timeEl = group.querySelector('.msg-time');
+                  if (timeEl && msg.edited_at && !timeEl.querySelector('.msg-edited')) {
+                    const ed = document.createElement('span');
+                    ed.className = 'msg-edited'; ed.textContent = ' (modificato)';
+                    timeEl.appendChild(ed);
+                  }
+                }
+              }
+            }
             if (roomId === state.activeRoom && dom.msgsContainer) {
               const group = dom.msgsContainer.querySelector(`[data-msg-id="${id}"]`);
-              if (group) updateMessageReactions(group, reactions);
+              if (group) updateMessageReactions(group, msg.reactions);
             }
           }
           return;
