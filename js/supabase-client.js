@@ -659,6 +659,15 @@ export async function connectSupabase() {
           renderRoomTabs();
           const { showBanOverlay } = await import('./kick-ban.js');
           showBanOverlay(payload.reason || 'No reason provided', payload.expires_at);
+        } else {
+          const uidStr = String(targetId);
+          for (const rId of Object.keys(state.rooms || {})) {
+            if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+          }
+          const u = state.users.find(us => String(us.id) === uidStr);
+          if (u) u.online = false;
+          const { renderUsers } = await import('./users.js');
+          renderUsers();
         }
       })
       .on('broadcast', { event: 'user-unbanned' }, async ({ payload }) => {

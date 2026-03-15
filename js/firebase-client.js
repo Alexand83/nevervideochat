@@ -725,6 +725,15 @@ export async function connectFirebase() {
           renderRoomTabs();
           const { showBanOverlay } = await import('./kick-ban.js');
           showBanOverlay(payload.reason || 'No reason provided', payload.expires_at);
+        } else {
+          /* Altri client: togli subito dalla lista così sparisce da user list */
+          const uidStr = String(targetId);
+          for (const rId of Object.keys(state.rooms || {})) {
+            if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+          }
+          const u = state.users.find(us => String(us.id) === uidStr);
+          if (u) u.online = false;
+          renderUsers();
         }
       })
       .on('broadcast', { event: 'user-unbanned' }, async ({ payload }) => {

@@ -771,6 +771,12 @@ async function banUser(userId, userName) {
     
     /* Broadcast ban event */
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin' });
+    /* Togli subito dalla lista in tutte le stanze (come kick/disconnect) */
+    const uidStr = String(userId);
+    for (const rId of Object.keys(state.rooms || {})) {
+      if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+    }
+    renderUsers();
     await clearBroadcastHistory(); /* niente replay al reconnect */
     showToast(`🚫 Banned ${userName}`);
     loadUsers();
