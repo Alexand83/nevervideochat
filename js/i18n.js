@@ -64,6 +64,7 @@ const translations = {
     'action.ban': 'Banna',
     'action.mute': 'Muta',
     'action.unmute': 'Smuta',
+    'action.disconnect': 'Disconnetti',
     'action.ignore': 'Ignora',
     'action.unignore': 'Non ignorare',
     
@@ -71,6 +72,7 @@ const translations = {
     'msg.banned': 'Sei stato bannato',
     'msg.kicked': 'Sei stato espulso',
     'msg.muted': 'Sei stato mutato',
+    'msg.disconnected': 'Sei stato disconnesso',
   },
   
   en: {
@@ -132,6 +134,7 @@ const translations = {
     'action.ban': 'Ban',
     'action.mute': 'Mute',
     'action.unmute': 'Unmute',
+    'action.disconnect': 'Disconnect',
     'action.ignore': 'Ignore',
     'action.unignore': 'Unignore',
     
@@ -139,6 +142,7 @@ const translations = {
     'msg.banned': 'You have been banned',
     'msg.kicked': 'You have been kicked',
     'msg.muted': 'You have been muted',
+    'msg.disconnected': 'You have been disconnected',
   },
   
   es: {
@@ -200,6 +204,7 @@ const translations = {
     'action.ban': 'Banear',
     'action.mute': 'Silenciar',
     'action.unmute': 'Desilenciar',
+    'action.disconnect': 'Desconectar',
     'action.ignore': 'Ignorar',
     'action.unignore': 'No ignorar',
     
@@ -207,6 +212,7 @@ const translations = {
     'msg.banned': 'Has sido baneado',
     'msg.kicked': 'Has sido expulsado',
     'msg.muted': 'Has sido silenciado',
+    'msg.disconnected': 'Has sido desconectado',
   },
   
   de: {
@@ -268,6 +274,7 @@ const translations = {
     'action.ban': 'Bannen',
     'action.mute': 'Stummschalten',
     'action.unmute': 'Stummschaltung aufheben',
+    'action.disconnect': 'Trennen',
     'action.ignore': 'Ignorieren',
     'action.unignore': 'Nicht ignorieren',
     
@@ -275,6 +282,7 @@ const translations = {
     'msg.banned': 'Du wurdest gebannt',
     'msg.kicked': 'Du wurdest gekickt',
     'msg.muted': 'Du wurdest stummgeschaltet',
+    'msg.disconnected': 'Du wurdest getrennt',
   },
 };
 

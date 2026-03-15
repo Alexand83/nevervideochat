@@ -801,6 +801,11 @@ export async function connectFirebase() {
         const isValid = await verifySessionImmediately(state.currentUser.id, token);
         if (!isValid) showDisconnectedOverlay(true); /* altra scheda: modal e reset subito */
       })
+      .on('broadcast', { event: 'force-disconnect' }, async ({ payload }) => {
+        const targetId = payload.to || payload.user_id;
+        if (!state.currentUser || String(targetId) !== String(state.currentUser.id)) return;
+        showDisconnectedOverlay(true);
+      })
       .subscribe();
 
     clearDisconnectGrace();

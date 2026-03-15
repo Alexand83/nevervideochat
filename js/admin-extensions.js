@@ -97,6 +97,7 @@ export function openRoleEditModal(role = null) {
     document.getElementById('permCanEditMessages').checked = perms.can_edit_messages === true;
     document.getElementById('permCanMute').checked = perms.can_mute === true;
     document.getElementById('permCanKick').checked = perms.can_kick === true;
+    document.getElementById('permCanDisconnect').checked = perms.can_disconnect === true;
     document.getElementById('permCanBan').checked = perms.can_ban === true;
     document.getElementById('permCanManageRooms').checked = perms.can_manage_rooms === true;
     document.getElementById('permCanManageUsers').checked = perms.can_manage_users === true;
@@ -119,6 +120,10 @@ export function openRoleEditModal(role = null) {
     document.getElementById('permCanPostMessages').checked = true;
     document.getElementById('permCanDeleteOwnMessages').checked = true;
     document.getElementById('permCanEditOwnMessages').checked = true;
+    document.getElementById('permCanMute').checked = false;
+    document.getElementById('permCanKick').checked = false;
+    document.getElementById('permCanDisconnect').checked = false;
+    document.getElementById('permCanBan').checked = false;
     document.getElementById('permCanChangeAvatar').checked = true;
     document.getElementById('permCanChangeNickname').checked = true;
     console.log('[Admin] Form reset for new role. ID field value:', idField?.value);
@@ -178,6 +183,7 @@ export async function saveRole() {
       can_edit_messages: document.getElementById('permCanEditMessages').checked,
       can_mute: document.getElementById('permCanMute').checked,
       can_kick: document.getElementById('permCanKick').checked,
+      can_disconnect: document.getElementById('permCanDisconnect').checked,
       can_ban: document.getElementById('permCanBan').checked,
       can_manage_rooms: document.getElementById('permCanManageRooms').checked,
       can_manage_users: document.getElementById('permCanManageUsers').checked,

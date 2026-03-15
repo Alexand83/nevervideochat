@@ -782,6 +782,12 @@ export async function connectSupabase() {
           }
         }
       })
+      .on('broadcast', { event: 'force-disconnect' }, async ({ payload }) => {
+        const targetId = payload.to || payload.user_id;
+        if (!state.currentUser || String(targetId) !== String(state.currentUser.id)) return;
+        console.log('[Supabase] force-disconnect received for current user - showing disconnect overlay');
+        showDisconnectedOverlay(true);
+      })
       .subscribe((status) => {
         /* Canale chiuso/timeout/errore → showDisconnectedOverlay (grazia 60s se tab hidden, gestita dentro) */
         if ((status === 'CLOSED' || status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') && state.currentUser) {

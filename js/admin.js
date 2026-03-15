@@ -562,11 +562,13 @@ async function filterAndRenderUsers() {
           </select>
           <button class="admin-action-btn" data-action="kick" data-user-id="${user.id}">👢 Kick</button>
           <button class="admin-action-btn" data-action="mute" data-user-id="${user.id}">🔇 Mute</button>
+          <button class="admin-action-btn" data-action="disconnect" data-user-id="${user.id}">⏏ Disconnect</button>
           <button class="admin-action-btn admin-action-danger" data-action="ban" data-user-id="${user.id}">🚫 Ban</button>
         </div>
       `;
       item.querySelector('[data-action="kick"]')?.addEventListener('click', () => kickUser(user.id, user.name));
       item.querySelector('[data-action="mute"]')?.addEventListener('click', () => muteUser(user.id, user.name));
+      item.querySelector('[data-action="disconnect"]')?.addEventListener('click', () => disconnectUser(user.id, user.name));
       item.querySelector('[data-action="ban"]')?.addEventListener('click', () => banUser(user.id, user.name));
       
       /* Populate role select */
@@ -653,6 +655,32 @@ async function kickUser(userId, userName) {
   renderUsers();
   showToast(`👢 Kicked ${escHtml(userName)}`);
   loadUsers();
+}
+
+async function disconnectUser(userId, userName) {
+  /* Check permissions */
+  if (!hasPermission('can_disconnect')) {
+    showToast('🚫 You do not have permission to disconnect users.');
+    return;
+  }
+
+  /* Security: Validate userId */
+  if (!userId || (typeof userId !== 'string' && typeof userId !== 'number')) {
+    showToast('⚠️ Invalid user ID.');
+    return;
+  }
+
+  if (!confirm(`Disconnect ${escHtml(userName)}? This will log them out and return them to login.`)) return;
+  if (!state.fb) return;
+
+  try {
+    broadcast('force-disconnect', String(userId), {});
+    await logAdminActionLocal('disconnect', 'user', String(userId), userName);
+    showToast(`⏏ Disconnected ${escHtml(userName)}`);
+  } catch (err) {
+    console.error('[Admin] Disconnect error:', err);
+    showToast('⚠️ Failed to disconnect user.');
+  }
 }
 
 async function muteUser(userId, userName) {
