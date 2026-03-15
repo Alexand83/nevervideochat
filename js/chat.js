@@ -326,7 +326,7 @@ async function startEditMessage(msgId) {
   actionsRow.hidden = true;
   textDiv.parentNode.insertBefore(wrap, textDiv);
   textarea.focus();
-});
+}
 
 /* ── Elimina messaggio (conferma poi rimozione da Firestore e da UI) ── */
 function confirmDeleteMessage(msgId) {
