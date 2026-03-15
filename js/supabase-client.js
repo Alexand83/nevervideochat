@@ -792,17 +792,24 @@ export async function connectSupabase() {
             await closeAllCamerasForUser(targetId);
           }
         } catch (_) {}
-        const uidStr = String(targetId);
-        for (const rId of Object.keys(state.rooms || {})) {
-          if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
-        }
-        const u = state.users.find(u => String(u.id) === uidStr);
-        if (u) u.online = false;
-        const { renderUsers } = await import('./users.js');
-        renderUsers();
         if (isCurrentUser) {
-          console.log('[Supabase] force-disconnect received for current user - showing disconnect overlay');
+          const roomIds = Object.keys(state.rooms || {});
+          const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
+          for (const rId of roomIds) {
+            leaveRoom(rId, { silent: true, force: true });
+          }
+          renderRoomTabs();
+          console.log('[Supabase] force-disconnect received - left rooms, showing disconnect overlay');
           showDisconnectedOverlay(true);
+        } else {
+          const uidStr = String(targetId);
+          for (const rId of Object.keys(state.rooms || {})) {
+            if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+          }
+          const u = state.users.find(u => String(u.id) === uidStr);
+          if (u) u.online = false;
+          const { renderUsers } = await import('./users.js');
+          renderUsers();
         }
       })
       .subscribe((status) => {

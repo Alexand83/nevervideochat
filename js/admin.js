@@ -645,16 +645,30 @@ async function kickUser(userId, userName) {
   
   if (!confirm(`Kick ${escHtml(userName)}?`)) return;
   if (!state.fb) return;
-  
-  broadcast('user-kicked', String(userId), { reason: 'Kicked by admin' });
-  /* Togli subito dalla lista in tutte le stanze (kick globale) */
-  const uidStr = String(userId);
-  for (const rId of Object.keys(state.rooms || {})) {
-    if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+
+  try {
+    /* Scrivi in DB così il client della vittima verifica e esce davvero (e rimuove presenza) */
+    const mins = 5;
+    const expiresAt = new Date(Date.now() + mins * 60 * 1000).toISOString();
+    const col = state.fb.firestore.collection('kicked_users');
+    const payload = { user_id: String(userId), username: userName || null, kicked_by: String(state.currentUser.id), expires_at: expiresAt };
+    const roomsSnap = await state.fb.firestore.collection('rooms').get();
+    for (const doc of roomsSnap.docs) {
+      await col.doc(`${userId}_${doc.id}`).set({ ...payload, room_id: doc.id }, { merge: true });
+    }
+    broadcast('user-kicked', String(userId), { room_id: null, expires_at: expiresAt, is_global: true });
+    /* Togli subito dalla lista in tutte le stanze (kick globale) */
+    const uidStr = String(userId);
+    for (const rId of Object.keys(state.rooms || {})) {
+      if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+    }
+    renderUsers();
+    showToast(`👢 Kicked ${escHtml(userName)}`);
+    loadUsers();
+  } catch (err) {
+    console.error('[Admin] Kick error:', err);
+    showToast('⚠️ Failed to kick user.');
   }
-  renderUsers();
-  showToast(`👢 Kicked ${escHtml(userName)}`);
-  loadUsers();
 }
 
 async function disconnectUser(userId, userName) {

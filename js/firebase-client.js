@@ -811,16 +811,23 @@ export async function connectFirebase() {
             await closeAllCamerasForUser(targetId);
           }
         } catch (_) {}
-        /* Rimuovi da tutte le room locali e marca offline nelle liste */
-        const uidStr = String(targetId);
-        for (const rId of Object.keys(state.rooms || {})) {
-          if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
-        }
-        const u = state.users.find(u => String(u.id) === uidStr);
-        if (u) u.online = false;
-        renderUsers();
         if (isCurrentUser) {
+          /* La vittima deve uscire da tutte le stanze così la presenza viene rimossa (altrimenti al refresh riappare) */
+          const roomIds = Object.keys(state.rooms || {});
+          const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
+          for (const rId of roomIds) {
+            leaveRoom(rId, { silent: true, force: true });
+          }
+          renderRoomTabs();
           showDisconnectedOverlay(true);
+        } else {
+          const uidStr = String(targetId);
+          for (const rId of Object.keys(state.rooms || {})) {
+            if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+          }
+          const u = state.users.find(u => String(u.id) === uidStr);
+          if (u) u.online = false;
+          renderUsers();
         }
       })
       .subscribe();
