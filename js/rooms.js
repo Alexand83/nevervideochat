@@ -194,7 +194,7 @@ export async function joinRoom(roomId) {
 }
 
 /* ── Leave a room (opts.silent = true per kick; opts.force = true permette di uscire anche da general quando kickato) ── */
-export function leaveRoom(roomId, opts = {}) {
+export async function leaveRoom(roomId, opts = {}) {
   if (roomId === 'general' && !opts.force) {
     if (!opts.silent) showToast('ℹ️ Cannot leave the General room.');
     return;
@@ -202,8 +202,9 @@ export function leaveRoom(roomId, opts = {}) {
   const room = state.rooms[roomId];
   if (!room) return;
 
-  /* Unsubscribe presence e messaggi → esci dalla lista utenti della stanza */
-  room.presenceCh?.unsubscribe?.();
+  /* Unsubscribe presence e messaggi → esci dalla lista utenti della stanza. Attendi remove() così la presenza sparisce prima di chiudere. */
+  const unsub = room.presenceCh?.unsubscribe?.();
+  if (unsub && typeof unsub.then === 'function') await unsub;
   room.dbSub?.unsubscribe?.();
   delete state.rooms[roomId];
 

@@ -309,8 +309,8 @@ export function createPresenceChannel(roomIdStr, key) {
       return this;
     },
     unsubscribe() {
-      ref.remove();
       listenRef.off();
+      return ref.remove();
     },
   };
 }
@@ -688,7 +688,7 @@ export async function connectFirebase() {
           if (payload.is_global) {
             for (const rId of Object.keys(state.rooms)) state.kickedUsers[targetId][String(rId)] = payload.expires_at;
             const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
-            for (const rId of Object.keys(state.rooms)) leaveRoom(rId, { silent: true, force: true });
+            for (const rId of Object.keys(state.rooms)) await leaveRoom(rId, { silent: true, force: true });
             renderRoomTabs();
             const { showKickOverlay } = await import('./kick-ban.js');
             await showKickOverlay(null, payload.expires_at, true);
@@ -696,7 +696,7 @@ export async function connectFirebase() {
             state.kickedUsers[targetId][String(roomId)] = payload.expires_at;
             const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
             if (state.rooms[roomId]) {
-              leaveRoom(roomId, { silent: true, force: true });
+              await leaveRoom(roomId, { silent: true, force: true });
               renderRoomTabs();
             }
             const { showKickOverlay } = await import('./kick-ban.js');
@@ -812,11 +812,11 @@ export async function connectFirebase() {
           }
         } catch (_) {}
         if (isCurrentUser) {
-          /* La vittima deve uscire da tutte le stanze così la presenza viene rimossa (altrimenti al refresh riappare) */
+          /* La vittima deve uscire da tutte le stanze e attendere che la presenza sia rimossa (altrimenti al refresh riappare) */
           const roomIds = Object.keys(state.rooms || {});
           const { leaveRoom, renderRoomTabs } = await import('./rooms.js');
           for (const rId of roomIds) {
-            leaveRoom(rId, { silent: true, force: true });
+            await leaveRoom(rId, { silent: true, force: true });
           }
           renderRoomTabs();
           showDisconnectedOverlay(true);
