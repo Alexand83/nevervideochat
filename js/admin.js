@@ -675,6 +675,12 @@ async function disconnectUser(userId, userName) {
 
   try {
     broadcast('force-disconnect', String(userId), {});
+    /* Rimuovi subito l'utente da tutte le liste locali (come per kick) */
+    const uidStr = String(userId);
+    for (const rId of Object.keys(state.rooms || {})) {
+      if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+    }
+    renderUsers();
     await logAdminActionLocal('disconnect', 'user', String(userId), userName);
     showToast(`⏏ Disconnected ${escHtml(userName)}`);
   } catch (err) {

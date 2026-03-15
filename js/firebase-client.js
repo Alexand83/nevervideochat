@@ -803,8 +803,25 @@ export async function connectFirebase() {
       })
       .on('broadcast', { event: 'force-disconnect' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
-        if (!state.currentUser || String(targetId) !== String(state.currentUser.id)) return;
-        showDisconnectedOverlay(true);
+        if (!state.currentUser || !targetId) return;
+        const isCurrentUser = String(targetId) === String(state.currentUser.id);
+        try {
+          const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
+          if (isCurrentUser || state.cameraWindows[targetId]) {
+            await closeAllCamerasForUser(targetId);
+          }
+        } catch (_) {}
+        /* Rimuovi da tutte le room locali e marca offline nelle liste */
+        const uidStr = String(targetId);
+        for (const rId of Object.keys(state.rooms || {})) {
+          if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+        }
+        const u = state.users.find(u => String(u.id) === uidStr);
+        if (u) u.online = false;
+        renderUsers();
+        if (isCurrentUser) {
+          showDisconnectedOverlay(true);
+        }
       })
       .subscribe();
 

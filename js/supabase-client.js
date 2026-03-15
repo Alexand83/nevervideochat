@@ -784,9 +784,26 @@ export async function connectSupabase() {
       })
       .on('broadcast', { event: 'force-disconnect' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
-        if (!state.currentUser || String(targetId) !== String(state.currentUser.id)) return;
-        console.log('[Supabase] force-disconnect received for current user - showing disconnect overlay');
-        showDisconnectedOverlay(true);
+        if (!state.currentUser || !targetId) return;
+        const isCurrentUser = String(targetId) === String(state.currentUser.id);
+        try {
+          const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
+          if (isCurrentUser || state.cameraWindows[targetId]) {
+            await closeAllCamerasForUser(targetId);
+          }
+        } catch (_) {}
+        const uidStr = String(targetId);
+        for (const rId of Object.keys(state.rooms || {})) {
+          if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
+        }
+        const u = state.users.find(u => String(u.id) === uidStr);
+        if (u) u.online = false;
+        const { renderUsers } = await import('./users.js');
+        renderUsers();
+        if (isCurrentUser) {
+          console.log('[Supabase] force-disconnect received for current user - showing disconnect overlay');
+          showDisconnectedOverlay(true);
+        }
       })
       .subscribe((status) => {
         /* Canale chiuso/timeout/errore → showDisconnectedOverlay (grazia 60s se tab hidden, gestita dentro) */
