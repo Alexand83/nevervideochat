@@ -13,6 +13,7 @@ import { openPrivateChat, closePChat } from './private-chat.js';
 import { sendMessage, clearReplyTo }  from './chat.js';
 import { sendTypingEvent } from './users.js';
 import { joinRoom, getAvailableRooms } from './rooms.js';
+import { hasPermission } from './permissions.js';
 
 /* Forward ref for uploadToStorage (set by main.js) */
 let _uploadToStorage = null;
@@ -350,12 +351,11 @@ async function checkAndShowAdminActions(targetUid) {
     const role = data.role;
     if (role === 'owner' || role === 'admin') return true;
     if (role === 'moderator') return true;
-    
     if (data.custom_role_id) {
       const roleSnap = await state.fb.firestore.collection('custom_roles').doc(data.custom_role_id).get();
       const customRole = roleSnap?.data();
       if (customRole?.permissions) {
-        return customRole.permissions.can_kick || customRole.permissions.can_ban || customRole.permissions.can_mute;
+        return customRole.permissions.can_kick || customRole.permissions.can_ban || customRole.permissions.can_mute || customRole.permissions.can_disconnect;
       }
     }
     return false;
@@ -426,6 +426,21 @@ export function initContextMenu() {
     closeCtxMenu();
     if (!uid || !user) return;
     openBanModal(uid, user.name || user.username);
+  });
+  
+  dom.ctxDisconnectBtn?.addEventListener('click', async () => {
+    const uid = state.contextTargetUID;
+    const user = findUser(uid);
+    closeCtxMenu();
+    if (!uid || !user) return;
+    if (!hasPermission('can_disconnect')) {
+      showToast('🚫 You do not have permission to disconnect users.');
+      return;
+    }
+    const { broadcast } = await import('./broadcast.js');
+    if (!confirm(`Disconnect ${user.name || user.username}? This will log them out and return them to login.`)) return;
+    broadcast('force-disconnect', String(uid), {});
+    showToast(`⏏ Disconnected ${user.name || user.username}`);
   });
   
   dom.ctxOverlay.addEventListener('click', closeCtxMenu);

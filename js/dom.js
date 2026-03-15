@@ -114,6 +114,7 @@ export const dom = {
   ctxAdminActions: $('ctxAdminActions'),
   ctxKickBtn:   $('ctxKickBtn'),
   ctxMuteBtn:   $('ctxMuteBtn'),
+  ctxDisconnectBtn: $('ctxDisconnectBtn'),
   ctxBanBtn:    $('ctxBanBtn'),
 
   /* Auth modal */
