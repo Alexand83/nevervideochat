@@ -28,6 +28,40 @@ Dopo aver eseguito **setup-firebase.html** avrai queste collezioni con i dati in
 - **Bucket**: `chat-media` (o il default del progetto)
 - **Path**: `avatars/{userId}/{filename}`, `uploads/{filename}` — come in Supabase.
 
+## Credenziali TURN (sicurezza WebRTC)
+
+Le credenziali dei server TURN **non** vanno nel codice sorgente. Inseriscile nella collection:
+
+| Collection | Document ID  | Campi |
+|------------|--------------|-------|
+| **config** | `ice_servers` | `iceServers` (array), `iceCandidatePoolSize` (number), `bundlePolicy` (string), `rtcpMuxPolicy` (string) |
+
+### Come creare il documento (Firebase Console → Firestore)
+
+```
+Collection: config
+Document:   ice_servers
+
+iceServers: [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  { urls: "turn:<TUO_HOST>:80",                  username: "<USER>", credential: "<PASS>" },
+  { urls: "turn:<TUO_HOST>:443",                 username: "<USER>", credential: "<PASS>" },
+  { urls: "turn:<TUO_HOST>:443?transport=tcp",   username: "<USER>", credential: "<PASS>" },
+  { urls: "turns:<TUO_HOST>:443?transport=tcp",  username: "<USER>", credential: "<PASS>" }
+]
+iceCandidatePoolSize: 10
+bundlePolicy:  "max-bundle"
+rtcpMuxPolicy: "require"
+```
+
+La regola Firestore (`firebase/firestore.rules`) permette lettura solo agli utenti autenticati
+e **write: false** dal client. Nessun client può modificare le credenziali.
+
+> **Se il documento non esiste o l'utente non è autenticato**, l'app usa solo server STUN
+> pubblici (no relay). Le connessioni dirette (host/srflx) funzioneranno comunque.
+
 ## Note
 
 - Le “tabelle” Supabase diventano **collezioni** Firestore; le righe diventano **documenti**.

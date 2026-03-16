@@ -4,7 +4,7 @@
 /* VERSION MARKER — if you see this in logs, new code is running */
 console.log('%c[NVC] camera.js v20260318 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
-import { ICE_SERVERS_FALLBACK, SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { ICE_SERVERS_FALLBACK } from './config.js';
 import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
@@ -17,10 +17,13 @@ import { getAvailableRooms } from './rooms.js';
 const CAM_STEP = 30;
 function camCount() { return Object.keys(state.cameraWindows).length; }
 
-/* ── ICE config fetch sicuro ────────────────────────────────────
-   Le credenziali TURN vivono negli env vars della Edge Function,
-   non nel bundle JS. Fallback a STUN-only se la funzione non è
-   raggiungibile (es. utente non autenticato, rete offline).        */
+/* ── ICE config sicura da Firestore ─────────────────────────────
+   Le credenziali TURN sono memorizzate nel documento Firestore
+   "config/ice_servers", leggibile solo da utenti autenticati e
+   mai scrivibile dal client (regola write:false).
+   Il documento NON è mai nel sorgente JS né nel repo git.
+   Fallback a STUN-only se Firestore non è disponibile.
+   Vedi: firebase/firestore.rules e firebase/FIRESTORE_COLLECTIONS.md */
 let _iceConfigCache = null;
 let _iceConfigFetchedAt = 0;
 const ICE_CONFIG_TTL_MS = 3_600_000; // 1 ora
@@ -29,13 +32,19 @@ async function getIceConfig() {
   const now = Date.now();
   if (_iceConfigCache && (now - _iceConfigFetchedAt) < ICE_CONFIG_TTL_MS) return _iceConfigCache;
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/get-ice-config`, {
-      headers: { apikey: SUPABASE_ANON_KEY },
-    });
-    if (res.ok) {
-      _iceConfigCache = await res.json();
-      _iceConfigFetchedAt = now;
-      return _iceConfigCache;
+    const snap = await state.fb?.firestore.collection('config').doc('ice_servers').get();
+    if (snap?.exists) {
+      const data = snap.data();
+      if (Array.isArray(data?.iceServers) && data.iceServers.length > 0) {
+        _iceConfigCache = {
+          iceServers:           data.iceServers,
+          iceCandidatePoolSize: data.iceCandidatePoolSize ?? 10,
+          bundlePolicy:         data.bundlePolicy         ?? 'max-bundle',
+          rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
+        };
+        _iceConfigFetchedAt = now;
+        return _iceConfigCache;
+      }
     }
   } catch (_) {}
   return ICE_SERVERS_FALLBACK;
