@@ -1912,14 +1912,22 @@ export async function handleWebRTCSignal(payload) {
       console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'listeners attached, initial state:', pc.connectionState, pc.iceConnectionState);
       console.log('[WebRTC-FLOW] INCOMING: setRemoteDescription(offer) for', from);
       await pc.setRemoteDescription({ type: 'offer', sdp });
-      /* Flush ICE arrivati prima dell'offer (dir 'out' da questo peer). Se sono di una vecchia sessione addIceCandidate può fallire → catch e ignora. */
-      const prePcCount = state.pendingIncomingICE[from]?.length || 0;
-      if (prePcCount) {
-        console.log('[WebRTC] VIEWER: flush', prePcCount, 'buffered ICE to incoming PC from', from.slice(0, 8) + '…');
-        for (const c of state.pendingIncomingICE[from]) {
+      /* Flush solo ICE ricevuti insieme a QUESTA offerta (_ts >= offerTs - 5s). I 70+ ICE replay Firebase sono per offerte vecchie → addIceCandidate fallisce e ICE resta "new". */
+      const offerTs = payload._ts ?? payload.ts ?? Date.now();
+      const minIceTs = offerTs - 5000;
+      const pending = state.pendingIncomingICE[from] || [];
+      const toFlush = pending.filter(entry => {
+        const ts = entry._ts ?? entry.ts;
+        if (ts == null) return pending.length <= 15;
+        return ts >= minIceTs;
+      });
+      state.pendingIncomingICE[from] = [];
+      if (toFlush.length) {
+        console.log('[WebRTC] VIEWER: flush', toFlush.length, 'buffered ICE (offerTs=', offerTs, 'dropped', pending.length - toFlush.length, 'stale) to incoming PC from', from.slice(0, 8) + '…');
+        for (const entry of toFlush) {
+          const c = entry.c || entry;
           await pc.addIceCandidate(c).catch(err => console.warn('[WebRTC] Pre-PC ICE flush error:', err.message));
         }
-        state.pendingIncomingICE[from] = [];
       }
       /* Flush any buffered ICE candidates that arrived before the offer (on this PC) */
       const onPcCount = pc._pendingCandidates?.length || 0;
@@ -2009,10 +2017,11 @@ export async function handleWebRTCSignal(payload) {
         ? { candidate: candidate.trim() }
         : (candidate && typeof candidate === 'object' && 'candidate' in candidate ? candidate : { candidate: String(candidate) });
       const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidateObj);
-      /* dir 'out': if we don't have incoming PC yet (offer not processed), buffer so we don't drop owner's ICE */
+      /* dir 'out': if we don't have incoming PC yet (offer not processed), buffer con _ts per flush solo ICE della stessa sessione */
       if (dir === 'out' && !pc) {
         state.pendingIncomingICE[from] = state.pendingIncomingICE[from] || [];
-        state.pendingIncomingICE[from].push(iceCandidate);
+        const iceTs = payload._ts ?? payload.ts ?? Date.now();
+        state.pendingIncomingICE[from].push({ c: iceCandidate, _ts: iceTs });
         console.log('[WebRTC-FLOW] ICE dir=out from', (from || '').slice(0, 8) + '…', '→ BUFFER (no incoming PC) size=', state.pendingIncomingICE[from].length);
         return;
       }
