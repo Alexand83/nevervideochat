@@ -68,18 +68,26 @@ export function loadDeviceSettings() {
 export function saveDeviceSettings(settings) {
   localStorage.setItem('nvc_device_settings', JSON.stringify(settings));
 }
-/** Profilo video ottimizzato per connessioni scadenti: risoluzione e fps contenuti così tutti riescono a vedere. */
-const VIDEO_CONSTRAINTS_LOW = {
-  width:  { ideal: 640, max: 1280 },
-  height: { ideal: 360, max: 720 },
-  frameRate: { ideal: 15, max: 24 },
+/** Livelli di cattura: partenza minimale per PC vecchi, ramp silenzioso se l'hardware regge. */
+const CAPTURE_LEVELS = ['minimal', 'low', 'medium', 'high'];
+const VIDEO_CONSTRAINTS_BY_LEVEL = {
+  minimal: { width: { ideal: 320, max: 424 }, height: { ideal: 240, max: 240 }, frameRate: { ideal: 10, max: 15 } },
+  low:     { width: { ideal: 640, max: 1280 }, height: { ideal: 360, max: 720 }, frameRate: { ideal: 15, max: 24 } },
+  medium:  { width: { ideal: 640, max: 854 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 20, max: 24 } },
+  high:    { width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 }, frameRate: { ideal: 24, max: 30 } },
 };
+
+/** Restituisce i constraint video per un livello (solo video, per ramp silenzioso). */
+export function getVideoConstraintsForLevel(level) {
+  const s = state.settings || {};
+  const base = VIDEO_CONSTRAINTS_BY_LEVEL[level] || VIDEO_CONSTRAINTS_BY_LEVEL.minimal;
+  return s.cameraId ? { deviceId: { exact: s.cameraId }, ...base } : base;
+}
 
 export function getMediaConstraints() {
   const s = state.settings || {};
-  const videoBase = s.cameraId
-    ? { deviceId: { exact: s.cameraId }, ...VIDEO_CONSTRAINTS_LOW }
-    : VIDEO_CONSTRAINTS_LOW;
+  const level = state.videoCaptureLevel || 'minimal';
+  const videoBase = getVideoConstraintsForLevel(level);
   const audioBase = s.micId ? { deviceId: { exact: s.micId } } : true;
   return {
     video: videoBase,

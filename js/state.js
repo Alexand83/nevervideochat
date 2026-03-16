@@ -26,6 +26,7 @@ export const state = {
   localStream:      null,
   cameraClosedAt:   0,
   cameraRoom:       null,   /* room where the camera is currently active */
+  videoCaptureLevel: null,  /* 'minimal'|'low'|'medium'|'high' — partenza minimale, ramp silenzioso */
 
   /* WebRTC */
   outgoingPCs:         {},

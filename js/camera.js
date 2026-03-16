@@ -10,7 +10,7 @@ import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
 import { broadcast, broadcastAll } from './broadcast.js';
 import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences } from './users.js';
-import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints, saveDeviceSettings } from './storage.js';
+import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints, getVideoConstraintsForLevel, saveDeviceSettings } from './storage.js';
 import { getAvailableRooms } from './rooms.js';
 
 const CAM_STEP = 30;
@@ -187,6 +187,24 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       videoEl.addEventListener('canplay', reattachRemoteVideo, { once: true });
       /* Retry a 400ms, 800ms, 1.2s, 1.6s, 2s, 2.5s, 3s finché non parte */
       [400, 800, 1200, 1600, 2000, 2500, 3000].forEach(t => setTimeout(reattachRemoteVideo, t));
+      /* Ultimo tentativo a 4s: sostituisci l'elemento video con uno nuovo (alcuni browser tengono cache nera sul vecchio) */
+      setTimeout(() => {
+        const cw = state.cameraWindows[uid];
+        if (!cw?.stream || cw.stream !== stream || cw.el !== win) return;
+        const wrap = cw.el.querySelector('.cam-win-video-wrap');
+        const oldV = wrap?.querySelector('video');
+        if (!wrap || !oldV || oldV.videoWidth > 0 || !cw.stream.getVideoTracks().some(t => t.readyState === 'live')) return;
+        const newV = document.createElement('video');
+        newV.id = oldV.id;
+        newV.setAttribute('autoplay', '');
+        newV.setAttribute('playsinline', '');
+        newV.muted = true;
+        newV.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+        newV.srcObject = new MediaStream(cw.stream.getTracks());
+        wrap.appendChild(newV);
+        oldV.remove();
+        newV.play().catch(() => {});
+      }, 4000);
     }
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
@@ -446,6 +464,7 @@ export async function closeCameraWindow(uid) {
       state.localStream = null;
       state.cameraClosedAt = Date.now();
       state.cameraRoom = null;
+      clearCaptureRamp();
       Object.keys(state.outgoingPCs).forEach(peerId => {
         clearEncodingRampTimer(state.outgoingPCs[peerId]);
         state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
@@ -480,6 +499,7 @@ export async function closeCameraWindow(uid) {
     state.localStream = null;
     state.cameraClosedAt = Date.now();
     state.cameraRoom = null;
+    clearCaptureRamp();
     Object.keys(state.outgoingPCs).forEach(peerId => {
       clearEncodingRampTimer(state.outgoingPCs[peerId]);
       state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
@@ -517,6 +537,7 @@ export function resetCameraStateOnDisconnect() {
   }
   state.cameraRoom = null;
   state.cameraClosedAt = 0;
+  clearCaptureRamp();
   for (const uid of Object.keys(state.outgoingPCs)) {
     clearEncodingRampTimer(state.outgoingPCs[uid]);
     try { state.outgoingPCs[uid].close(); } catch (_) {}
@@ -658,6 +679,7 @@ export async function toggleOwnCamera() {
       state.localStream = null;
       state.cameraClosedAt = Date.now();
       state.cameraRoom = null;
+      clearCaptureRamp();
       Object.keys(state.outgoingPCs).forEach(peerId => {
         clearEncodingRampTimer(state.outgoingPCs[peerId]);
         state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
@@ -704,11 +726,20 @@ async function createMicVolumePipeline(stream) {
   }
 }
 
+/** Timer per ramp silenzioso qualità cattura (minimal → low → medium → high). */
+let captureRampTimer = null;
+
+function clearCaptureRamp() {
+  if (captureRampTimer) { clearTimeout(captureRampTimer); captureRampTimer = null; }
+  state.videoCaptureLevel = null;
+}
+
 export async function startOwnCamera() {
   if (!navigator.mediaDevices?.getUserMedia) { showToast('⚠️ Camera not supported.'); return; }
   try {
     const msSince = Date.now() - state.cameraClosedAt;
     if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
+    state.videoCaptureLevel = 'minimal';
     state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
     state.micPipeline = await createMicVolumePipeline(state.localStream) || null;
     state.currentUser.hasCamera = true;
@@ -733,6 +764,7 @@ export async function startOwnCamera() {
       state.localStream = null;
       state.currentUser.hasCamera = false;
       state.cameraRoom = null;
+      clearCaptureRamp();
       dom.cameraBtnLabel.textContent = 'Camera Off';
       dom.cameraBtnHeader.classList.remove('camera-on');
       showToast('⚠️ Failed to create camera window.');
@@ -778,6 +810,13 @@ export async function startOwnCamera() {
       await updateAllRoomPresences();
       renderUsers();
     }, 1500);
+    
+    /* Ramp silenzioso qualità cattura: minimal → low (5s) → medium (15s) → high (30s) se l'hardware regge */
+    if (captureRampTimer) clearTimeout(captureRampTimer);
+    const scheduleNextRamp = (delayMs) => {
+      captureRampTimer = setTimeout(() => tryRampUpCaptureQuality(), delayMs);
+    };
+    scheduleNextRamp(5000);
     
     if (isEventsRoom) {
       /* Automatically share with all users in Events room */
@@ -1465,7 +1504,48 @@ export async function sharePublicCameraTo(toUid) {
   } catch (err) { showToast('⚠️ Could not share camera: ' + err.message); }
 }
 
-/* ── Qualità video adattiva: partenza bassa per connessioni scadenti, ramp-up se la connessione regge ── */
+/* ── Ramp silenzioso qualità CATTURA (getUserMedia): minimal → low → medium → high ── */
+async function tryRampUpCaptureQuality() {
+  captureRampTimer = null;
+  if (!state.localStream || state.cameraRoom == null) return;
+  const levels = ['minimal', 'low', 'medium', 'high'];
+  const cur = state.videoCaptureLevel || 'minimal';
+  const idx = levels.indexOf(cur);
+  const next = levels[idx + 1];
+  if (!next) return;
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: getVideoConstraintsForLevel(next),
+      audio: false,
+    });
+    const newVideoTrack = newStream.getVideoTracks()[0];
+    if (!newVideoTrack) {
+      newStream.getTracks().forEach(t => t.stop());
+      return;
+    }
+    const oldVideoTrack = state.localStream.getVideoTracks()[0];
+    if (!oldVideoTrack) {
+      newStream.getTracks().forEach(t => t.stop());
+      return;
+    }
+    state.localStream.removeTrack(oldVideoTrack);
+    state.localStream.addTrack(newVideoTrack);
+    oldVideoTrack.stop();
+    newStream.getTracks().filter(t => t !== newVideoTrack).forEach(t => t.stop());
+    state.videoCaptureLevel = next;
+    Object.values(state.outgoingPCs || {}).forEach(pc => {
+      const sender = pc.getSenders?.().find(s => s.track?.kind === 'video');
+      if (sender) sender.replaceTrack(newVideoTrack).catch(() => {});
+    });
+    const delays = { minimal: 5000, low: 10000, medium: 15000, high: 0 };
+    const delay = delays[next] || 0;
+    if (delay > 0) captureRampTimer = setTimeout(() => tryRampUpCaptureQuality(), delay);
+  } catch (_) {
+    /* Fallito: resta al livello corrente; nessun toast, silenzioso */
+  }
+}
+
+/* ── Qualità video adattiva (encoding WebRTC): partenza bassa, ramp-up se la connessione regge ── */
 const ENCODING_PROFILES = {
   low:    { maxBitrate: 250000, scaleResolutionDownBy: 2   },
   medium: { maxBitrate: 450000, scaleResolutionDownBy: 1.5 },
