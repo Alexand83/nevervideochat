@@ -11,12 +11,12 @@
   min-height: 190px;
   background: var(--bg1);
   border: 1px solid var(--border);
-  border-radius: var(--r4);
+  border-radius: var(--r5);
   box-shadow: var(--sh-xl);
   z-index: 650;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   animation: slideUpIn .2s ease;
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
   container-type: inline-size;
@@ -93,7 +93,7 @@
   background: #000;
   overflow: hidden;
   min-height: 0;
-  border-radius: 0;
+  border-radius: 0 0 var(--r3) var(--r3);
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 /* Indicatore "sta parlando": bordo/glow su tutta la finestra (header + video + footer) */
@@ -470,7 +470,7 @@
     transparent 73%
   );
   opacity: .45;
-  border-radius: 0 0 var(--r4) 0;
+  border-radius: 0 0 var(--r5) 0;
   transition: opacity var(--tf);
   touch-action: none;
 }

@@ -127,7 +127,10 @@ export function createCameraWindow(uid, stream, name, isOwn) {
   const videoEl = $(`cam-vid-${safeUid}`);
   const placeholderEl = $(`cam-solo-voce-${safeUid}`);
   if (videoEl) {
-    videoEl.srcObject = null; videoEl.srcObject = stream;
+    /* Per il remoto usa un MediaStream nuovo così il browser non tiene cache nera */
+    const streamToAttach = !isOwn && stream?.getTracks?.()?.length ? new MediaStream(stream.getTracks()) : stream;
+    videoEl.srcObject = null;
+    videoEl.srcObject = streamToAttach;
     if (!isOwn) {
       videoEl.muted = true;
       videoEl.volume = 1;
@@ -165,34 +168,25 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         }, 500);
       }
       updateRemoteVideoVisibility(uid);
-      /* Come per la propria cam: forza primo frame sul remoto (evita schermo nero su dispositivi lenti / browser vecchi) */
-      const forceRemoteFirstFrame = () => {
+      /* Forza primo frame sul remoto: reattach con nuovo MediaStream + play (evita schermo nero) */
+      const reattachRemoteVideo = () => {
         const cw = state.cameraWindows[uid];
         if (!cw?.stream || cw.stream !== stream || cw.el !== win) return;
         const v = cw.el.querySelector('video');
-        if (!v || !cw.stream.getVideoTracks().some(t => t.readyState === 'live')) return;
+        if (!v) return;
+        const tracks = cw.stream.getTracks();
+        const hasVideo = tracks.some(t => t.kind === 'video' && t.readyState === 'live');
+        if (!hasVideo) return;
         if (v.videoWidth > 0) return; /* già ok */
         v.srcObject = null;
-        v.srcObject = cw.stream;
+        v.srcObject = new MediaStream(tracks);
         v.muted = true;
         v.play().catch(() => {});
       };
-      videoEl.addEventListener('loadeddata', forceRemoteFirstFrame, { once: true });
-      videoEl.addEventListener('canplay', forceRemoteFirstFrame, { once: true });
-      setTimeout(forceRemoteFirstFrame, 400);
-      setTimeout(forceRemoteFirstFrame, 1200);
-      /* Fallback: dopo 2s se il video è ancora senza frame, reattach (utile su stessa rete quando i frame arrivano un po' dopo) */
-      setTimeout(() => {
-        const cw = state.cameraWindows[uid];
-        if (!cw?.stream || cw.el !== win) return;
-        const v = cw.el.querySelector('video');
-        if (v && v.srcObject === cw.stream && v.videoWidth === 0 && cw.stream.getVideoTracks().some(t => t.readyState === 'live')) {
-          v.srcObject = null;
-          v.srcObject = cw.stream;
-          v.muted = true; /* remoto: audio solo da Web Audio (volume/mute) */
-          v.play().catch(() => {});
-        }
-      }, 2000);
+      videoEl.addEventListener('loadeddata', reattachRemoteVideo, { once: true });
+      videoEl.addEventListener('canplay', reattachRemoteVideo, { once: true });
+      /* Retry a 400ms, 800ms, 1.2s, 1.6s, 2s, 2.5s, 3s finché non parte */
+      [400, 800, 1200, 1600, 2000, 2500, 3000].forEach(t => setTimeout(reattachRemoteVideo, t));
     }
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
@@ -1644,20 +1638,20 @@ export async function handleWebRTCSignal(payload) {
             const vid = cw.el?.querySelector?.('video') || document.getElementById(`cam-vid-${safeId(from)}`);
             if (vid) {
               vid.srcObject = null;
-              vid.srcObject = cw.stream;
+              vid.srcObject = new MediaStream(cw.stream.getTracks());
               vid.muted = true; /* remoto: audio solo da Web Audio così volume/mute funzionano */
               vid.play().catch(() => {});
-              /* Su alcuni dispositivi il primo frame arriva in ritardo: riattacca dopo un attimo se ancora nero */
-              setTimeout(() => {
+              /* Riattacca più volte se ancora nero (primo frame in ritardo su alcuni browser) */
+              [300, 600, 1000, 1500].forEach(t => setTimeout(() => {
                 if (!state.cameraWindows[from]?.stream || state.cameraWindows[from].stream !== cw.stream) return;
                 const v = state.cameraWindows[from].el?.querySelector?.('video');
-                if (v && v.videoWidth === 0 && cw.stream.getVideoTracks().some(t => t.readyState === 'live')) {
+                if (v && v.videoWidth === 0 && cw.stream.getVideoTracks().some(track => track.readyState === 'live')) {
                   v.srcObject = null;
-                  v.srcObject = cw.stream;
+                  v.srcObject = new MediaStream(cw.stream.getTracks());
                   v.muted = true;
                   v.play().catch(() => {});
                 }
-              }, 500);
+              }, t));
             }
           } else if (track?.kind === 'audio' && !cw.stream.getAudioTracks().length) {
             cw.stream.addTrack(track);
