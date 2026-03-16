@@ -32,24 +32,8 @@ export function getDeviceType() {
   return type;
 }
 
-/* Icone SVG dispositivo: stile lineare pulito, 24x24 */
-const DEVICE_SVG = {
-  /* Smartphone: corpo alto con dettaglio centrale */
-  mobile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <rect x="8" y="2" width="8" height="20" rx="2.5"/>
-    <line x1="12" y1="18" x2="12" y2="18.5" stroke-linecap="round"/>
-  </svg>`,
-  /* Tablet: corpo largo, stesso dettaglio in basso */
-  tablet: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <rect x="3" y="4" width="18" height="16" rx="2"/>
-    <line x1="12" y1="19" x2="12" y2="19.5" stroke-linecap="round"/>
-  </svg>`,
-  /* PC: schermo + base a T */
-  desktop: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <rect x="2" y="3" width="20" height="14" rx="1.5"/>
-    <path d="M6 17h12M12 17v4"/>
-  </svg>`,
-};
+/* Emoji per tipo dispositivo */
+const DEVICE_EMOJI = { mobile: '📱', tablet: '💻', desktop: '🖥️' };
 const DEVICE_LABEL = { mobile: 'Mobile', tablet: 'Tablet', desktop: 'PC' };
 
 /* ── User helpers ── */
@@ -165,7 +149,7 @@ export function renderUsers() {
     const deviceEl = document.createElement('span');
     deviceEl.className = `user-device-icon user-device-${dtype}`;
     deviceEl.title = DEVICE_LABEL[dtype] || 'PC';
-    deviceEl.innerHTML = DEVICE_SVG[dtype] || DEVICE_SVG.desktop;
+    deviceEl.textContent = DEVICE_EMOJI[dtype] || DEVICE_EMOJI.desktop;
     li.append(av, info, deviceEl);
 
     /* For the current user: show cam icon only in the room where cam is active */
