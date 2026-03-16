@@ -343,11 +343,15 @@ export function createCameraWindow(uid, stream, name, isOwn) {
           updateCamQualityUI('low');
           showToast('📉 Qualità video ridotta per connessioni lente.');
         } else {
+          /* Ripristino: riavvia il ramp-up automatico per ogni PC.
+             Non usare currentEncodingLevel (è ancora 'low' — lo aveva sovrascritto
+             updateCamQualityUI('low') quando era stato premuto "Riduci qualità").
+             startEncodingRampUp risale low → medium (15s) → high (15s). */
           Object.keys(state.outgoingPCs).forEach(peerId => {
-            applyVideoEncoding(state.outgoingPCs[peerId], currentEncodingLevel);
+            startEncodingRampUp(state.outgoingPCs[peerId], peerId);
           });
-          updateCamQualityUI(currentEncodingLevel);
-          showToast('📈 Ripristinato aumento automatico qualità.');
+          updateCamQualityUI('low'); /* il label salirà col ramp */
+          showToast('📈 Qualità automatica riattivata — sale gradualmente.');
         }
       });
     }
