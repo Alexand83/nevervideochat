@@ -171,13 +171,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         }, 500);
       }
       updateRemoteVideoVisibility(uid);
-      /* Cam nera: sostituzione ripetuta dell'elemento video + polling finché non parte */
-      const tryReplace = () => {
-        if (state.cameraWindows[uid]?.stream !== stream || state.cameraWindows[uid]?.el !== win) return;
-        replaceRemoteVideoElement(uid);
-      };
-      [500, 1000, 2000, 3000, 4000, 6000].forEach(t => setTimeout(tryReplace, t));
-      /* Polling ogni 400ms per 12s: se ancora nero, sostituisci di nuovo l'elemento */
+      /* Polling ogni 400ms per 12s: finché il video è nero e il track è vivo, ricrea l'elemento */
       let pollCount = 0;
       const pollInterval = setInterval(() => {
         pollCount++;
@@ -188,7 +182,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
           return;
         }
         const v = cw.el?.querySelector('video');
-        if (v?.videoWidth > 0) { clearInterval(pollInterval); if (cw) cw._remoteVideoPollInterval = null; return; }
+        if (v?.videoWidth > 0) { clearInterval(pollInterval); cw._remoteVideoPollInterval = null; return; }
         if (stream.getVideoTracks().some(t => t.readyState === 'live')) replaceRemoteVideoElement(uid);
       }, 400);
       if (state.cameraWindows[uid]) state.cameraWindows[uid]._remoteVideoPollInterval = pollInterval;
@@ -268,7 +262,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         updateRemoteVideoVisibility(uid);
       }
       syncRemoteVideoPlaceholder();
-      const remoteVideoCheckInterval = setInterval(syncRemoteVideoPlaceholder, 1000);
+      const remoteVideoCheckInterval = setInterval(syncRemoteVideoPlaceholder, 2000);
       if (state.cameraWindows[uid]) state.cameraWindows[uid].remoteVideoCheckInterval = remoteVideoCheckInterval;
     }
   }
@@ -438,75 +432,52 @@ export async function closeCameraWindow(uid) {
     const { updateEventsCamGrid } = await import('./rooms.js');
     updateEventsCamGrid();
     
-    /* If this is own camera, also stop stream */
-    const isOwn = uid === state.currentUser?.id || uid === 'me';
-    if (isOwn) {
-      stopMicMeter(uid);
-      const closedRoom = state.cameraRoom;
-      if (state.micPipeline) {
-        state.micPipeline.ctx.close().catch(() => {});
-        state.micPipeline = null;
-      }
-      state.localStream?.getTracks().forEach(t => t.stop());
-      state.localStream = null;
-      state.cameraClosedAt = Date.now();
-      state.cameraRoom = null;
-      clearCaptureRamp();
-      Object.keys(state.outgoingPCs).forEach(peerId => {
-        clearEncodingRampTimer(state.outgoingPCs[peerId]);
-        state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
-      });
-      state.currentUser.hasCamera = false;
-      dom.cameraBtnLabel.textContent = 'Camera Off'; dom.cameraBtnHeader.classList.remove('camera-on');
-      broadcastAll('cam-closed', { room_id: closedRoom });
-      await updateAllRoomPresences(); renderUsers(); showToast('📹 Camera disabled.');
-    }
+    if (uid === state.currentUser?.id || uid === 'me') await _teardownOwnStream();
     return;
   }
   
   /* Normal floating window close */
   const cw = state.cameraWindows[uid]; if (!cw) return;
   if (cw._remoteVideoPollInterval) { clearInterval(cw._remoteVideoPollInterval); cw._remoteVideoPollInterval = null; }
-  stopMicMeter(uid); 
-  /* CRITICO: Rimuovi il stream prima di rimuovere la cam per evitare che streamAlive risulti true */
-  if (cw.stream) {
-    cw.stream.getTracks().forEach(t => t.stop());
-    cw.stream = null;
-  }
-  cw.el.remove(); 
+  stopMicMeter(uid);
+  if (cw.stream) { cw.stream.getTracks().forEach(t => t.stop()); cw.stream = null; }
+  if (cw.el?.parentNode) cw.el.remove();
   delete state.cameraWindows[uid];
-  const isOwn = uid === state.currentUser?.id || uid === 'me';
-  if (isOwn) {
-    stopMicMeter(uid);
-    const closedRoom = state.cameraRoom;
-    if (state.micPipeline) {
-      state.micPipeline.ctx.close().catch(() => {});
-      state.micPipeline = null;
-    }
-    state.localStream?.getTracks().forEach(t => t.stop());
-    state.localStream = null;
-    state.cameraClosedAt = Date.now();
-    state.cameraRoom = null;
-    clearCaptureRamp();
-    Object.keys(state.outgoingPCs).forEach(peerId => {
-      clearEncodingRampTimer(state.outgoingPCs[peerId]);
-      state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
-    });
-    state.currentUser.hasCamera = false;
-    dom.cameraBtnLabel.textContent = 'Camera Off'; dom.cameraBtnHeader.classList.remove('camera-on');
-    broadcastAll('cam-closed', { room_id: closedRoom });
-    await updateAllRoomPresences(); renderUsers(); showToast('📹 Camera disabled.');
+
+  if (uid === state.currentUser?.id || uid === 'me') {
+    await _teardownOwnStream();
   } else {
-    /* CRITICO: Marca questa camera come chiusa manualmente dall'utente */
-    /* Questo impedisce che venga riaperta automaticamente */
     state.manuallyClosedCameras[uid] = true;
-    console.log('[Camera] Camera manually closed by user:', uid, '- will not auto-reopen');
-    
-    if (state.incomingPCs[uid]) { 
-      state.incomingPCs[uid].close(); 
-      delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid]; 
+    if (state.incomingPCs[uid]) {
+      state.incomingPCs[uid].close();
+      delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid];
     }
   }
+}
+
+/** Arresta lo stream locale e aggiorna UI/presenza. Chiamato da closeCameraWindow e toggleOwnCamera. */
+async function _teardownOwnStream() {
+  const selfId = state.currentUser?.id;
+  stopMicMeter(selfId);
+  const closedRoom = state.cameraRoom;
+  if (state.micPipeline) { state.micPipeline.ctx.close().catch(() => {}); state.micPipeline = null; }
+  state.localStream?.getTracks().forEach(t => t.stop());
+  state.localStream = null;
+  state.cameraClosedAt = Date.now();
+  state.cameraRoom = null;
+  clearCaptureRamp();
+  for (const peerId of Object.keys(state.outgoingPCs)) {
+    clearEncodingRampTimer(state.outgoingPCs[peerId]);
+    state.outgoingPCs[peerId]?.close();
+    delete state.outgoingPCs[peerId];
+  }
+  state.currentUser.hasCamera = false;
+  dom.cameraBtnLabel.textContent = 'Camera Off';
+  dom.cameraBtnHeader.classList.remove('camera-on');
+  broadcastAll('cam-closed', { room_id: closedRoom });
+  await updateAllRoomPresences();
+  renderUsers();
+  showToast('📹 Camera disabled.');
 }
 
 /**
@@ -606,17 +577,12 @@ export async function handleCamClosed(payload) {
   const cw = state.cameraWindows[uid];
   if (cw) {
     if (cw.isEventsGrid) {
-      /* Remove slot from events grid entirely */
-      const slot = cw.el;
-      if (slot && slot.parentNode) slot.remove();
-      delete state.cameraWindows[uid];
-      /* Recalculate columns */
+      if (cw.el?.parentNode) cw.el.remove();
       const { updateEventsCamGrid } = await import('./rooms.js');
       updateEventsCamGrid();
     } else {
-      /* Normal floating window */
       stopMicMeter(uid);
-      cw.el.remove();
+      if (cw.el?.parentNode) cw.el.remove();
     }
     delete state.cameraWindows[uid];
   }
@@ -653,33 +619,12 @@ function toggleCamMic(uid) {
 
 export async function toggleOwnCamera() {
   if (state.localStream) {
-    /* Check if camera is in Events grid */
     const camWin = state.cameraWindows[state.currentUser.id];
-    if (camWin?.isEventsGrid) {
-      /* Close Events grid camera */
-      await closeCameraWindow(state.currentUser.id);
-    } else if (camWin) {
-      /* Close normal floating window */
+    if (camWin) {
       await closeCameraWindow(state.currentUser.id);
     } else {
-      /* Camera window doesn't exist but stream is active - force close */
-      state.localStream?.getTracks().forEach(t => t.stop());
-      state.localStream = null;
-      state.cameraClosedAt = Date.now();
-      state.cameraRoom = null;
-      clearCaptureRamp();
-      Object.keys(state.outgoingPCs).forEach(peerId => {
-        clearEncodingRampTimer(state.outgoingPCs[peerId]);
-        state.outgoingPCs[peerId]?.close(); delete state.outgoingPCs[peerId];
-      });
-      state.currentUser.hasCamera = false;
-      dom.cameraBtnLabel.textContent = 'Camera Off';
-      dom.cameraBtnHeader.classList.remove('camera-on');
-      broadcastAll('cam-closed', { room_id: state.cameraRoom });
-      const { updateAllRoomPresences } = await import('./users.js');
-      await updateAllRoomPresences();
-      renderUsers();
-      showToast('📹 Camera disabled.');
+      /* Stream attivo ma finestra già rimossa — chiudi direttamente */
+      await _teardownOwnStream();
     }
   } else {
     await startOwnCamera();
@@ -776,28 +721,11 @@ export async function startOwnCamera() {
     /* Aggiorna anche state.currentUser.hasCamera per coerenza */
     state.currentUser.hasCamera = true;
     
-    /* Broadcast e aggiorna presenza in Supabase */
     broadcastAll('cam-opened', { room_id: state.cameraRoom, videoOff: state.cameraWindows[state.currentUser?.id]?.videoOff === true });
-    
-    /* Aggiorna la presenza in tutte le stanze - chiama più volte per assicurarsi che sia propagata */
     await updateAllRoomPresences();
     renderUsers();
-    
-    /* Aggiorna di nuovo dopo brevi delay per assicurarsi che la presenza sia sincronizzata */
-    setTimeout(async () => {
-      await updateAllRoomPresences();
-      renderUsers();
-    }, 300);
-    
-    setTimeout(async () => {
-      await updateAllRoomPresences();
-      renderUsers();
-    }, 800);
-    
-    setTimeout(async () => {
-      await updateAllRoomPresences();
-      renderUsers();
-    }, 1500);
+    /* Secondo aggiornamento a 800ms: assicura propagazione dopo il broadcast */
+    setTimeout(async () => { await updateAllRoomPresences(); renderUsers(); }, 800);
     
     /* Ramp silenzioso qualità cattura: minimal → low (5s) → medium (15s) → high (30s) se l'hardware regge */
     if (captureRampTimer) clearTimeout(captureRampTimer);
@@ -1836,43 +1764,20 @@ export async function handleWebRTCSignal(payload) {
         if (pc.connectionState === 'failed') {
           if (state.incomingPCs[from] !== pc) return;
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
-
-          /* Rimuovi slot SUBITO in modo sincrono (così non resta mai schermo nero), poi cleanup completo e eventuale reconnect */
-          const cw = state.cameraWindows[from];
-          if (cw) {
-            if (cw.streamCheckInterval) { clearInterval(cw.streamCheckInterval); cw.streamCheckInterval = null; }
-            if (cw.stream) { cw.stream.getTracks().forEach(t => t.stop()); cw.stream = null; }
-            if (cw.isEventsGrid && cw.el?.parentNode) cw.el.remove();
-            else if (cw.el?.parentNode) { stopMicMeter(from); cw.el.remove(); }
-            delete state.cameraWindows[from];
-            import('./rooms.js').then(({ updateEventsCamGrid }) => updateEventsCamGrid()).catch(() => {});
-            for (const room of Object.values(state.rooms)) { if (room.users[from]) room.users[from].hasCamera = false; }
-            const u = state.users.find(usr => usr.id === from);
-            if (u) u.hasCamera = false;
-            /* Non rimuovere l'utente dalla stanza: resta in lista. */
-            renderUsers();
-          }
-
           removeRemoteCameraFromGrid(from).then(() => {
             if (reconnectAttempts >= MAX_RECONNECT) return;
             reconnectAttempts++;
             const delay = reconnectAttempts * 2000;
-            console.log('[WebRTC] Incoming failed for', from, '— reconnect attempt', reconnectAttempts, 'of', MAX_RECONNECT, 'in', delay, 'ms');
             setTimeout(() => {
               if (pc._createdInRoom && String(state.activeRoom) !== String(pc._createdInRoom)) return;
               if (state.manuallyClosedCameras[from]) return;
               const user = findUser(from);
               if (user?.hasCamera && user?.online && !state.cameraWindows[from] && !state.incomingPCs[from]) {
-                console.log('[WebRTC] Re-requesting camera from', from);
                 delete state.pendingCamRequests[from];
                 requestPublicCamera(from);
               }
             }, delay);
           }).catch(() => {});
-
-          if (reconnectAttempts >= MAX_RECONNECT) {
-            console.error('[WebRTC] Max reconnect attempts reached for', from);
-          }
         }
       });
       /* Retry play() quando la connessione è pronta. Un solo reattach alla prima connected per evitare flicker. */
@@ -2064,25 +1969,11 @@ export async function handleWebRTCSignal(payload) {
 }
 
 function openRemoteCamWindow(uid, stream, userName = null) {
-  /* CRITICO: Non aprire mai una finestra "remota" per se stessi (replay/race possono mandare offer con from=me) */
   if (String(uid) === String(state.currentUser?.id)) return;
-  /* CRITICO: Lo stream remoto non deve essere il nostro localStream (evita cam "mia" nella finestra sbagliata) */
   if (stream === state.localStream) return;
-  console.log('[WebRTC-FLOW] openRemoteCamWindow', (uid || '').slice(0, 8) + '…', 'tracks=', stream?.getTracks?.()?.length);
   clearPendingCamRequest(String(uid));
   const user = findUser(uid);
-  const name = userName || user?.name || uid;
-  
-  /* Check if we're in Events room - if so, ensure grid is visible */
-  const availableRooms = getAvailableRooms();
-  const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-  const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
-  
-  if (isEventsRoom && dom.eventsCamGrid) {
-    dom.eventsCamGrid.hidden = false;
-  }
-  
-  createCameraWindow(uid, stream, name, false);
+  createCameraWindow(uid, stream, userName || user?.name || uid, false);
 }
 
 /* ── Private video call ───────────────────────────────────────── */
