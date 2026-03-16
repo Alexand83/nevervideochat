@@ -165,6 +165,22 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         }, 500);
       }
       updateRemoteVideoVisibility(uid);
+      /* Come per la propria cam: forza primo frame sul remoto (evita schermo nero su dispositivi lenti / browser vecchi) */
+      const forceRemoteFirstFrame = () => {
+        const cw = state.cameraWindows[uid];
+        if (!cw?.stream || cw.stream !== stream || cw.el !== win) return;
+        const v = cw.el.querySelector('video');
+        if (!v || !cw.stream.getVideoTracks().some(t => t.readyState === 'live')) return;
+        if (v.videoWidth > 0) return; /* già ok */
+        v.srcObject = null;
+        v.srcObject = cw.stream;
+        v.muted = true;
+        v.play().catch(() => {});
+      };
+      videoEl.addEventListener('loadeddata', forceRemoteFirstFrame, { once: true });
+      videoEl.addEventListener('canplay', forceRemoteFirstFrame, { once: true });
+      setTimeout(forceRemoteFirstFrame, 400);
+      setTimeout(forceRemoteFirstFrame, 1200);
       /* Fallback: dopo 2s se il video è ancora senza frame, reattach (utile su stessa rete quando i frame arrivano un po' dopo) */
       setTimeout(() => {
         const cw = state.cameraWindows[uid];
@@ -1631,6 +1647,17 @@ export async function handleWebRTCSignal(payload) {
               vid.srcObject = cw.stream;
               vid.muted = true; /* remoto: audio solo da Web Audio così volume/mute funzionano */
               vid.play().catch(() => {});
+              /* Su alcuni dispositivi il primo frame arriva in ritardo: riattacca dopo un attimo se ancora nero */
+              setTimeout(() => {
+                if (!state.cameraWindows[from]?.stream || state.cameraWindows[from].stream !== cw.stream) return;
+                const v = state.cameraWindows[from].el?.querySelector?.('video');
+                if (v && v.videoWidth === 0 && cw.stream.getVideoTracks().some(t => t.readyState === 'live')) {
+                  v.srcObject = null;
+                  v.srcObject = cw.stream;
+                  v.muted = true;
+                  v.play().catch(() => {});
+                }
+              }, 500);
             }
           } else if (track?.kind === 'audio' && !cw.stream.getAudioTracks().length) {
             cw.stream.addTrack(track);
