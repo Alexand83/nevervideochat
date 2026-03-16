@@ -182,18 +182,24 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     };
     if (!isOwn) requestAnimationFrame(() => doPlay());
     else doPlay();
-    /* Propria cam: forza primo frame (evita schermo nero se il browser ritarda il rendering) */
+    /* Propria cam: forza primo frame senza riattaccare lo stream (evita zoom/flash quando il browser ritarda) */
     if (isOwn && stream?.getVideoTracks?.()?.length) {
-      const forceFirstFrame = () => {
+      const forceFirstFrame = (reattach = false) => {
         if (!state.cameraWindows[uid]?.stream || state.cameraWindows[uid].stream !== stream) return;
-        if (videoEl.videoWidth > 0) return;
-        videoEl.srcObject = null;
-        videoEl.srcObject = stream;
+        if (videoEl.videoWidth > 0) {
+          if (!reattach) videoEl.play().catch(() => {});
+          return;
+        }
+        if (reattach) {
+          videoEl.srcObject = null;
+          videoEl.srcObject = stream;
+        }
         videoEl.play().catch(() => {});
       };
-      videoEl.addEventListener('loadeddata', forceFirstFrame, { once: true });
-      videoEl.addEventListener('canplay', forceFirstFrame, { once: true });
-      setTimeout(forceFirstFrame, 400);
+      videoEl.addEventListener('loadeddata', () => forceFirstFrame(false), { once: true });
+      videoEl.addEventListener('canplay', () => forceFirstFrame(false), { once: true });
+      /* Solo se dopo 400ms è ancora nero, riattacca (una volta) per evitare flash inutili */
+      setTimeout(() => forceFirstFrame(videoEl.videoWidth === 0), 400);
     }
     if (!isOwn) {
       /* Indicatore "sta parlando" e volume: avvia subito se c'è audio, così il bordo si illumina anche se play() è in ritardo */

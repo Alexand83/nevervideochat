@@ -68,12 +68,13 @@ export function loadDeviceSettings() {
 export function saveDeviceSettings(settings) {
   localStorage.setItem('nvc_device_settings', JSON.stringify(settings));
 }
-/** Livelli di cattura: partenza minimale per PC vecchi, ramp silenzioso se l'hardware regge. */
+/** Livelli di cattura: partenza minimale per PC vecchi, ramp silenzioso se l'hardware regge.
+ *  Tutti in 16:9 per evitare "salto/zoom" quando si passa al livello successivo (object-fit: cover). */
 const CAPTURE_LEVELS = ['minimal', 'low', 'medium', 'high'];
 const VIDEO_CONSTRAINTS_BY_LEVEL = {
-  minimal: { width: { ideal: 320, max: 424 }, height: { ideal: 240, max: 240 }, frameRate: { ideal: 10, max: 15 } },
+  minimal: { width: { ideal: 320, max: 424 }, height: { ideal: 180, max: 240 }, frameRate: { ideal: 10, max: 15 } },
   low:     { width: { ideal: 640, max: 1280 }, height: { ideal: 360, max: 720 }, frameRate: { ideal: 15, max: 24 } },
-  medium:  { width: { ideal: 640, max: 854 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 20, max: 24 } },
+  medium:  { width: { ideal: 854, max: 854 }, height: { ideal: 480, max: 480 }, frameRate: { ideal: 20, max: 24 } },
   high:    { width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 }, frameRate: { ideal: 24, max: 30 } },
 };
 
