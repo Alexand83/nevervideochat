@@ -58,7 +58,7 @@ export async function loadUserPermissions() {
 }
 
 /* ── Permessi predefiniti per ruolo base ──────────────────────── */
-function getDefaultPermissions(role) {
+export function getDefaultPermissions(role) {
   const permissions = {
     owner: {
       can_ban: true,
@@ -179,4 +179,39 @@ export function getAllPermissions() {
 /* ── Ricarica permessi (utile dopo cambi ruolo) ───────────────── */
 export async function refreshPermissions() {
   await loadUserPermissions();
+}
+
+/**
+ * Carica i permessi di UN ALTRO utente direttamente da Firebase.
+ * Usato dal ricevente di cam-req per verificare in modo indipendente
+ * se il richiedente ha davvero can_view_cam_without_accept — senza
+ * fidarsi del campo requesterHasForceView nella payload (spoofabile).
+ */
+export async function loadPermissionsForUser(uid) {
+  if (!state.fb) return getDefaultPermissions('user');
+  try {
+    const profileSnap = await state.fb.firestore.collection('profiles').doc(String(uid)).get();
+    if (!profileSnap.exists) return getDefaultPermissions('user');
+    const data = profileSnap.data();
+    const role = data.role || 'user';
+    const customRoleId = data.custom_role_id || null;
+    let customRoleData = null;
+    if (customRoleId) {
+      const roleSnap = await state.fb.firestore.collection('custom_roles').doc(String(customRoleId)).get();
+      if (roleSnap.exists) customRoleData = roleSnap.data();
+    }
+    if (role === 'owner') return getDefaultPermissions('owner');
+    if (customRoleData?.permissions) {
+      const def = getDefaultPermissions('user');
+      return {
+        ...def,
+        ...customRoleData.permissions,
+        can_edit_own_messages:   customRoleData.permissions.can_edit_own_messages   !== false,
+        can_delete_own_messages: customRoleData.permissions.can_delete_own_messages !== false,
+      };
+    }
+    return getDefaultPermissions(role);
+  } catch (_) {
+    return getDefaultPermissions('user');
+  }
 }

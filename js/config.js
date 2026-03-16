@@ -26,24 +26,22 @@ export const AVATAR_COLORS = [
   '#3fb950','#238636','#e8523a','#f78166','#79c0ff',
 ];
 
-export const ICE_SERVERS = {
+/**
+ * Fallback STUN-only config usato se la Edge Function get-ice-config non è raggiungibile.
+ * Le credenziali TURN (relay) vengono caricate a runtime dalla Edge Function — non sono
+ * mai esposte nel bundle JS. Vedi supabase/functions/get-ice-config/README.md.
+ */
+export const ICE_SERVERS_FALLBACK = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302'  },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.relay.metered.ca:80' },
-    { urls: 'turn:openrelay.metered.ca:80',  username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turns:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   ],
   iceCandidatePoolSize: 10,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
 };
-
-/** Se true, chi vede la cam (viewer) usa solo relay (TURN): funziona anche dietro NAT/firewall senza configurare nulla. */
-export const VIDEO_ICE_RELAY_ONLY = true;
 
 export const EMOJI_CATEGORIES = {
   '😊': ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'],

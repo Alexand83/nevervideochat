@@ -4,17 +4,42 @@
 /* VERSION MARKER — if you see this in logs, new code is running */
 console.log('%c[NVC] camera.js v20260318 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
-import { ICE_SERVERS } from './config.js';
+import { ICE_SERVERS_FALLBACK, SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
 import { broadcast, broadcastAll } from './broadcast.js';
 import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences } from './users.js';
 import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints, getVideoConstraintsForLevel, saveDeviceSettings } from './storage.js';
+import { loadPermissionsForUser } from './permissions.js';
 import { getAvailableRooms } from './rooms.js';
 
 const CAM_STEP = 30;
 function camCount() { return Object.keys(state.cameraWindows).length; }
+
+/* ── ICE config fetch sicuro ────────────────────────────────────
+   Le credenziali TURN vivono negli env vars della Edge Function,
+   non nel bundle JS. Fallback a STUN-only se la funzione non è
+   raggiungibile (es. utente non autenticato, rete offline).        */
+let _iceConfigCache = null;
+let _iceConfigFetchedAt = 0;
+const ICE_CONFIG_TTL_MS = 3_600_000; // 1 ora
+
+async function getIceConfig() {
+  const now = Date.now();
+  if (_iceConfigCache && (now - _iceConfigFetchedAt) < ICE_CONFIG_TTL_MS) return _iceConfigCache;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/get-ice-config`, {
+      headers: { apikey: SUPABASE_ANON_KEY },
+    });
+    if (res.ok) {
+      _iceConfigCache = await res.json();
+      _iceConfigFetchedAt = now;
+      return _iceConfigCache;
+    }
+  } catch (_) {}
+  return ICE_SERVERS_FALLBACK;
+}
 /** Per evitare XSS/breakout in id HTML: solo caratteri sicuri */
 function safeId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '') || 'u'; }
 
@@ -604,7 +629,10 @@ export async function handleCamClosed(payload) {
   }
 
   renderUsers();
-  if (inMyRoom) showToast(`📹 ${payload.fromName} turned off their camera`);
+  if (inMyRoom) {
+    const knownName = findUser(uid)?.name || payload.fromName || 'User';
+    showToast(`📹 ${knownName} turned off their camera`);
+  }
 }
 
 function toggleCamMic(uid) {
@@ -1271,10 +1299,18 @@ export async function requestPublicCamera(targetUid) {
     console.log('[Camera Request] Incoming PC for', uid, 'already exists in state:', existingInPC.connectionState, '/ ICE:', existingInPC.iceConnectionState, '— skipping duplicate request');
     return;
   }
-  if (state.pendingCamRequests[uid]) { 
-    console.log('[Camera Request] Already waiting for reply from', uid);
-    return; 
+  if (state.pendingCamRequests[uid]) {
+    return;
   }
+  /* Rate-limit: max 1 richiesta ogni 30s per lo stesso destinatario */
+  const CAM_REQ_COOLDOWN_MS = 30_000;
+  const lastReqTs = state.camReqCooldowns[uid] || 0;
+  if (Date.now() - lastReqTs < CAM_REQ_COOLDOWN_MS) {
+    const secsLeft = Math.ceil((CAM_REQ_COOLDOWN_MS - (Date.now() - lastReqTs)) / 1000);
+    showToast(`⏳ Attendi ${secsLeft}s prima di inviare un'altra richiesta cam.`);
+    return;
+  }
+  state.camReqCooldowns[uid] = Date.now();
   console.log('[Camera Request] Sending camera request to', uid, 'in room', state.activeRoom);
   /* L'utente sta chiedendo di nuovo esplicitamente: se prima aveva chiuso manualmente quella cam, permettiamo di riaprirla. */
   if (state.manuallyClosedCameras[uid]) {
@@ -1282,13 +1318,9 @@ export async function requestPublicCamera(targetUid) {
     console.log('[Camera Request] Clearing manual-close flag for', uid, 'due to explicit new request');
   }
   setPendingCamRequest(uid, 'public', target.name);
-  let requesterHasForceView = false;
-  try {
-    const { hasPermission, loadUserPermissions } = await import('./permissions.js');
-    await loadUserPermissions();
-    requesterHasForceView = hasPermission('can_view_cam_without_accept');
-  } catch (_) {}
-  broadcast('cam-req', uid, { reqType: 'public', room_id: state.activeRoom, requesterHasForceView });
+  /* Non inviare requesterHasForceView nella payload: il ricevente verifica
+     in modo indipendente da Firebase — il campo è spoofabile da client malevoli. */
+  broadcast('cam-req', uid, { reqType: 'public', room_id: state.activeRoom });
   showToast(`📹 Camera request sent to ${target.name}…`);
 }
 
@@ -1296,7 +1328,9 @@ export async function requestPublicCamera(targetUid) {
 export async function handleCamRequest(payload) {
   if (payload.to !== state.currentUser?.id) return;
   const fromId   = String(payload.from);
-  const fromName = payload.fromName || 'User';
+  /* Usa il nome dalla fonte fidata (stato locale/DB), non dalla payload —
+     il mittente potrebbe mettere qualsiasi stringa come fromName. */
+  const fromName = findUser(fromId)?.name || payload.fromName || 'User';
 
   /* room_id e confronti in stringa per evitare problemi PC (number vs string dopo 15s / tab switch) */
   const requestRoom = payload.room_id != null ? String(payload.room_id) : null;
@@ -1336,11 +1370,16 @@ export async function handleCamRequest(payload) {
     return;
   }
 
-  /* Ruolo con "View cams without accept": solo cam pubblica (stanza). La cam privata richiede sempre accettazione. */
-  const forceView = payload.requesterHasForceView === true || payload.requesterHasForceView === 'true';
-  if (forceView && payload.reqType === 'public') {
-    sharePublicCameraTo(fromId);
-    return;
+  /* Ruolo con "View cams without accept": verifica indipendente da Firebase —
+     NON ci si fida del campo requesterHasForceView nella payload (spoofabile). */
+  if (payload.reqType === 'public') {
+    try {
+      const requesterPerms = await loadPermissionsForUser(fromId);
+      if (requesterPerms.can_view_cam_without_accept === true) {
+        sharePublicCameraTo(fromId);
+        return;
+      }
+    } catch (_) {}
   }
 
   if (payload.reqType === 'public') {
@@ -1401,7 +1440,7 @@ export async function sharePublicCameraTo(toUid) {
       oldPc.close();
       delete state.outgoingPCs[toUid];
     }
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(await getIceConfig());
     state.outgoingPCs[toUid] = pc;
     const tracks = state.localStream.getTracks().filter(t => t.readyState === 'live');
     console.log('[WebRTC-FLOW] OUTGOING: add', tracks.length, 'tracks to', (toUid || '').slice(0, 8) + '…');
@@ -1633,7 +1672,7 @@ export async function handleWebRTCSignal(payload) {
       }
       
       /* Viewer: usa ICE normale (host+srflx+relay). Con relay-only i candidati che arrivano sono spesso host/srflx e vengono ignorati → ICE resta "new". */
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+      const pc = new RTCPeerConnection(await getIceConfig());
       pc._createdInRoom = state.activeRoom; /* Track room at creation — used to discard stale streams */
       pc._camRoom = payload.room_id != null ? String(payload.room_id) : null; /* room where cam was opened (from offer) */
       state.incomingPCs[from] = pc;
@@ -1716,6 +1755,7 @@ export async function handleWebRTCSignal(payload) {
       /* Monitor incoming connection — auto-reconnect if it fails */
       let reconnectAttempts = 0;
       const MAX_RECONNECT = 3;
+      let wasEverConnected = false; /* riduce retry se la connessione non si è mai stabilita */
       /* Se resta "connecting" o "new" per 45s, togli dalla grid (prima 25s: troppo poco con replay Firebase / rete lenta) */
       const CONNECTING_TIMEOUT_MS = 45000;
       let connectingTimeout = setTimeout(() => {
@@ -1752,20 +1792,24 @@ export async function handleWebRTCSignal(payload) {
         }
         
         /* CRITICO: Se si riconnette, cancella il timer di chiusura */
+        if (pc.connectionState === 'connected') wasEverConnected = true;
         if (pc.connectionState === 'connected' || pc.connectionState === 'connecting') {
           const cw = state.cameraWindows[from];
           if (cw?.disconnectTimer) {
             clearTimeout(cw.disconnectTimer);
             delete cw.disconnectTimer;
-            console.log('[WebRTC] Connection reconnected for', from, '- cancelled close timer');
           }
         }
         
         if (pc.connectionState === 'failed') {
           if (state.incomingPCs[from] !== pc) return;
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
+          /* Se la connessione non si è mai stabilita (wasEverConnected = false),
+             limitiamo a 1 solo tentativo: l'utente non ha mai visto la cam,
+             quindi il retry aggressivo sarebbe solo spam. */
+          const maxRetry = wasEverConnected ? MAX_RECONNECT : 1;
           removeRemoteCameraFromGrid(from).then(() => {
-            if (reconnectAttempts >= MAX_RECONNECT) return;
+            if (reconnectAttempts >= maxRetry) return;
             reconnectAttempts++;
             const delay = reconnectAttempts * 2000;
             setTimeout(() => {
@@ -1919,9 +1963,11 @@ export async function handleWebRTCSignal(payload) {
       /* dir 'out': if we don't have incoming PC yet (offer not processed), buffer con _ts per flush solo ICE della stessa sessione */
       if (dir === 'out' && !pc) {
         state.pendingIncomingICE[from] = state.pendingIncomingICE[from] || [];
-        const iceTs = payload._ts ?? payload.ts ?? Date.now();
-        state.pendingIncomingICE[from].push({ c: iceCandidate, _ts: iceTs });
-        console.log('[WebRTC-FLOW] ICE dir=out from', (from || '').slice(0, 8) + '…', '→ BUFFER (no incoming PC) size=', state.pendingIncomingICE[from].length);
+        /* Cap a 100: evita crescita illimitata in caso di flood di candidati ICE */
+        if (state.pendingIncomingICE[from].length < 100) {
+          const iceTs = payload._ts ?? payload.ts ?? Date.now();
+          state.pendingIncomingICE[from].push({ c: iceCandidate, _ts: iceTs });
+        }
         return;
       }
       if (pc) {
@@ -1945,7 +1991,7 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPrivate) {
     if (sigType === 'offer') {
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+      const pc = new RTCPeerConnection(await getIceConfig());
       state.privatePeer = pc; state.activeCallUID = from;
       pc.onicecandidate = ({ candidate: c }) => { if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'private' }); };
       pc.ontrack = ({ streams }) => {
@@ -2000,7 +2046,7 @@ async function startPrivateCall(targetUid) {
       state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
       state.streamOpenedForCall = true;
     } else { state.streamOpenedForCall = false; }
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(await getIceConfig());
     state.privatePeer = pc; state.activeCallUID = targetUid;
     state.localStream.getTracks().filter(t => t.readyState === 'live').forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate: c }) => { if (c) broadcast('webrtc', targetUid, { sigType: 'ice', candidate: c, ctx: 'private' }); };

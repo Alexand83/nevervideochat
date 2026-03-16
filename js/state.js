@@ -50,6 +50,8 @@ export const state = {
   pendingCamRequests: {},
   rejectedCamUsers:   {},
   ignoredUsers:       {},
+  /* Rate-limit cam-req: { [targetUid]: lastSentTimestamp } */
+  camReqCooldowns:    {},
 
   /* Muted/Kicked/Banned users cache (loaded from DB) */
   mutedUsers:         {},  /* { userId: { room_id: null|string, expires_at: string|null } } */
