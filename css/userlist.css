@@ -151,6 +151,29 @@
   flex-shrink: 0;
 }
 
+/* Icona dispositivo (phone / tablet / monitor) */
+.user-device-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--tx2);
+  opacity: .6;
+  transition: opacity var(--tf);
+}
+.user-device-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.user-item:hover .user-device-icon { opacity: .9; }
+
+/* Colori per tipo: mobile/tablet in caldo, desktop neutro */
+.user-device-mobile  { color: var(--accent); opacity: .7; }
+.user-device-tablet  { color: var(--accent); opacity: .55; }
+.user-device-desktop { color: var(--tx2);    opacity: .5; }
+
 /* User tags */
 .registered-tag {
   font-size: 10px;

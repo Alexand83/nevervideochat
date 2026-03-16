@@ -9,6 +9,46 @@ import { avatarColor, initials, safeAvatarUrl } from './utils.js';
 let _openContextMenu = null;
 export function setOpenContextMenu(fn) { _openContextMenu = fn; }
 
+/* ── Rilevamento tipo dispositivo ───────────────────────────────
+   Ritorna 'mobile' | 'tablet' | 'desktop'.
+   Chiamato una volta e cachato per evitare ricalcoli ripetuti.    */
+let _deviceTypeCache = null;
+export function getDeviceType() {
+  if (_deviceTypeCache) return _deviceTypeCache;
+  const ua = navigator.userAgent;
+  let type;
+  if (/iPad/i.test(ua)) {
+    type = 'tablet';
+  } else if (/Android/i.test(ua) && !/Mobile/i.test(ua)) {
+    type = 'tablet'; /* Android tablet: "Android" senza "Mobile" */
+  } else if (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1) {
+    type = 'tablet'; /* iPad con iOS 13+ che si maschera da Mac */
+  } else if (/Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+    type = 'mobile';
+  } else {
+    type = 'desktop';
+  }
+  _deviceTypeCache = type;
+  return type;
+}
+
+/* Icone SVG per dispositivo (viewBox 0 0 16 16, stroke=currentColor) */
+const DEVICE_SVG = {
+  mobile: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="5" y="1" width="6" height="14" rx="1.5"/>
+    <circle cx="8" cy="12.8" r=".6" fill="currentColor" stroke="none"/>
+  </svg>`,
+  tablet: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="3" y="1" width="10" height="14" rx="1.5"/>
+    <circle cx="8" cy="13" r=".6" fill="currentColor" stroke="none"/>
+  </svg>`,
+  desktop: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="1" y="2" width="14" height="9" rx="1.5"/>
+    <path d="M5 14h6M8 11v3" stroke-linecap="round"/>
+  </svg>`,
+};
+const DEVICE_LABEL = { mobile: 'Mobile', tablet: 'Tablet', desktop: 'PC' };
+
 /* ── User helpers ── */
 export function findUser(id) {
   if (id === 'me' || id === state.currentUser?.id) return state.currentUser;
@@ -28,8 +68,9 @@ export function ensureUser(id, name, extra = {}) {
   if ('online'    in extra) u.online    = extra.online;
   if ('hasCamera' in extra) u.hasCamera = extra.hasCamera;
   if ('avatarUrl' in extra) u.avatarUrl = extra.avatarUrl;
-  if ('roleName'  in extra) u.roleName  = extra.roleName  ?? 'User';
-  if ('roleColor' in extra) u.roleColor = extra.roleColor ?? '#8b949e';
+  if ('roleName'   in extra) u.roleName   = extra.roleName   ?? 'User';
+  if ('roleColor'  in extra) u.roleColor  = extra.roleColor  ?? '#8b949e';
+  if ('deviceType' in extra) u.deviceType = extra.deviceType ?? 'desktop';
   return u;
 }
 
@@ -115,7 +156,14 @@ export function renderUsers() {
     sub.textContent = roleName;
     sub.style.color = roleColor;
     info.append(nameEl, sub);
-    li.append(av, info);
+
+    /* Icona dispositivo (mobile / tablet / desktop) */
+    const dtype = user.deviceType || (user.id === state.currentUser?.id ? getDeviceType() : 'desktop');
+    const deviceEl = document.createElement('span');
+    deviceEl.className = `user-device-icon user-device-${dtype}`;
+    deviceEl.title = DEVICE_LABEL[dtype] || 'PC';
+    deviceEl.innerHTML = DEVICE_SVG[dtype] || DEVICE_SVG.desktop;
+    li.append(av, info, deviceEl);
 
     /* For the current user: show cam icon only in the room where cam is active */
     const hasCamHere = user.id === state.currentUser?.id
@@ -227,15 +275,16 @@ export async function updateOwnPresence(presenceCh) {
   }
 
   await ch.track({
-    id:        state.currentUser.id,
-    name:      state.currentUser.name,  /* display_name - quello che l'utente vuole mostrare */
-    username:  state.currentUser.username || null,  /* username dell'account (per login) */
-    isGuest:   state.currentUser.isGuest,
-    hasCamera: state.cameraRoom === roomId,   /* true only in the room where cam is active */
-    online:    true,
-    avatarUrl: state.currentUser.avatarUrl || null,
-    roleName:  state.currentUser.roleName || 'User',
-    roleColor: state.currentUser.roleColor || '#8b949e',
+    id:         state.currentUser.id,
+    name:       state.currentUser.name,
+    username:   state.currentUser.username || null,
+    isGuest:    state.currentUser.isGuest,
+    hasCamera:  state.cameraRoom === roomId,
+    online:     true,
+    avatarUrl:  state.currentUser.avatarUrl || null,
+    roleName:   state.currentUser.roleName  || 'User',
+    roleColor:  state.currentUser.roleColor || '#8b949e',
+    deviceType: getDeviceType(),
   });
 }
 
@@ -305,15 +354,16 @@ export function syncPresence(presenceState, roomId) {
     }
     
     const user = {
-      id: String(uid),
-      name:      info.name || info.username || 'User',  /* display_name dalla presenza */
-      username:  info.username || null,  /* username dell'account */
-      isGuest:   info.isGuest,
-      online:    true,
-      hasCamera: hasCamera,  /* Preserva hasCamera se già presente, altrimenti usa quello dalla presenza */
-      avatarUrl: info.avatarUrl || null,
-      roleName:  info.roleName || 'User',
-      roleColor: info.roleColor || '#8b949e',
+      id:         String(uid),
+      name:       info.name || info.username || 'User',
+      username:   info.username || null,
+      isGuest:    info.isGuest,
+      online:     true,
+      hasCamera:  hasCamera,
+      avatarUrl:  info.avatarUrl || null,
+      roleName:   info.roleName  || 'User',
+      roleColor:  info.roleColor || '#8b949e',
+      deviceType: info.deviceType || 'desktop',
     };
     room.users[String(uid)] = user;
     /* Annulla leave in sospeso: utente ancora in presenza (evita falso "esce/rientra" da track cam) */
@@ -323,7 +373,7 @@ export function syncPresence(presenceState, roomId) {
       delete state.presenceLeaveTimers[timerKey];
     }
     /* Also keep the global state.users in sync */
-    ensureUser(String(uid), info.name || info.username || 'User', { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: hasCamera, avatarUrl: info.avatarUrl || null, roleName: user.roleName, roleColor: user.roleColor });
+    ensureUser(String(uid), info.name || info.username || 'User', { username: info.username || null, isGuest: info.isGuest, online: true, hasCamera: hasCamera, avatarUrl: info.avatarUrl || null, roleName: user.roleName, roleColor: user.roleColor, deviceType: user.deviceType });
   });
 
   /* Rimuovi utenti che non sono più nella presenza — con debounce 2s come per leave (Supabase invia sync senza utente prima del join su track()) */
@@ -352,15 +402,16 @@ export function syncPresence(presenceState, roomId) {
   /* CRITICO: Inserisci sempre il current user in lista se è nella stanza (fix: nick non appariva dopo refresh) */
   if (state.currentUser && rId === state.activeRoom) {
     room.users[myId] = {
-      id: myId,
-      name: state.currentUser.name,
-      username: state.currentUser.username || null,
-      isGuest: state.currentUser.isGuest,
-      online: true,
-      hasCamera: state.cameraRoom === rId,
-      avatarUrl: state.currentUser.avatarUrl || null,
-      roleName: state.currentUser.roleName || 'User',
-      roleColor: state.currentUser.roleColor || '#8b949e',
+      id:         myId,
+      name:       state.currentUser.name,
+      username:   state.currentUser.username || null,
+      isGuest:    state.currentUser.isGuest,
+      online:     true,
+      hasCamera:  state.cameraRoom === rId,
+      avatarUrl:  state.currentUser.avatarUrl || null,
+      roleName:   state.currentUser.roleName  || 'User',
+      roleColor:  state.currentUser.roleColor || '#8b949e',
+      deviceType: getDeviceType(),
     };
   }
 
