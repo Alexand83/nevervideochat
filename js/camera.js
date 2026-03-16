@@ -1912,18 +1912,13 @@ export async function handleWebRTCSignal(payload) {
       console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'listeners attached, initial state:', pc.connectionState, pc.iceConnectionState);
       console.log('[WebRTC-FLOW] INCOMING: setRemoteDescription(offer) for', from);
       await pc.setRemoteDescription({ type: 'offer', sdp });
-      /* Flush solo ICE ricevuti insieme a QUESTA offerta (_ts >= offerTs - 5s). I 70+ ICE replay Firebase sono per offerte vecchie → addIceCandidate fallisce e ICE resta "new". */
-      const offerTs = payload._ts ?? payload.ts ?? Date.now();
-      const minIceTs = offerTs - 5000;
+      /* Flush gli ULTIMI N ICE nel buffer (i più recenti = quasi sempre per quest'offerta). Con relay-only servono i candidati relay che arrivano dopo l'offer; se filtriamo per _ts restiamo con 0 e ICE resta "new". */
       const pending = state.pendingIncomingICE[from] || [];
-      const toFlush = pending.filter(entry => {
-        const ts = entry._ts ?? entry.ts;
-        if (ts == null) return pending.length <= 15;
-        return ts >= minIceTs;
-      });
+      const maxFlush = 50;
+      const toFlush = pending.length <= maxFlush ? pending : pending.slice(-maxFlush);
       state.pendingIncomingICE[from] = [];
       if (toFlush.length) {
-        console.log('[WebRTC] VIEWER: flush', toFlush.length, 'buffered ICE (offerTs=', offerTs, 'dropped', pending.length - toFlush.length, 'stale) to incoming PC from', from.slice(0, 8) + '…');
+        console.log('[WebRTC] VIEWER: flush', toFlush.length, 'buffered ICE (last', maxFlush, ') to incoming PC from', from.slice(0, 8) + '…');
         for (const entry of toFlush) {
           const c = entry.c || entry;
           await pc.addIceCandidate(c).catch(err => console.warn('[WebRTC] Pre-PC ICE flush error:', err.message));
