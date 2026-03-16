@@ -194,7 +194,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
           videoEl.srcObject = null;
           videoEl.srcObject = stream;
         }
-        videoEl.play().catch(() => {});
+    videoEl.play().catch(() => {});
       };
       videoEl.addEventListener('loadeddata', () => forceFirstFrame(false), { once: true });
       videoEl.addEventListener('canplay', () => forceFirstFrame(false), { once: true });
@@ -456,7 +456,7 @@ export async function closeCameraWindow(uid) {
   const camWin = state.cameraWindows[uid];
   stopRemoteSpeakingIndicator(uid);
   closeRemoteVolumeContext(uid);
-
+  
   /* CRITICO: Pulisci l'interval di monitoraggio del flusso se presente */
   if (camWin?.streamCheckInterval) {
     clearInterval(camWin.streamCheckInterval);
@@ -503,22 +503,22 @@ export async function closeCameraWindow(uid) {
 async function _teardownOwnStream() {
   const selfId = state.currentUser?.id;
   stopMicMeter(selfId);
-  const closedRoom = state.cameraRoom;
+      const closedRoom = state.cameraRoom;
   if (state.micPipeline) { state.micPipeline.ctx.close().catch(() => {}); state.micPipeline = null; }
-  state.localStream?.getTracks().forEach(t => t.stop());
-  state.localStream = null;
-  state.cameraClosedAt = Date.now();
-  state.cameraRoom = null;
+      state.localStream?.getTracks().forEach(t => t.stop());
+      state.localStream = null;
+      state.cameraClosedAt = Date.now();
+      state.cameraRoom = null;
   clearCaptureRamp();
   for (const peerId of Object.keys(state.outgoingPCs)) {
     clearEncodingRampTimer(state.outgoingPCs[peerId]);
     state.outgoingPCs[peerId]?.close();
     delete state.outgoingPCs[peerId];
   }
-  state.currentUser.hasCamera = false;
+      state.currentUser.hasCamera = false;
   dom.cameraBtnLabel.textContent = 'Camera Off';
   dom.cameraBtnHeader.classList.remove('camera-on');
-  broadcastAll('cam-closed', { room_id: closedRoom });
+      broadcastAll('cam-closed', { room_id: closedRoom });
   await updateAllRoomPresences();
   renderUsers();
   showToast('📹 Camera disabled.');
@@ -593,13 +593,13 @@ export async function removeRemoteCameraFromGrid(uid) {
     updateEventsCamGrid();
   } else {
     stopMicMeter(uid);
-    cw.el.remove();
+  cw.el.remove(); 
   }
   delete state.cameraWindows[uid];
-  if (state.incomingPCs[uid]) {
+    if (state.incomingPCs[uid]) { 
     try { state.incomingPCs[uid].close(); } catch {}
     delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid];
-  }
+    }
   for (const room of Object.values(state.rooms)) {
     if (room.users[uid]) room.users[uid].hasCamera = false;
   }
@@ -639,7 +639,7 @@ export async function handleCamClosed(payload) {
   const u = state.users.find(u => u.id === uid);
   if (u) u.hasCamera = false;
   /* Non rimuovere l'utente dalla stanza: resta in lista (ha solo spento la cam). */
-
+  
   /* CRITICO: Rimuovi il flag di chiusura manuale quando la camera viene effettivamente chiusa dall'altro utente */
   /* Questo permette all'utente di richiedere di nuovo la camera in futuro se vuole */
   if (state.manuallyClosedCameras[uid]) {
@@ -984,6 +984,21 @@ async function initRemoteVolumeControl(uid) {
 
   if (!remoteGain) video.muted = false;
 
+  /* Chrome (soprattutto mobile) richiede un user gesture per far partire l'audio.
+     Riprendi l'AudioContext al primo tap su volume/mute così il viewer sente il broadcaster. */
+  const resumeCtxOnUserGesture = () => {
+    if (remoteCtx?.state === 'suspended') {
+      remoteCtx.resume().then(() => {
+        if (remoteGain) remoteGain.gain.value = isMuted ? 0 : lastVolumePct / 100;
+      }).catch(() => {});
+    }
+    /* Fallback senza Web Audio: unmute il video solo in risposta a gesture (Chrome altrimenti blocca) */
+    if (!remoteGain && video.muted && lastVolumePct > 0) {
+      video.muted = false;
+      video.play().catch(() => {});
+    }
+  };
+
   let lastVolumePct = 100;
   const setVolumeFromPct = (pct) => {
     const clamped = Math.max(0, Math.min(100, pct));
@@ -999,6 +1014,7 @@ async function initRemoteVolumeControl(uid) {
   let isMuted = false;
   if (muteBtn) {
     muteBtn.addEventListener('click', () => {
+      resumeCtxOnUserGesture();
       isMuted = !isMuted;
       if (remoteGain) remoteGain.gain.value = isMuted ? 0 : lastVolumePct / 100;
       else video.muted = isMuted;
@@ -1009,6 +1025,7 @@ async function initRemoteVolumeControl(uid) {
 
   if (wrap) {
     const onInput = (e) => {
+      resumeCtxOnUserGesture();
       const rect = wrap.getBoundingClientRect();
       if (rect.width <= 0) return;
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -1318,8 +1335,8 @@ export async function requestPublicCamera(targetUid) {
     console.log('[Camera Request] Incoming PC for', uid, 'already exists in state:', existingInPC.connectionState, '/ ICE:', existingInPC.iceConnectionState, '— skipping duplicate request');
     return;
   }
-  if (state.pendingCamRequests[uid]) {
-    return;
+  if (state.pendingCamRequests[uid]) { 
+    return; 
   }
   /* Rate-limit: max 1 richiesta ogni 30s per lo stesso destinatario */
   const CAM_REQ_COOLDOWN_MS = 30_000;
@@ -1395,9 +1412,9 @@ export async function handleCamRequest(payload) {
     try {
       const requesterPerms = await loadPermissionsForUser(fromId);
       if (requesterPerms.can_view_cam_without_accept === true) {
-        sharePublicCameraTo(fromId);
-        return;
-      }
+      sharePublicCameraTo(fromId);
+      return;
+    }
     } catch (_) {}
   }
 
@@ -1480,7 +1497,7 @@ export async function sharePublicCameraTo(toUid) {
     console.log('[WebRTC-FLOW] OUTGOING: send offer to', (toUid || '').slice(0, 8) + '…', 'sdpLen=', offer.sdp?.length);
     broadcast('webrtc', toUid, { sigType: 'offer', sdp: offer.sdp, ctx: 'public', room_id: state.cameraRoom });
     broadcast('cam-accepted', toUid, {});
-
+    
     const viewerUser = findUser(toUid);
     state.camViewers[toUid] = viewerUser?.username || viewerUser?.name || toUid;
     refreshViewersPanel(state.currentUser.id);
@@ -1524,7 +1541,7 @@ async function tryRampUpCaptureQuality() {
     const newVideoTrack = newStream.getVideoTracks()[0];
     if (!newVideoTrack) {
       newStream.getTracks().forEach(t => t.stop());
-      return;
+          return;
     }
     const oldVideoTrack = state.localStream.getVideoTracks()[0];
     if (!oldVideoTrack) {
@@ -1598,7 +1615,7 @@ function startEncodingRampUp(pc, peerId) {
   pc._encodingRampTimer = setInterval(() => {
     if (pc.connectionState === 'closed') {
       clearEncodingRampTimer(pc);
-      return;
+          return;
     }
     if (forceLowQuality) return;
     if (pc.connectionState !== 'connected') return;
@@ -1948,7 +1965,7 @@ export async function handleWebRTCSignal(payload) {
         } else {
           /* Replay Firebase o answer duplicata: PC già stable, ignora senza warn */
           if (pc.signalingState !== 'stable' || pc.connectionState !== 'connected') {
-            console.warn('[WebRTC] Cannot set remote answer - wrong state:', pc.signalingState, 'expected: have-local-offer');
+          console.warn('[WebRTC] Cannot set remote answer - wrong state:', pc.signalingState, 'expected: have-local-offer');
           }
         }
       } else {
