@@ -52,11 +52,6 @@ async function getIceConfig() {
 /** Per evitare XSS/breakout in id HTML: solo caratteri sicuri */
 function safeId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '') || 'u'; }
 
-/** Rileva Chrome (non Safari, Firefox, Samsung) — usato per mostrare il play button audio */
-function isChromeNotSafari() {
-  const ua = navigator.userAgent;
-  return /Chrome\/\d/.test(ua) && !/(Chromium|OPR|Edg\/|SamsungBrowser|Firefox)/.test(ua);
-}
 
 /** Contatore globale reconnect per peer: impedisce il loop infinito dopo MAX_GLOBAL_RECONNECT tentativi */
 const _globalReconnectCounts = {};
@@ -204,38 +199,44 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       setTimeout(forceFirstFrame, 400);
     }
     if (!isOwn) {
-      /* Chrome non può avviare AudioContext senza gesto utente.
-         Mostriamo subito un pulsante Play ben visibile; su Safari/Firefox
-         initRemoteVolumeControl parte in automatico come prima. */
-      if (isChromeNotSafari()) {
-        const playWrap = win.querySelector('.cam-win-video-wrap') || win;
-        if (!playWrap.querySelector('.cam-chrome-play')) {
-          const playBtn = document.createElement('button');
-          playBtn.className = 'cam-chrome-play';
-          playBtn.setAttribute('aria-label', 'Attiva audio');
-          playBtn.innerHTML = '<span class="cam-chrome-play-icon">▶</span><span class="cam-chrome-play-label">Tocca per l\'audio</span>';
-          playWrap.appendChild(playBtn);
-          const activateChrome = () => {
-            playBtn.remove();
-            win.querySelector('.cam-tap-audio')?.remove();
-            const vid2 = $(`cam-vid-${safeUid}`) || win.querySelector('video');
-            if (vid2) { vid2.muted = false; vid2.play().catch(() => { vid2.muted = true; }); }
-            closeRemoteVolumeContext(uid);
-            initRemoteVolumeControl(uid);
-          };
-          playBtn.addEventListener('click',      activateChrome, { once: true });
-          playBtn.addEventListener('touchstart', activateChrome, { once: true, passive: true });
-        }
-      } else {
-        /* Safari / Firefox: avvia subito in automatico */
+      /* Pulsante Play universale: mostrato subito su tutti i browser.
+         Su desktop / Safari dove AudioContext parte senza gesto, viene
+         auto-rimosso dopo 350ms. Su Chrome mobile (AudioContext bloccato)
+         rimane visibile finché l'utente tocca. */
+      const playWrap = win.querySelector('.cam-win-video-wrap') || win;
+      const playBtn = document.createElement('button');
+      playBtn.className = 'cam-chrome-play';
+      playBtn.setAttribute('aria-label', 'Attiva audio');
+      playBtn.innerHTML = '<span class="cam-chrome-play-icon">▶</span><span class="cam-chrome-play-label">Tocca per l\'audio</span>';
+      playWrap.appendChild(playBtn);
+      const activatePlay = () => {
+        playBtn.remove();
+        win.querySelector('.cam-tap-audio')?.remove();
+        const vid2 = $(`cam-vid-${safeUid}`) || win.querySelector('video');
+        if (vid2) { vid2.muted = false; vid2.play().catch(() => { vid2.muted = true; }); }
+        closeRemoteVolumeContext(uid);
+        initRemoteVolumeControl(uid);
+      };
+      playBtn.addEventListener('click',      activatePlay, { once: true });
+      playBtn.addEventListener('touchstart', activatePlay, { once: true, passive: true });
+
+      /* Prova a far partire Web Audio in automatico; se ci riesce (safari/PC)
+         rimuovi il pulsante dopo 350ms, altrimenti rimane per l'utente. */
+      const tryAutoAudio = async () => {
         if (stream?.getAudioTracks?.()?.length) {
-          initRemoteVolumeControl(uid);
+          await initRemoteVolumeControl(uid);
         } else {
-          setTimeout(() => {
-            if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length) initRemoteVolumeControl(uid);
-          }, 500);
+          await new Promise(r => setTimeout(r, 500));
+          if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length)
+            await initRemoteVolumeControl(uid);
         }
-      }
+        /* Se Web Audio è partito con successo, il pulsante è superfluo */
+        if (state.cameraWindows[uid]?.remoteVolumeCtx) {
+          playBtn.remove();
+          win.querySelector('.cam-tap-audio')?.remove();
+        }
+      };
+      setTimeout(tryAutoAudio, 350);
       updateRemoteVideoVisibility(uid);
       /* Polling ogni 400ms per 12s: finché il video è nero e il track è vivo, ricrea l'elemento */
       let pollCount = 0;
@@ -1197,11 +1198,11 @@ function replaceRemoteVideoElement(uid) {
   requestAnimationFrame(() => {
     newV.play().catch(() => {});
   });
-  /* Reinizializza audio solo su non-Chrome (Chrome usa il play button):
-     il vecchio initRemoteVolumeControl ha in chiusura il vecchio elemento,
-     quindi dopo la sostituzione del video serve un nuovo riferimento. */
+  /* Reinizializza audio se non c'è già un AudioContext attivo: il vecchio
+     initRemoteVolumeControl ha in chiusura il vecchio elemento video (ora
+     rimosso dal DOM), quindi il riferimento è stale. */
   const cwForAudio = state.cameraWindows[uid];
-  if (cwForAudio && !cwForAudio.remoteVolumeCtx && !isChromeNotSafari() &&
+  if (cwForAudio && !cwForAudio.remoteVolumeCtx &&
       cwForAudio.stream?.getAudioTracks?.()?.length) {
     closeRemoteVolumeContext(uid);
     initRemoteVolumeControl(uid);
