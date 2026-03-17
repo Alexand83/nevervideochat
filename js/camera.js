@@ -1012,32 +1012,45 @@ async function initRemoteVolumeControl(uid) {
        Saltiamo Web Audio e usiamo getStats() per il glow; l'audio esce dall'<video>. */
     const isIOS = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isIOS) {
-      /* Su iOS: audio diretto dall'<video>, getStats() per il glow.
-         Non facciamo return: il codice mute/volume qui sotto deve girare
-         (usa video.muted/video.volume dato che remoteGain = null). */
+      /* iOS: createMediaStreamSource() non funziona con WebRTC (zero data).
+         Usiamo createMediaElementSource(videoElement) → GainNode per il volume.
+         getStats() per il glow (analyser ancora inaffidabile su iOS WebRTC). */
       if (!video.muted) {
+        /* Speaking indicator via getStats */
         const fallbackPc = state.incomingPCs[uid];
         if (fallbackPc && cw && !cw._statsInterval) {
           cw._statsInterval = setInterval(async () => {
-            if (!state.cameraWindows[uid]) {
-              clearInterval(cw._statsInterval);
-              cw._statsInterval = null;
-              return;
-            }
+            if (!state.cameraWindows[uid]) { clearInterval(cw._statsInterval); cw._statsInterval = null; return; }
             try {
               const stats = await fallbackPc.getStats();
               let level = 0;
-              stats.forEach(s => {
-                if (s.type === 'inbound-rtp' && s.kind === 'audio')
-                  level = s.audioLevel ?? 0;
-              });
+              stats.forEach(s => { if (s.type === 'inbound-rtp' && s.kind === 'audio') level = s.audioLevel ?? 0; });
               const el = state.cameraWindows[uid]?.el;
               if (el) el.classList.toggle('cam-speaking', level > 0.008);
             } catch (_) {}
           }, 150);
         }
+        /* Volume via createMediaElementSource + GainNode (workaround iOS video.volume read-only) */
+        try {
+          remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const resumeOk = await remoteCtx.resume().then(() => remoteCtx.state === 'running').catch(() => false);
+          if (resumeOk) {
+            const src = remoteCtx.createMediaElementSource(video);
+            remoteGain = remoteCtx.createGain();
+            remoteGain.gain.value = 1;
+            src.connect(remoteGain);
+            remoteGain.connect(remoteCtx.destination);
+            cw.remoteVolumeCtx = remoteCtx;
+          } else {
+            remoteCtx.close().catch(() => {});
+            remoteCtx = null;
+          }
+        } catch (e) {
+          console.warn('[Camera] iOS createMediaElementSource GainNode failed:', e);
+          remoteCtx = null;
+        }
       }
-      /* Salta il blocco Web Audio e vai direttamente al setup mute/volume */
+      /* Salta il blocco Web Audio standard, vai al setup mute/volume */
     } else {
     try {
       remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1105,7 +1118,9 @@ async function initRemoteVolumeControl(uid) {
   if (cw._volumeHandlersAttached) return;
   cw._volumeHandlersAttached = true;
 
-  /* Su iOS video.volume è read-only: lo slider controlla solo mute (0%=muto, >0%=audio) */
+  /* Su iOS video.volume è read-only.
+     Se remoteGain (GainNode via createMediaElementSource) è disponibile, il volume è controllabile normalmente.
+     Altrimenti lo slider funziona come mute toggle (fallback). */
   const isIOSDevice = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   let lastVolumePct = 100;
@@ -1149,8 +1164,8 @@ async function initRemoteVolumeControl(uid) {
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const x = clientX - rect.left;
       const pct = (x / rect.width) * 100;
-      if (isIOSDevice) {
-        /* Su iOS volume non controllabile: slider = toggle mute a 0% */
+      if (isIOSDevice && !remoteGain) {
+        /* Fallback iOS senza GainNode: slider = toggle mute a 0% */
         const shouldMute = pct < 5;
         setVolumeFromPct(shouldMute ? 0 : 100);
         applyMute(shouldMute);
@@ -1249,7 +1264,8 @@ function replaceRemoteVideoElement(uid) {
   newV.setAttribute('autoplay', '');
   newV.setAttribute('playsinline', '');
   if (newV.webkitPlaysInline !== undefined) newV.webkitPlaysInline = true;
-  newV.muted = true;
+  /* Preserva lo stato mute del vecchio elemento (es. audio già attivato dall'utente) */
+  newV.muted = oldV.muted;
   newV.playsInline = true;
   newV.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
   /* Video track PRIMO: alcuni browser decodificano meglio il primo track dello stream */
@@ -1259,12 +1275,12 @@ function replaceRemoteVideoElement(uid) {
   requestAnimationFrame(() => {
     newV.play().catch(() => {});
   });
-  /* Reinizializza audio se non c'è già un AudioContext attivo: il vecchio
-     initRemoteVolumeControl ha in chiusura il vecchio elemento video (ora
-     rimosso dal DOM), quindi il riferimento è stale. */
+  /* Reinizializza audio:
+     - Se non c'è AudioContext: il vecchio initRemoteVolumeControl ha referenze al vecchio <video>.
+     - Se c'è AudioContext (iOS GainNode): il createMediaElementSource punta al vecchio <video>,
+       va riconnesso al nuovo. */
   const cwForAudio = state.cameraWindows[uid];
-  if (cwForAudio && !cwForAudio.remoteVolumeCtx &&
-      cwForAudio.stream?.getAudioTracks?.()?.length) {
+  if (cwForAudio && cwForAudio.stream?.getAudioTracks?.()?.length) {
     closeRemoteVolumeContext(uid);
     initRemoteVolumeControl(uid);
   }
