@@ -586,8 +586,9 @@
 /* Mobile */
 @media (max-width: 768px) {
   .cam-window {
-    width: calc(100vw - 32px);
-    right: 16px !important;
+    width: clamp(180px, 55vw, 260px);
+    height: 195px;
+    right: 12px !important;
     bottom: 68px !important;
   }
   .cam-resize-handle {

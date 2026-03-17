@@ -1854,11 +1854,18 @@ export async function handleWebRTCSignal(payload) {
         
         if (pc.connectionState === 'failed') {
           if (state.incomingPCs[from] !== pc) return;
+          /* Bug noto Chrome Android: connectionState='failed' scatta anche
+             quando iceConnectionState è già 'connected'/'completed' — in
+             quel caso il flusso audio/video sta effettivamente arrivando,
+             quindi ignoriamo il 'failed'. */
+          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') return;
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
-          /* Su Chrome mobile dietro NAT stretto (carrier-grade NAT) ICE può
-             fallire entro ~1s causando la finestra apri-e-chiudi.
+          /* Su mobile Chrome ICE può fallire entro ~1s.
              Invece di chiudere subito, mostriamo un overlay "Riconnessione…"
-             e ritentiamo MAX_RECONNECT volte con delay crescente. */
+             e ritentiamo MAX_RECONNECT volte con delay crescente.
+             Se nel frattempo il broadcaster ha inviato un ICE-restart offer
+             e state.incomingPCs[from] è già stato ricreato, il timer esce
+             senza toccare nulla. */
           if (reconnectAttempts < MAX_RECONNECT) {
             reconnectAttempts++;
             const delay = Math.min(reconnectAttempts * 3000, 9000);
@@ -1876,8 +1883,11 @@ export async function handleWebRTCSignal(payload) {
               if (pc._createdInRoom && String(state.activeRoom) !== String(pc._createdInRoom)) return;
               if (state.manuallyClosedCameras[from]) return;
               state.cameraWindows[from]?.el?.querySelector('.cam-reconnecting')?.remove();
+              /* Se una nuova connessione è già in corso (es. ICE restart del
+                 broadcaster), non interferire: lasciamo che si stabilisca. */
+              if (state.incomingPCs[from]) return;
               const user = findUser(from);
-              if (user?.hasCamera && user?.online && !state.incomingPCs[from]) {
+              if (user?.hasCamera && user?.online) {
                 removeRemoteCameraFromGrid(from).then(() => {
                   if (!state.cameraWindows[from] && !state.incomingPCs[from]) {
                     delete state.pendingCamRequests[from];
