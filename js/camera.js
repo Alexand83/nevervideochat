@@ -1143,6 +1143,14 @@ function replaceRemoteVideoElement(uid) {
   requestAnimationFrame(() => {
     newV.play().catch(() => {});
   });
+  /* Reinizializza il controllo volume solo se non c'è già un AudioContext
+     attivo: il vecchio initRemoteVolumeControl ha in chiusura il vecchio
+     elemento video (ora rimosso), quindi il riferimento è stale. */
+  const cwForAudio = state.cameraWindows[uid];
+  if (cwForAudio && !cwForAudio.remoteVolumeCtx && cwForAudio.stream?.getAudioTracks?.()?.length) {
+    closeRemoteVolumeContext(uid);
+    initRemoteVolumeControl(uid);
+  }
   return true;
 }
 
@@ -1854,11 +1862,6 @@ export async function handleWebRTCSignal(payload) {
         
         if (pc.connectionState === 'failed') {
           if (state.incomingPCs[from] !== pc) return;
-          /* Bug noto Chrome Android: connectionState='failed' scatta anche
-             quando iceConnectionState è già 'connected'/'completed' — in
-             quel caso il flusso audio/video sta effettivamente arrivando,
-             quindi ignoriamo il 'failed'. */
-          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') return;
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
           /* Su mobile Chrome ICE può fallire entro ~1s.
              Invece di chiudere subito, mostriamo un overlay "Riconnessione…"
