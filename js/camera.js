@@ -1100,6 +1100,18 @@ async function initRemoteVolumeControl(uid) {
   /* Unmuta solo se lo stream non ha audio tracks */
   if (!audioTrack) video.muted = false;
 
+  /* Salta se i handler sono già stati attaccati in una chiamata precedente
+     (evita accumulo di listener da replaceRemoteVideoElement + activateAudio) */
+  if (cw._volumeHandlersAttached) return;
+  cw._volumeHandlersAttached = true;
+
+  /* Su iOS video.volume è read-only: nascondi lo slider, lascia solo il mute */
+  const isIOSDevice = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isIOSDevice && wrap) {
+    wrap.style.display = 'none';
+    if (thumb) thumb.style.display = 'none';
+  }
+
   let lastVolumePct = 100;
   const setVolumeFromPct = (pct) => {
     const clamped = Math.max(0, Math.min(100, pct));
@@ -1114,16 +1126,25 @@ async function initRemoteVolumeControl(uid) {
 
   let isMuted = false;
   if (muteBtn) {
-    muteBtn.addEventListener('click', () => {
+    const toggleMute = () => {
       isMuted = !isMuted;
+      /* Su iOS: usa sempre il video corrente (non la closure stale) */
+      const vid = isIOSDevice
+        ? (cw.el?.querySelector('video') || video)
+        : video;
       if (remoteGain) remoteGain.gain.value = isMuted ? 0 : lastVolumePct / 100;
-      else video.muted = isMuted;
+      else vid.muted = isMuted;
       muteBtn.setAttribute('aria-pressed', String(isMuted));
       muteBtn.textContent = isMuted ? '🔇' : '🔊';
-    });
+    };
+    muteBtn.addEventListener('click', toggleMute);
+    /* Fallback touchend per iOS (click può non sparare dopo touchstart passive) */
+    if (isIOSDevice) {
+      muteBtn.addEventListener('touchend', (e) => { e.preventDefault(); toggleMute(); }, { passive: false });
+    }
   }
 
-  if (wrap) {
+  if (wrap && !isIOSDevice) {
     const onInput = (e) => {
       const rect = wrap.getBoundingClientRect();
       if (rect.width <= 0) return;
@@ -1173,6 +1194,8 @@ function closeRemoteVolumeContext(uid) {
     clearInterval(cw._statsInterval);
     cw._statsInterval = null;
   }
+  /* Permette di riattaccare i handler se la finestra viene ricreata */
+  cw._volumeHandlersAttached = false;
 }
 
 function updateVideoToggleButton(uid) {
