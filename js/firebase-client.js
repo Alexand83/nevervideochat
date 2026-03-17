@@ -288,13 +288,34 @@ export function createPresenceChannel(roomIdStr, key) {
 
   ref.onDisconnect().remove();
   const listenRef = rtdb.ref(`presence/room_${roomIdStr.replace(/[.#$/[\]]/g, '_')}`);
+  let firstSnapshot = true;
   listenRef.on('value', (snap) => {
     const val = snap.val() || {};
+    const oldState = presenceState;
     presenceState = {};
     Object.keys(val).forEach(uid => {
       const d = val[uid];
       if (d && d.name != null) presenceState[uid] = [{ ...d }];
     });
+
+    if (firstSnapshot) {
+      /* Al primo snapshot non generiamo join: l'utente sta solo caricando i presenti */
+      firstSnapshot = false;
+    } else {
+      /* Join: uid presenti ora ma non prima */
+      Object.keys(presenceState).forEach(uid => {
+        if (!oldState[uid]) {
+          joinListeners.forEach(fn => fn({ key: uid, newPresences: presenceState[uid] }));
+        }
+      });
+      /* Leave: uid presenti prima ma non ora */
+      Object.keys(oldState).forEach(uid => {
+        if (!presenceState[uid]) {
+          leaveListeners.forEach(fn => fn({ key: uid }));
+        }
+      });
+    }
+
     syncListeners.forEach(fn => fn());
   });
 
