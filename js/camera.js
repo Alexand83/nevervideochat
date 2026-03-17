@@ -1012,6 +1012,9 @@ async function initRemoteVolumeControl(uid) {
        Saltiamo Web Audio e usiamo getStats() per il glow; l'audio esce dall'<video>. */
     const isIOS = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isIOS) {
+      /* Su iOS: audio diretto dall'<video>, getStats() per il glow.
+         Non facciamo return: il codice mute/volume qui sotto deve girare
+         (usa video.muted/video.volume dato che remoteGain = null). */
       if (!video.muted) {
         const fallbackPc = state.incomingPCs[uid];
         if (fallbackPc && cw && !cw._statsInterval) {
@@ -1034,9 +1037,8 @@ async function initRemoteVolumeControl(uid) {
           }, 150);
         }
       }
-      return;
-    }
-
+      /* Salta il blocco Web Audio e vai direttamente al setup mute/volume */
+    } else {
     try {
       remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
       /* resume() può fallire su mobile senza gesto dell'utente */
@@ -1091,13 +1093,11 @@ async function initRemoteVolumeControl(uid) {
       }
     } catch (err) {
       console.warn('[Camera] Remote Web Audio failed:', err);
-      /* Non unmutare qui: tieni muted così l'autoplay non si rompe.
-         L'utente sentirà l'audio dopo il tap sull'overlay. */
     }
+    } /* end else (non-iOS) */
   }
 
-  /* Unmuta solo se lo stream non ha audio tracks: non c'è nulla da sentire comunque,
-     e il video deve giocare. Se ha audio ma Web Audio è fallito, tieni muted (overlay). */
+  /* Unmuta solo se lo stream non ha audio tracks */
   if (!audioTrack) video.muted = false;
 
   let lastVolumePct = 100;
