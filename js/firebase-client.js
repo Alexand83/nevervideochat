@@ -229,9 +229,12 @@ export function createBroadcastChannel() {
     /* Per webrtc passiamo _ts così handleWebRTCSignal può scartare replay vecchi (child_added su Firebase consegna tutti i messaggi passati al subscribe) */
     let payloadWithTs = event === 'webrtc' ? { ...payload, _ts: ts } : payload;
     if (event === 'webrtc') {
-      /* NON sovrascrivere payload.to: broadcast() imposta già to=destinatario corretto.
-         Sovrascrivere to=currentUser causava la ricezione di offer/ICE altrui da parte di tutti
-         gli utenti nella stanza, aprendo camera window non richieste. */
+      /* Offer/ICE di stanza: payload.to può essere errato (replay/ordine Firebase). Forziamo to=me così camera.js non fa SKIP. Solo ctx==='private' resta targeted. */
+      const isRoomIce = payloadWithTs?.sigType === 'ice' && payloadWithTs?.from && payloadWithTs?.ctx !== 'private';
+      const isRoomOffer = payloadWithTs?.sigType === 'offer' && payloadWithTs?.from && payloadWithTs?.ctx !== 'private';
+      if ((isRoomIce || isRoomOffer) && state.currentUser?.id) {
+        payloadWithTs = { ...payloadWithTs, to: state.currentUser.id };
+      }
       const toMe = payloadWithTs?.to != null && state.currentUser?.id != null && String(payloadWithTs.to) === String(state.currentUser.id);
       if (toMe) console.log('[WebRTC-FLOW] Firebase RX webrtc for me', (payloadWithTs.sigType || ''), 'from=', (v.from || '').slice(0, 8) + '…');
     }
@@ -285,7 +288,7 @@ export function createPresenceChannel(roomIdStr, key) {
 
   ref.onDisconnect().remove();
   const listenRef = rtdb.ref(`presence/room_${roomIdStr.replace(/[.#$/[\]]/g, '_')}`);
-  const PRESENCE_STALE_MS = 5 * 60 * 1000; /* entry più vecchie di 5min = ghost */
+  const PRESENCE_STALE_MS = 10 * 60 * 1000; /* entry più vecchie di 10min = ghost (heartbeat ogni 3min) */
   let firstSnapshot = true;
   listenRef.on('value', (snap) => {
     const val = snap.val() || {};

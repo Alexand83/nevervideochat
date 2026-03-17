@@ -80,6 +80,16 @@ export async function joinRoom(roomId) {
   /* Presence channel for this room */
   const presenceCh = createPresenceChannel(roomIdStr, state.currentUser?.id);
 
+  /* Heartbeat: refresha il ts ogni 3 minuti per evitare che la presenza venga
+     considerata "stale" (>5 min) da nuovi utenti che entrano nella stanza. */
+  const HEARTBEAT_MS = 3 * 60 * 1000;
+  const heartbeatInterval = setInterval(async () => {
+    if (!state.rooms[roomIdStr]?.presenceCh) { clearInterval(heartbeatInterval); return; }
+    await updateOwnPresence(presenceCh);
+  }, HEARTBEAT_MS);
+  /* Salva l'interval nel room object per poterlo pulire al leave */
+  if (state.rooms[roomIdStr]) state.rooms[roomIdStr]._heartbeatInterval = heartbeatInterval;
+
   /* Traccia gli uid già visti per rilevare join reali, indipendente da room.users */
   const seenUids = new Set();
   let initialSyncDone = false;
@@ -88,7 +98,7 @@ export async function joinRoom(roomId) {
     .on('presence', { event: 'sync' }, () => {
       const presenceState = presenceCh.presenceState();
       const myId = String(state.currentUser.id);
-      const STALE_MS = 3 * 60 * 1000;
+      const STALE_MS = 10 * 60 * 1000;
 
       if (!initialSyncDone) {
         /* Primo sync: popola seenUids senza mostrare messaggi */
@@ -161,6 +171,9 @@ export async function leaveRoom(roomId, opts = {}) {
   }
   const room = state.rooms[roomId];
   if (!room) return;
+
+  /* Ferma il heartbeat della presenza */
+  if (room._heartbeatInterval) { clearInterval(room._heartbeatInterval); room._heartbeatInterval = null; }
 
   /* Unsubscribe presence e messaggi → esci dalla lista utenti della stanza. Attendi remove() così la presenza sparisce prima di chiudere. */
   const unsub = room.presenceCh?.unsubscribe?.();
