@@ -147,7 +147,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       </button>
     </div>
     <div class="cam-win-video-wrap">
-      <video id="cam-vid-${safeUid}" autoplay ${isOwn ? 'muted' : ''} playsinline
+      <video id="cam-vid-${safeUid}" autoplay muted playsinline
              style="${isOwn ? 'transform:scaleX(-1)' : ''}"></video>
       <div class="cam-solo-voce-placeholder" id="cam-solo-voce-${safeUid}" hidden><span class="cam-solo-voce-icon">🎤</span><span class="cam-solo-voce-txt">Solo voce</span></div>
     </div>
@@ -954,14 +954,13 @@ async function initRemoteVolumeControl(uid) {
       const resumeOk = await remoteCtx.resume().then(() => remoteCtx.state === 'running').catch(() => false);
 
       if (!resumeOk) {
-        /* Chrome mobile: contesto ancora suspended → chiudi e usa il tag video direttamente.
-           L'audio arriverà senza Web Audio; l'utente può toccare la cam per attivare Web Audio. */
+        /* Chrome mobile: AudioContext suspended senza gesto utente.
+           Tieni il video MUTED (così l'autoplay funziona) e mostra overlay.
+           Al primo tap: unmuta, reinizializza Web Audio (ora il gesto c'è). */
         remoteCtx.close().catch(() => {});
         remoteCtx = null;
-        video.muted = false;
-        video.play().catch(() => {});
+        /* video.muted rimane true → autoplay garantito */
 
-        /* Overlay "Tap to hear" — scompare al primo tap e rilancia initRemoteVolumeControl */
         if (cw?.el && !cw.el.querySelector('.cam-tap-audio')) {
           const ov = document.createElement('div');
           ov.className = 'cam-tap-audio';
@@ -969,6 +968,9 @@ async function initRemoteVolumeControl(uid) {
           (cw.el.querySelector('.cam-win-video-wrap') || cw.el).appendChild(ov);
           const activateAudio = () => {
             removeTapOverlay();
+            /* Ora c'è il gesto → unmuta il video e reinizializza Web Audio */
+            video.muted = false;
+            video.play().catch(() => {});
             closeRemoteVolumeContext(uid);
             initRemoteVolumeControl(uid);
           };
@@ -1005,12 +1007,14 @@ async function initRemoteVolumeControl(uid) {
       }
     } catch (err) {
       console.warn('[Camera] Remote Web Audio failed:', err);
-      video.muted = false;
-      video.play().catch(() => {});
+      /* Non unmutare qui: tieni muted così l'autoplay non si rompe.
+         L'utente sentirà l'audio dopo il tap sull'overlay. */
     }
   }
 
-  if (!remoteGain) video.muted = false;
+  /* Unmuta solo se lo stream non ha audio tracks: non c'è nulla da sentire comunque,
+     e il video deve giocare. Se ha audio ma Web Audio è fallito, tieni muted (overlay). */
+  if (!audioTrack) video.muted = false;
 
   let lastVolumePct = 100;
   const setVolumeFromPct = (pct) => {

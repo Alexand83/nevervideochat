@@ -164,38 +164,61 @@ export async function finishInit() {
     }
   }
   
-  /* Load user permissions */
-  const { loadUserPermissions } = await import('./permissions.js');
-  await loadUserPermissions();
-  
-  /* Load and display announcements */
-  const { loadAndDisplayAnnouncements, initAnnouncementsListener } = await import('./announcements.js');
-  await loadAndDisplayAnnouncements();
-  
-  /* Initialize word filter */
-  const { initWordFilterListener } = await import('./word-filter.js');
-  await initWordFilterListener();
+  const isGuest = !!state.currentUser?.isGuest;
+
+  /* Caricamenti in parallelo: permessi + annunci + filtro parole (indipendenti tra loro) */
+  const [
+    { loadUserPermissions },
+    { loadAndDisplayAnnouncements, initAnnouncementsListener },
+    { initWordFilterListener },
+  ] = await Promise.all([
+    import('./permissions.js'),
+    import('./announcements.js'),
+    import('./word-filter.js'),
+  ]);
+  await Promise.all([
+    loadUserPermissions(),
+    loadAndDisplayAnnouncements(),
+    initWordFilterListener(),
+  ]);
   initAnnouncementsListener();
+
   state.pendingCamRequests = {};
   state.rejectedCamUsers   = loadRejectedCams();
   state.ignoredUsers       = loadIgnoredUsers();
-  state.settings = loadDeviceSettings();
-  /* Utenti registrati: sovrascrivi con impostazioni dal profilo (DB) */
-  if (state.currentUser && !state.currentUser.is_guest && state.fb) {
-    try { await loadUserSettingsFromProfile(); } catch (e) { console.warn('[Settings] Load from profile failed', e); }
+  state.settings           = loadDeviceSettings();
+  if (!state.privateChats) state.privateChats = {};
+
+  /* Impostazioni profilo + tema/lingua in parallelo (solo registrati) */
+  if (!isGuest && state.fb) {
+    const [{ loadUserTheme }, { initI18n, setLanguage }] = await Promise.all([
+      import('./themes.js'),
+      import('./i18n.js'),
+    ]);
+    await Promise.all([
+      loadUserSettingsFromProfile().catch(e => console.warn('[Settings]', e)),
+      loadUserTheme(),
+    ]);
+    setLanguage(state.currentUser.language || 'it');
+    initI18n();
+  } else if (state.currentUser) {
+    /* Guest: tema/lingua con default veloci, senza attendere Firebase */
+    const [{ loadUserTheme }, { initI18n, setLanguage }] = await Promise.all([
+      import('./themes.js'),
+      import('./i18n.js'),
+    ]);
+    loadUserTheme().catch(() => {});   /* non-blocking */
+    setLanguage('it');
+    initI18n();
   }
   applyRichTextSettings(state.settings);
-  if (!state.privateChats) state.privateChats = {};
-  
-  /* Reset games panel width CSS variable to 0 on init (unless in games room) */
+
+  /* Reset variabili CSS */
   document.documentElement.style.setProperty('--games-panel-width', '0px');
-  /* Reset users panel width CSS variable on init */
   document.documentElement.style.setProperty('--users-panel-width', '0px');
 
-  /* Reply cancel button */
+  /* Reply cancel + placeholder immagini */
   dom.replyPreviewCancel?.addEventListener('click', clearReplyTo);
-
-  /* Click su placeholder immagini in chat: carica immagine (se impostazione "non auto-display" attiva) */
   dom.msgsContainer?.addEventListener('click', (e) => {
     if (e.target?.classList?.contains('msg-img-placeholder')) {
       const src = e.target.dataset?.src;
@@ -203,32 +226,28 @@ export async function finishInit() {
     }
   });
 
-  /* Load and apply user theme and language */
-  if (state.currentUser) {
-    const { loadUserTheme } = await import('./themes.js');
-    const { initI18n, setLanguage } = await import('./i18n.js');
-    await loadUserTheme();
-    setLanguage(state.currentUser.language || 'it');
-    initI18n();
-  }
-
-  /* Load mute/kick/ban status for current user */
+  /* Profilo, ruolo, restrizioni, ban (solo se Firebase disponibile; in parallelo) */
   if (state.fb && state.currentUser) {
-    /* Crea/aggiorna profilo nel database con ruoli di default */
-    await ensureUserProfile(state.currentUser);
-    /* Carica nome e colore del ruolo (custom_roles) per presenza e lista utenti */
-    await loadCurrentUserRole();
+    if (!isGuest) {
+      /* Utente registrato: tutte le queries */
+      await Promise.all([
+        ensureUserProfile(state.currentUser),
+        loadCurrentUserRole(),
+        loadUserRestrictions(state.currentUser.id),
+        loadBannedUserIds(),
+      ]);
+    } else {
+      /* Guest: solo ruolo (istantaneo, nessuna query) e ban list (sicurezza) */
+      loadCurrentUserRole();   /* sincrono per guest: imposta roleName='Guest' */
+      loadBannedUserIds().catch(() => {});   /* non-blocking */
+    }
 
-    await loadUserRestrictions(state.currentUser.id);
-    await loadBannedUserIds();
-    
-    /* Check if user is banned - if so, show ban overlay and stop initialization */
+    /* Check ban (dopo aver caricato la lista) */
     const { checkIsBanned } = await import('./users.js');
     if (checkIsBanned(state.currentUser.id)) {
       const ban = state.bannedUsers[String(state.currentUser.id)];
       const { showBanOverlay } = await import('./kick-ban.js');
       showBanOverlay(ban?.reason || 'You have been banned from all rooms.', ban?.expires_at);
-      /* Don't initialize rooms, chat, or any other features - user is banned */
       return;
     }
   }
