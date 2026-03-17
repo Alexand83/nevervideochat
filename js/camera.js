@@ -199,15 +199,15 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       setTimeout(forceFirstFrame, 400);
     }
     if (!isOwn) {
-      /* Chrome iOS (CriOS) non può avviare AudioContext né riprodurre audio senza
-         gesto utente esplicito: mostriamo un badge nell'header + ascoltiamo il primo
-         tap sulla finestra. Per tutti gli altri browser l'audio parte in automatico. */
-      const isChromeIOS = /CriOS/i.test(navigator.userAgent);
+      /* Su iOS (Safari e Chrome/CriOS) Web Audio non riceve dati dai track WebRTC:
+         mostriamo un badge ▶ Play nell'header e aspettiamo il gesto utente.
+         Su tutti gli altri browser (desktop, Android) l'audio parte in automatico. */
+      const isIOS = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-      if (isChromeIOS) {
+      if (isIOS) {
         const audioBadge = document.createElement('button');
         audioBadge.className = 'cam-audio-badge';
-        audioBadge.textContent = '🔇 Tap';
+        audioBadge.textContent = '▶ Play';
         audioBadge.setAttribute('aria-label', 'Attiva audio');
         const hdr = win.querySelector('.cam-win-hdr');
         if (hdr) {
@@ -229,7 +229,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         win.addEventListener('click',      activateAudio, { once: true });
         win.addEventListener('touchstart', activateAudio, { once: true, passive: true });
       } else {
-        /* Safari iOS, desktop Chrome/Firefox/Safari, Android: comportamento originale */
+        /* Desktop Chrome/Firefox/Safari, Android: comportamento originale */
         if (stream?.getAudioTracks?.()?.length) {
           initRemoteVolumeControl(uid);
         } else {
@@ -1007,11 +1007,11 @@ async function initRemoteVolumeControl(uid) {
   const removeTapOverlay = () => cw?.el?.querySelector?.('.cam-tap-audio')?.remove();
 
   if (audioTrack) {
-    /* Chrome iOS (CriOS): AudioContext.resume() riporta 'running' come falso positivo
-       ma createMediaStreamSource non riceve dati reali. Saltiamo Web Audio e usiamo
-       direttamente getStats() per il glow. L'audio esce dall'elemento <video>. */
-    const isChromeIOS = /CriOS/i.test(navigator.userAgent);
-    if (isChromeIOS) {
+    /* iOS (Safari e Chrome/CriOS): AudioContext.resume() può riportare falsi positivi
+       e createMediaStreamSource non riceve dati reali dai track WebRTC su iOS.
+       Saltiamo Web Audio e usiamo getStats() per il glow; l'audio esce dall'<video>. */
+    const isIOS = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isIOS) {
       if (!video.muted) {
         const fallbackPc = state.incomingPCs[uid];
         if (fallbackPc && cw && !cw._statsInterval) {
