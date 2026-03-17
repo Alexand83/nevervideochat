@@ -220,23 +220,24 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       playBtn.addEventListener('click',      activatePlay, { once: true });
       playBtn.addEventListener('touchstart', activatePlay, { once: true, passive: true });
 
-      /* Prova a far partire Web Audio in automatico; se ci riesce (safari/PC)
-         rimuovi il pulsante dopo 350ms, altrimenti rimane per l'utente. */
-      const tryAutoAudio = async () => {
-        if (stream?.getAudioTracks?.()?.length) {
-          await initRemoteVolumeControl(uid);
-        } else {
-          await new Promise(r => setTimeout(r, 500));
-          if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length)
+      /* Su mobile NON avviamo Web Audio automaticamente: Chrome (e altri) mentono
+         su AudioContext.state='running' senza gesto → il pulsante verrebbe rimosso
+         prima che l'utente possa vederlo. Su desktop (no touch) proviamo in auto. */
+      const isMobileDevice = ('ontouchstart' in window) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (!isMobileDevice) {
+        const tryAutoAudio = async () => {
+          const tracks = state.cameraWindows[uid]?.stream?.getAudioTracks?.() || [];
+          if (!tracks.length) await new Promise(r => setTimeout(r, 500));
+          if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length) {
             await initRemoteVolumeControl(uid);
-        }
-        /* Se Web Audio è partito con successo, il pulsante è superfluo */
-        if (state.cameraWindows[uid]?.remoteVolumeCtx) {
-          playBtn.remove();
-          win.querySelector('.cam-tap-audio')?.remove();
-        }
-      };
-      setTimeout(tryAutoAudio, 350);
+          }
+          if (state.cameraWindows[uid]?.remoteVolumeCtx) {
+            playBtn.remove();
+            win.querySelector('.cam-tap-audio')?.remove();
+          }
+        };
+        setTimeout(tryAutoAudio, 350);
+      }
       updateRemoteVideoVisibility(uid);
       /* Polling ogni 400ms per 12s: finché il video è nero e il track è vivo, ricrea l'elemento */
       let pollCount = 0;
