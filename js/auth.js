@@ -282,7 +282,13 @@ export function initAuthModal() {
     const btn = dom.guestContinueBtn;
     if (btn) { btn.disabled = true; btn.dataset.origText = btn.textContent; btn.textContent = '…'; }
     try {
-      const { data, error } = await state.fb.auth.signInAnonymously();
+      /* Timeout di 5s: su Chrome mobile con privacy strette Firebase può bloccarsi
+         senza mai risolvere né rigettare (indexedDB inaccessibile). */
+      const signInPromise = state.fb.auth.signInAnonymously();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('guest-timeout')), 5000)
+      );
+      const { data, error } = await Promise.race([signInPromise, timeoutPromise]);
       if (error) throw error;
       const uid = data?.user?.id;
       if (!uid) throw new Error('Anonymous sign-in failed');
@@ -291,7 +297,7 @@ export function initAuthModal() {
       dom.authModal.hidden = true;
       _finishInit?.();
     } catch (err) {
-      console.warn('[Auth] Guest sign-in failed, using local identity:', err);
+      console.warn('[Auth] Guest sign-in failed, using local identity:', err.message || err);
       state.currentUser = getOrCreateGuestIdentity();
       dom.authModal.hidden = true;
       _finishInit?.();

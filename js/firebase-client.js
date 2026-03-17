@@ -134,6 +134,13 @@ function authAdapter() {
     /* Guest users: enable "Anonymous" sign-in in Firebase Console → Authentication → Sign-in method */
     async signInAnonymously() {
       try {
+        /* Usa persistenza SESSION (sessionStorage) invece di LOCAL (indexedDB).
+           Chrome mobile blocca indexedDB in modalità privata o con impostazioni
+           di privacy strette → signInAnonymously() si blocca senza risolvere. */
+        const Persistence = firebase.auth?.Auth?.Persistence;
+        if (Persistence?.SESSION) {
+          await firebase.auth().setPersistence(Persistence.SESSION).catch(() => {});
+        }
         const cr = await firebase.auth().signInAnonymously();
         const token = await cr.user.getIdToken().catch(() => null);
         return {
