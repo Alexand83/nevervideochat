@@ -1887,27 +1887,33 @@ export async function handleWebRTCSignal(payload) {
         if (!isPublic) return; /* only process public offers */
         /* Ignora offerta propria: Firebase recapita il messaggio anche al mittente, non creare incoming PC per se stessi */
         if (from && state.currentUser?.id && String(from) === String(state.currentUser.id)) return;
-        /* Accetta offerta solo se l'offerer ha la cam attiva in questa stanza.
-           La race condition (offer arriva prima di cam-opened) è ora gestita a monte:
-           firebase-client.js non sovrascrive più to=me, quindi questa offer è
-           genuinamente indirizzata a noi da qualcuno che ci ha già accettato. */
+        /* Rifiuta offerta non solicitata: se non abbiamo né una richiesta pendente, né una finestra
+           già aperta, né una PC esistente per questo broadcaster, l'offer è arrivata per un altro
+           utente (stesso UID su due tab, o segnale consegnato a tutti su canale broadcast).
+           Eccezione: stanza Events (auto-request) → la pendingCamRequest viene già impostata. */
+        const hasPending  = !!state.pendingCamRequests[from];
+        const hasWindow   = !!state.cameraWindows[from];
+        const hasPC       = !!state.incomingPCs[from];
+        if (!hasPending && !hasWindow && !hasPC) {
+          console.log('[WebRTC] Rejecting unsolicited offer from', (from || '').slice(0, 8) + '… — no pending request / window / PC for this peer');
+          return;
+        }
+        /* Accetta offerta se: (a) hasCamera=true in locale, oppure (b) room_id dell'offer
+           coincide con la stanza attiva. Il caso (b) copre la race condition in cui l'offer
+           arriva prima del broadcast cam-opened, o durante reconnect quando removeRemoteCameraFromGrid
+           ha già azzerato hasCamera. */
         const offererHasCamInMyRoom = !!state.rooms[state.activeRoom]?.users[from]?.hasCamera;
         const offerRoomId = payload.room_id != null ? String(payload.room_id) : null;
-        if (!offererHasCamInMyRoom) {
-          /* Fallback: accetta se room_id coincide E c'è già un incomingPC per questo peer
-             (reconnect: hasCamera fu azzerato ma la connessione era valida) */
-          const hasExistingPC = !!state.incomingPCs[from];
-          const offerRoomMatches = offerRoomId != null && offerRoomId === String(state.activeRoom);
-          if (!hasExistingPC && !offerRoomMatches) {
-            console.log('[WebRTC] Rejecting offer from', (from || '').slice(0, 8) + '… — no camera in current room', state.activeRoom, 'offer room_id=', offerRoomId);
-            return;
-          }
-          /* Correggilo se è solo una race condition */
-          if (state.rooms[state.activeRoom]?.users[from]) {
-            state.rooms[state.activeRoom].users[from].hasCamera = true;
-            const uFix = findUser(from);
-            if (uFix) uFix.hasCamera = true;
-          }
+        const offerRoomMatches = offerRoomId === String(state.activeRoom);
+        if (!offererHasCamInMyRoom && !offerRoomMatches) {
+          console.log('[WebRTC] Rejecting offer from', (from || '').slice(0, 8) + '… — no camera in current room', state.activeRoom, 'offer room_id=', offerRoomId);
+          return;
+        }
+        /* Offer accettata: se hasCamera era temporaneamente false (race condition), correggilo */
+        if (!offererHasCamInMyRoom && state.rooms[state.activeRoom]?.users[from]) {
+          state.rooms[state.activeRoom].users[from].hasCamera = true;
+          const uFix = findUser(from);
+          if (uFix) uFix.hasCamera = true;
         }
         /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
         const prev = state._incomingOfferDone[from] || Promise.resolve();
@@ -2274,8 +2280,12 @@ export async function handleWebRTCSignal(payload) {
         ? { candidate: candidate.trim() }
         : (candidate && typeof candidate === 'object' && 'candidate' in candidate ? candidate : { candidate: String(candidate) });
       const iceCandidate = candidate instanceof RTCIceCandidate ? candidate : new RTCIceCandidate(candidateObj);
-      /* dir 'out': if we don't have incoming PC yet (offer not processed), buffer con _ts per flush solo ICE della stessa sessione */
+      /* dir 'out': if we don't have incoming PC yet (offer not processed), buffer con _ts per flush solo ICE della stessa sessione.
+         Bufferizza solo se abbiamo una richiesta pendente o una finestra/PC per questo peer:
+         evita di accumulare ICE per broadcaster che non abbiamo mai richiesto (stesso UID su più tab). */
       if (dir === 'out' && !pc) {
+        const shouldBuffer = !!state.pendingCamRequests[from] || !!state.cameraWindows[from];
+        if (!shouldBuffer) return;
         state.pendingIncomingICE[from] = state.pendingIncomingICE[from] || [];
         /* Cap a 100: evita crescita illimitata in caso di flood di candidati ICE */
         if (state.pendingIncomingICE[from].length < 100) {
