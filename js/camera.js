@@ -52,6 +52,16 @@ async function getIceConfig() {
 /** Per evitare XSS/breakout in id HTML: solo caratteri sicuri */
 function safeId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '') || 'u'; }
 
+/** Rileva Chrome (non Safari, Firefox, Samsung) — usato per mostrare il play button audio */
+function isChromeNotSafari() {
+  const ua = navigator.userAgent;
+  return /Chrome\/\d/.test(ua) && !/(Chromium|OPR|Edg\/|SamsungBrowser|Firefox)/.test(ua);
+}
+
+/** Contatore globale reconnect per peer: impedisce il loop infinito dopo MAX_GLOBAL_RECONNECT tentativi */
+const _globalReconnectCounts = {};
+const MAX_GLOBAL_RECONNECT = 3;
+
 /** Qualità video adattiva: livello corrente e flag "forzata bassa" (pulsante Riduci qualità) */
 let currentEncodingLevel = 'low';
 let forceLowQuality = false;
@@ -194,13 +204,37 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       setTimeout(forceFirstFrame, 400);
     }
     if (!isOwn) {
-      /* Indicatore "sta parlando" e volume: avvia subito se c'è audio, così il bordo si illumina anche se play() è in ritardo */
-      if (stream?.getAudioTracks?.()?.length) {
-        initRemoteVolumeControl(uid);
+      /* Chrome non può avviare AudioContext senza gesto utente.
+         Mostriamo subito un pulsante Play ben visibile; su Safari/Firefox
+         initRemoteVolumeControl parte in automatico come prima. */
+      if (isChromeNotSafari()) {
+        const playWrap = win.querySelector('.cam-win-video-wrap') || win;
+        if (!playWrap.querySelector('.cam-chrome-play')) {
+          const playBtn = document.createElement('button');
+          playBtn.className = 'cam-chrome-play';
+          playBtn.setAttribute('aria-label', 'Attiva audio');
+          playBtn.innerHTML = '<span class="cam-chrome-play-icon">▶</span><span class="cam-chrome-play-label">Tocca per l\'audio</span>';
+          playWrap.appendChild(playBtn);
+          const activateChrome = () => {
+            playBtn.remove();
+            win.querySelector('.cam-tap-audio')?.remove();
+            const vid2 = $(`cam-vid-${safeUid}`) || win.querySelector('video');
+            if (vid2) { vid2.muted = false; vid2.play().catch(() => { vid2.muted = true; }); }
+            closeRemoteVolumeContext(uid);
+            initRemoteVolumeControl(uid);
+          };
+          playBtn.addEventListener('click',      activateChrome, { once: true });
+          playBtn.addEventListener('touchstart', activateChrome, { once: true, passive: true });
+        }
       } else {
-        setTimeout(() => {
-          if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length) initRemoteVolumeControl(uid);
-        }, 500);
+        /* Safari / Firefox: avvia subito in automatico */
+        if (stream?.getAudioTracks?.()?.length) {
+          initRemoteVolumeControl(uid);
+        } else {
+          setTimeout(() => {
+            if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length) initRemoteVolumeControl(uid);
+          }, 500);
+        }
       }
       updateRemoteVideoVisibility(uid);
       /* Polling ogni 400ms per 12s: finché il video è nero e il track è vivo, ricrea l'elemento */
@@ -607,6 +641,8 @@ export async function removeRemoteCameraFromGrid(uid, opts = {}) {
     try { state.incomingPCs[uid].close(); } catch {}
     delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid];
     }
+  /* Reset contatore reconnect: quando la finestra è chiusa (manualmente o definitivamente) */
+  delete _globalReconnectCounts[uid];
   /* keepHasCamera=true durante reconnect automatico: il broadcaster ha ancora la cam aperta,
      azzerarla causerebbe il reject dell'offer di riconnessione. */
   if (!opts.keepHasCamera) {
@@ -974,21 +1010,19 @@ async function initRemoteVolumeControl(uid) {
       const resumeOk = await remoteCtx.resume().then(() => remoteCtx.state === 'running').catch(() => false);
 
       if (!resumeOk) {
-        /* Chrome mobile: AudioContext suspended senza gesto utente.
-           Tieni il video MUTED (così l'autoplay funziona) e mostra overlay.
-           Al primo tap: unmuta, reinizializza Web Audio (ora il gesto c'è). */
         remoteCtx.close().catch(() => {});
         remoteCtx = null;
-        /* video.muted rimane true → autoplay garantito */
-
-        if (cw?.el && !cw.el.querySelector('.cam-tap-audio')) {
+        /* Se il video è già unmutato (es. Chrome play button già toccato) l'audio
+           esce direttamente dall'elemento HTML — non serve overlay. */
+        if (!video.muted) return;
+        /* Altrimenti mostra overlay tap (non-Chrome o Chrome senza play button) */
+        if (cw?.el && !cw.el.querySelector('.cam-tap-audio') && !cw.el.querySelector('.cam-chrome-play')) {
           const ov = document.createElement('div');
           ov.className = 'cam-tap-audio';
           ov.textContent = '🔇 Tocca per sentire l\'audio';
           (cw.el.querySelector('.cam-win-video-wrap') || cw.el).appendChild(ov);
           const activateAudio = () => {
             removeTapOverlay();
-            /* Ora c'è il gesto → unmuta il video e reinizializza Web Audio */
             video.muted = false;
             video.play().catch(() => {});
             closeRemoteVolumeContext(uid);
@@ -1163,11 +1197,12 @@ function replaceRemoteVideoElement(uid) {
   requestAnimationFrame(() => {
     newV.play().catch(() => {});
   });
-  /* Reinizializza il controllo volume solo se non c'è già un AudioContext
-     attivo: il vecchio initRemoteVolumeControl ha in chiusura il vecchio
-     elemento video (ora rimosso), quindi il riferimento è stale. */
+  /* Reinizializza audio solo su non-Chrome (Chrome usa il play button):
+     il vecchio initRemoteVolumeControl ha in chiusura il vecchio elemento,
+     quindi dopo la sostituzione del video serve un nuovo riferimento. */
   const cwForAudio = state.cameraWindows[uid];
-  if (cwForAudio && !cwForAudio.remoteVolumeCtx && cwForAudio.stream?.getAudioTracks?.()?.length) {
+  if (cwForAudio && !cwForAudio.remoteVolumeCtx && !isChromeNotSafari() &&
+      cwForAudio.stream?.getAudioTracks?.()?.length) {
     closeRemoteVolumeContext(uid);
     initRemoteVolumeControl(uid);
   }
@@ -1866,7 +1901,8 @@ export async function handleWebRTCSignal(payload) {
 
         if (pc.connectionState === 'connected') {
           wasEverConnected = true;
-          /* Rimozione overlay reconnect se la connessione si è stabilita */
+          /* Connessione stabilita: reset contatore globale e rimuovi overlay */
+          delete _globalReconnectCounts[from];
           state.cameraWindows[from]?.el?.querySelector('.cam-reconnecting')?.remove();
         }
         
@@ -1926,7 +1962,10 @@ export async function handleWebRTCSignal(payload) {
                  broadcaster), non interferire: lasciamo che si stabilisca. */
               if (state.incomingPCs[from]) return;
               const user = findUser(from);
-              if (user?.online) {
+              /* Incrementa contatore globale; dopo MAX_GLOBAL_RECONNECT stop al loop */
+              _globalReconnectCounts[from] = (_globalReconnectCounts[from] || 0) + 1;
+              const tooManyRetries = _globalReconnectCounts[from] > MAX_GLOBAL_RECONNECT;
+              if (user?.online && !tooManyRetries) {
                 /* keepHasCamera=true: il broadcaster ha ancora la cam — non azzeriamo
                    il flag così l'offer di riconnessione non viene rifiutata. */
                 removeRemoteCameraFromGrid(from, { keepHasCamera: true }).then(() => {
@@ -1936,6 +1975,8 @@ export async function handleWebRTCSignal(payload) {
                   }
                 }).catch(() => {});
               } else {
+                /* Troppi tentativi o utente offline: chiudi definitivamente */
+                delete _globalReconnectCounts[from];
                 removeRemoteCameraFromGrid(from).catch(() => {});
               }
             }, delay);

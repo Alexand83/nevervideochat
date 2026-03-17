@@ -355,6 +355,47 @@
   -webkit-backdrop-filter: blur(4px);
 }
 
+/* ── Pulsante Play per Chrome (autoplay policy) ── */
+.cam-chrome-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(0,0,0,.52);
+  border: none;
+  border-radius: inherit;
+  cursor: pointer;
+  z-index: 12;
+  color: #fff;
+  -webkit-tap-highlight-color: transparent;
+}
+.cam-chrome-play:active { background: rgba(0,0,0,.7); }
+.cam-chrome-play-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.18);
+  border: 2px solid rgba(255,255,255,.7);
+  font-size: 22px;
+  line-height: 1;
+  padding-left: 3px; /* centra visivamente il triangolo */
+  transition: background .15s;
+}
+.cam-chrome-play:active .cam-chrome-play-icon { background: rgba(255,255,255,.35); }
+.cam-chrome-play-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  opacity: .85;
+  white-space: nowrap;
+}
+
 .cam-reconnecting {
   position: absolute;
   inset: 0;
