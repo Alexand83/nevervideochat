@@ -1030,24 +1030,24 @@ async function initRemoteVolumeControl(uid) {
             } catch (_) {}
           }, 150);
         }
-        /* Volume via createMediaElementSource + GainNode (workaround iOS video.volume read-only) */
+        /* Volume via createMediaElementSource + GainNode (workaround iOS video.volume read-only).
+         TUTTO SINCRONO: il contesto del gesto utente (tap badge) si perde al primo await;
+         creare AudioContext + collegare il grafo prima di qualsiasi await è indispensabile
+         affinché resume() venga accettato da iOS. */
         try {
           remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
-          const resumeOk = await remoteCtx.resume().then(() => remoteCtx.state === 'running').catch(() => false);
-          if (resumeOk) {
-            const src = remoteCtx.createMediaElementSource(video);
-            remoteGain = remoteCtx.createGain();
-            remoteGain.gain.value = 1;
-            src.connect(remoteGain);
-            remoteGain.connect(remoteCtx.destination);
-            cw.remoteVolumeCtx = remoteCtx;
-          } else {
-            remoteCtx.close().catch(() => {});
-            remoteCtx = null;
-          }
+          const src = remoteCtx.createMediaElementSource(video);
+          remoteGain = remoteCtx.createGain();
+          remoteGain.gain.value = 1;
+          src.connect(remoteGain);
+          remoteGain.connect(remoteCtx.destination);
+          cw.remoteVolumeCtx = remoteCtx;
+          remoteCtx.resume().catch(e => console.warn('[Camera] iOS ctx resume error:', e));
         } catch (e) {
           console.warn('[Camera] iOS createMediaElementSource GainNode failed:', e);
           remoteCtx = null;
+          remoteGain = null;
+          cw.remoteVolumeCtx = null;
         }
       }
       /* Salta il blocco Web Audio standard, vai al setup mute/volume */
