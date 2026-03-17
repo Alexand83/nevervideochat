@@ -426,47 +426,43 @@ export function switchRoom(roomId) {
   /* Update camera button to reflect whether cam is active in this room */
   _updateCamBtn();
   
-  /* Events room: automatically request cameras from users who already have them open */
+  /* Events room: automatically request cameras from users who already have them open.
+     Delay di 8s per dare tempo alla connessione WebRTC di stabilizzarsi dopo il cambio stanza.
+     Secondo tentativo a 16s per cam che non si sono connesse al primo giro. */
   if (isEventsRoom) {
     const room = state.rooms[roomIdStr];
     if (room) {
-      /* Request cameras after a short delay to let WebRTC connections settle.
-         CRITICAL: always check state.activeRoom === roomIdStr before acting — the
-         user may have already switched away before the timeout fires. */
-      setTimeout(async () => {
-        /* Guard: abort if user has left this room */
+      const requestEventsRoomCams = async (label) => {
         if (state.activeRoom !== roomIdStr) return;
-
         const { requestPublicCamera } = await import('./camera.js?v=20260318');
         const allUsers = Object.values(room.users);
         const usersWithCam = allUsers.filter(user =>
           user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)
         );
-        console.log('[Events Room] Requesting cameras from', usersWithCam.length, 'users:', usersWithCam.map(u => u.name || u.id));
+        console.log(`[Events Room] (${label}) Requesting cameras from`, usersWithCam.length, 'users:', usersWithCam.map(u => u.name || u.id));
 
         usersWithCam.forEach((user, index) => {
-          /* CRITICO: Rimuovi manuallyClosedCameras per questo utente se ha ancora la cam attiva */
-          /* Questo permette di richiedere di nuovo la cam quando si ritorna in Events room */
+          /* Pulisci manuallyClosedCameras: al rientro in Events la cam si deve ricaricare */
           if (state.manuallyClosedCameras[user.id] && user.hasCamera) {
-            console.log('[Events Room] Clearing manuallyClosedCameras for', user.name || user.id, '- camera is active again');
             delete state.manuallyClosedCameras[user.id];
           }
-          
-          const alreadyViewing  = !!state.cameraWindows[user.id];
-          const pcActive        = !!state.incomingPCs?.[user.id];
-          const reqPending      = !!state.pendingCamRequests?.[user.id];
+          const alreadyViewing = !!state.cameraWindows[user.id];
+          const pcActive       = !!state.incomingPCs?.[user.id];
+          const reqPending     = !!state.pendingCamRequests?.[user.id];
           if (!alreadyViewing && !pcActive && !reqPending) {
             setTimeout(() => {
-              /* Guard: abort if user has left before the staggered delay fires */
               if (state.activeRoom !== roomIdStr) return;
-              console.log('[Events Room] Requesting camera from', user.name || user.id);
+              console.log(`[Events Room] (${label}) Requesting camera from`, user.name || user.id);
               requestPublicCamera(user.id);
-            }, index * 200);
-          } else {
-            console.log('[Events Room] Already viewing/connecting camera from', user.name || user.id);
+            }, index * 300);
           }
         });
-      }, 1000);
+      };
+
+      /* Primo tentativo: 8s (tempo per stabilizzare la connessione dopo cambio stanza) */
+      setTimeout(() => requestEventsRoomCams('8s'), 8000);
+      /* Secondo tentativo: 16s (retry per cam non connesse al primo giro) */
+      setTimeout(() => requestEventsRoomCams('16s'), 16000);
     }
   }
 }
