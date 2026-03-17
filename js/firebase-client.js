@@ -288,14 +288,23 @@ export function createPresenceChannel(roomIdStr, key) {
 
   ref.onDisconnect().remove();
   const listenRef = rtdb.ref(`presence/room_${roomIdStr.replace(/[.#$/[\]]/g, '_')}`);
+  const PRESENCE_STALE_MS = 5 * 60 * 1000; /* entry più vecchie di 5min = ghost */
   let firstSnapshot = true;
   listenRef.on('value', (snap) => {
     const val = snap.val() || {};
     const oldState = presenceState;
     presenceState = {};
+    const now = Date.now();
     Object.keys(val).forEach(uid => {
       const d = val[uid];
-      if (d && d.name != null) presenceState[uid] = [{ ...d }];
+      if (!d || d.name == null) return;
+      /* Salta entry stale (onDisconnect non scattato) */
+      if (d.ts && now - d.ts > PRESENCE_STALE_MS) {
+        /* Rimuovi silenziosamente il ghost da Firebase */
+        rtdb.ref(`${`presence/room_${roomIdStr.replace(/[.#$/[\]]/g, '_')}`}/${uid}`).remove().catch(() => {});
+        return;
+      }
+      presenceState[uid] = [{ ...d }];
     });
 
     if (firstSnapshot) {

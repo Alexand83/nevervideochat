@@ -89,11 +89,14 @@ export async function joinRoom(roomId) {
 
       /* Rileva join confrontando presenceState con room.users PRIMA di syncPresence */
       if (syncCount > 1 && roomIdStr === String(state.activeRoom)) {
+        const STALE_MS = 3 * 60 * 1000; /* presenze più vecchie di 3min sono fantasma */
         Object.entries(presenceState).forEach(([uid, presences]) => {
           if (uid === myId) return;
           const existingUser = state.rooms[roomIdStr]?.users[uid];
           if (existingUser?.online) return; /* già presente, non è un nuovo ingresso */
           const info = presences[0];
+          /* Ignora entry stale (onDisconnect non scattato da sessione precedente) */
+          if (info.ts && Date.now() - info.ts > STALE_MS) return;
           const leftKey = roomIdStr + ':' + uid;
           const leftAt = state.presenceLeftAt[leftKey];
           if (leftAt) delete state.presenceLeftAt[leftKey];
