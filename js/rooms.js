@@ -80,28 +80,32 @@ export async function joinRoom(roomId) {
   /* Presence channel for this room */
   const presenceCh = createPresenceChannel(roomIdStr, state.currentUser?.id);
 
-  let syncCount = 0;
+  /* Traccia gli uid già visti per rilevare join reali, indipendente da room.users */
+  const seenUids = new Set();
+  let initialSyncDone = false;
+
   presenceCh
     .on('presence', { event: 'sync' }, () => {
-      syncCount++;
       const presenceState = presenceCh.presenceState();
       const myId = String(state.currentUser.id);
+      const STALE_MS = 3 * 60 * 1000;
 
-      /* Rileva join confrontando presenceState con room.users PRIMA di syncPresence */
-      if (syncCount > 1 && roomIdStr === String(state.activeRoom)) {
-        const STALE_MS = 3 * 60 * 1000; /* presenze più vecchie di 3min sono fantasma */
+      if (!initialSyncDone) {
+        /* Primo sync: popola seenUids senza mostrare messaggi */
+        Object.keys(presenceState).forEach(uid => seenUids.add(uid));
+        initialSyncDone = true;
+      } else if (roomIdStr === String(state.activeRoom)) {
+        /* Sync successivi: chiunque NON era in seenUids è un nuovo ingresso */
         Object.entries(presenceState).forEach(([uid, presences]) => {
           if (uid === myId) return;
-          const existingUser = state.rooms[roomIdStr]?.users[uid];
-          if (existingUser?.online) return; /* già presente, non è un nuovo ingresso */
+          if (seenUids.has(uid)) return;
+          seenUids.add(uid);
           const info = presences[0];
-          /* Ignora entry stale (onDisconnect non scattato da sessione precedente) */
           if (info.ts && Date.now() - info.ts > STALE_MS) return;
           const leftKey = roomIdStr + ':' + uid;
           const leftAt = state.presenceLeftAt[leftKey];
           if (leftAt) delete state.presenceLeftAt[leftKey];
-          const justRejoined = leftAt && (Date.now() - leftAt < 10000);
-          if (!justRejoined) {
+          if (!leftAt || Date.now() - leftAt >= 10000) {
             showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
             addSystemMessage(`👤 ${info.name} è entrato nella chat`, roomIdStr);
           }
@@ -111,12 +115,13 @@ export async function joinRoom(roomId) {
       syncPresence(presenceState, roomIdStr);
       if (roomIdStr === String(state.activeRoom)) renderUsers();
     })
-    .on('presence', { event: 'join' }, () => { /* join rilevato nel sync handler */ })
+    .on('presence', { event: 'join' }, () => {})
     .on('presence', { event: 'leave' }, async ({ key }) => {
       const uid = String(key);
       if (!state.rooms[roomIdStr]) return;
       if (uid === String(state.currentUser?.id)) return;
       const leaveName = state.rooms[roomIdStr].users[uid]?.name || uid;
+      seenUids.delete(uid); /* rimuovi da seenUids così un futuro re-ingresso viene notificato */
       delete state.rooms[roomIdStr].users[uid];
       state.presenceLeftAt[roomIdStr + ':' + uid] = Date.now();
       if (state.cameraWindows[uid]) {
