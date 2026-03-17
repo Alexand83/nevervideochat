@@ -199,12 +199,13 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       setTimeout(forceFirstFrame, 400);
     }
     if (!isOwn) {
-      /* Su iOS (Safari e Chrome/CriOS) Web Audio non riceve dati dai track WebRTC:
-         mostriamo un badge ▶ Play nell'header e aspettiamo il gesto utente.
-         Su tutti gli altri browser (desktop, Android) l'audio parte in automatico. */
-      const isIOS = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      /* Chrome iOS (CriOS): AudioContext dà falsi positivi su resume() → badge obbligatorio.
+         Safari iOS + tutti gli altri browser: autoplay funziona dopo interazione utente → auto-init. */
+      const isChromeIOS = /CriOS/i.test(navigator.userAgent);
+      const isSafariIOS = !isChromeIOS && /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-      if (isIOS) {
+      if (isChromeIOS) {
+        /* Badge ▶ Play solo su Chrome iOS */
         const audioBadge = document.createElement('button');
         audioBadge.className = 'cam-audio-badge';
         audioBadge.textContent = '▶ Play';
@@ -228,6 +229,26 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         };
         win.addEventListener('click',      activateAudio, { once: true });
         win.addEventListener('touchstart', activateAudio, { once: true, passive: true });
+      } else if (isSafariIOS) {
+        /* Safari iOS: sblocca l'audio automaticamente (l'utente ha già interagito con la pagina).
+           Aspettiamo la promessa di play() prima di chiamare initRemoteVolumeControl,
+           così video.muted ha il valore corretto quando la funzione gira. */
+        const tryAutoAudio = () => {
+          const vid2 = win.querySelector('video');
+          if (!vid2 || !state.cameraWindows[uid]) return;
+          vid2.muted = false;
+          const p = vid2.play();
+          const afterPlay = () => { if (state.cameraWindows[uid]) initRemoteVolumeControl(uid); };
+          if (p) p.then(afterPlay).catch(() => { vid2.muted = true; afterPlay(); });
+          else afterPlay();
+        };
+        if (stream?.getAudioTracks?.()?.length) {
+          tryAutoAudio();
+        } else {
+          setTimeout(() => {
+            if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length) tryAutoAudio();
+          }, 500);
+        }
       } else {
         /* Desktop Chrome/Firefox/Safari, Android: comportamento originale */
         if (stream?.getAudioTracks?.()?.length) {
@@ -1065,9 +1086,8 @@ async function initRemoteVolumeControl(uid) {
        Saltiamo Web Audio e usiamo getStats() per il glow; l'audio esce dall'<video>. */
     const isIOS = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isIOS) {
-      /* iOS: createMediaStreamSource() non funziona con WebRTC (zero data).
-         Usiamo createMediaElementSource(videoElement) → GainNode per il volume.
-         getStats() per il glow (analyser ancora inaffidabile su iOS WebRTC). */
+      /* Tutti gli iOS: createMediaStreamSource() non riceve dati WebRTC → skip Web Audio.
+         Audio diretto dall'<video>; getStats() per lo speaking indicator. */
       if (!video.muted) {
         /* Speaking indicator via getStats */
         const fallbackPc = state.incomingPCs[uid];
@@ -1083,8 +1103,24 @@ async function initRemoteVolumeControl(uid) {
             } catch (_) {}
           }, 150);
         }
-        /* Su iOS video.volume è read-only: non è possibile controllare il volume via JS.
-         Lo slider funziona come mute toggle (0% = muto, qualsiasi valore = audio pieno). */
+        /* Su iOS video.volume è read-only: slider = mute toggle. */
+      } else {
+        /* video.muted = true → autoplay bloccato (es. Safari con restrizioni). Mostra overlay tap. */
+        if (cw?.el && !cw.el.querySelector('.cam-tap-audio') && !cw.el.querySelector('.cam-audio-badge')) {
+          const ov = document.createElement('div');
+          ov.className = 'cam-tap-audio';
+          ov.textContent = '🔇 Tocca per sentire l\'audio';
+          (cw.el.querySelector('.cam-win-video-wrap') || cw.el).appendChild(ov);
+          const activateFallback = () => {
+            removeTapOverlay();
+            const v = cw.el?.querySelector('video');
+            if (v) { v.muted = false; v.play().catch(() => {}); }
+            closeRemoteVolumeContext(uid);
+            initRemoteVolumeControl(uid);
+          };
+          cw.el.addEventListener('click',      activateFallback, { once: true });
+          cw.el.addEventListener('touchstart', activateFallback, { once: true, passive: true });
+        }
       }
       /* Salta il blocco Web Audio standard, vai al setup mute/volume */
     } else {
