@@ -207,7 +207,12 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       audioBadge.textContent = '🔇 Tap';
       audioBadge.setAttribute('aria-label', 'Attiva audio');
       const hdr = win.querySelector('.cam-win-hdr');
-      if (hdr) hdr.appendChild(audioBadge);
+      if (hdr) {
+        /* Inserisci PRIMA del tasto X: se lo appendiamo dopo, su mobile si sovrappone
+           al close button e il tap chiude la finestra invece di attivare l'audio. */
+        const closeBtn = hdr.querySelector('.cam-win-close-btn');
+        closeBtn ? hdr.insertBefore(audioBadge, closeBtn) : hdr.appendChild(audioBadge);
+      }
 
       let audioActivated = false;
       const activateAudio = () => {

@@ -357,7 +357,6 @@
 
 /* ── Badge audio nell'header (sempre visibile, per iOS Chrome e mobile) ── */
 .cam-audio-badge {
-  margin-left: auto;
   padding: 2px 7px;
   border-radius: var(--r-pill);
   border: 1px solid rgba(255,255,255,.25);
