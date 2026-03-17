@@ -80,43 +80,35 @@ export async function joinRoom(roomId) {
   /* Presence channel for this room */
   const presenceCh = createPresenceChannel(roomIdStr, state.currentUser?.id);
 
+  let syncCount = 0;
   presenceCh
     .on('presence', { event: 'sync' }, () => {
-      syncPresence(presenceCh.presenceState(), roomIdStr);
+      syncCount++;
+      const presenceState = presenceCh.presenceState();
+      const myId = String(state.currentUser.id);
+
+      /* Rileva join confrontando presenceState con room.users PRIMA di syncPresence */
+      if (syncCount > 1 && roomIdStr === String(state.activeRoom)) {
+        Object.entries(presenceState).forEach(([uid, presences]) => {
+          if (uid === myId) return;
+          const existingUser = state.rooms[roomIdStr]?.users[uid];
+          if (existingUser?.online) return; /* già presente, non è un nuovo ingresso */
+          const info = presences[0];
+          const leftKey = roomIdStr + ':' + uid;
+          const leftAt = state.presenceLeftAt[leftKey];
+          if (leftAt) delete state.presenceLeftAt[leftKey];
+          const justRejoined = leftAt && (Date.now() - leftAt < 10000);
+          if (!justRejoined) {
+            showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
+            addSystemMessage(`👤 ${info.name} è entrato nella chat`, roomIdStr);
+          }
+        });
+      }
+
+      syncPresence(presenceState, roomIdStr);
       if (roomIdStr === String(state.activeRoom)) renderUsers();
     })
-    .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-      const uid = String(key);
-      if (uid === String(state.currentUser.id)) return;
-      const info = newPresences[0];
-      if (!state.rooms[roomIdStr]) return;
-
-      const existingUser = state.rooms[roomIdStr].users[uid];
-      const globalUser = findUser(uid);
-      let hasCamera;
-      if (info.hasCamera === true)       hasCamera = true;
-      else if (info.hasCamera === false)  hasCamera = false;
-      else hasCamera = existingUser?.hasCamera === true || globalUser?.hasCamera === true;
-
-      state.rooms[roomIdStr].users[uid] = {
-        id: uid, name: info.name, username: info.username || null,
-        isGuest: info.isGuest, online: true,
-        hasCamera, avatarUrl: info.avatarUrl || null,
-      };
-
-      if (roomIdStr === String(state.activeRoom)) {
-        renderUsers();
-        const wasAlreadyOnline = existingUser?.online;
-        const leftKey = roomIdStr + ':' + uid;
-        const leftAt = state.presenceLeftAt[leftKey];
-        if (leftAt) delete state.presenceLeftAt[leftKey];
-        const justRejoined = leftAt && (Date.now() - leftAt < 10000);
-        if (!wasAlreadyOnline && !justRejoined) {
-          showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
-          addSystemMessage(`👤 ${info.name} è entrato nella chat`, roomIdStr);
-        }
-      }
-    })
+    .on('presence', { event: 'join' }, () => { /* join rilevato nel sync handler */ })
     .on('presence', { event: 'leave' }, async ({ key }) => {
       const uid = String(key);
       if (!state.rooms[roomIdStr]) return;

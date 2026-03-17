@@ -109,13 +109,14 @@ export function addSystemMessage(text, roomId) {
   if (!dom.msgsContainer) return;
   if (dom.welcomeBanner?.parentNode) dom.welcomeBanner.remove();
   const el = document.createElement('div');
-  el.className = 'msg-system';
+  const isEnter = text.includes('entrat');
+  el.className = `msg-system ${isEnter ? 'msg-system-enter' : 'msg-system-leave'}`;
   el.textContent = text;
   dom.msgsContainer.appendChild(el);
   scrollToBottom();
-  /* Rimuovi messaggi di sistema vecchi se ne accumula troppi (max 5) */
+  /* Rimuovi messaggi di sistema vecchi se ne accumula troppi (max 6) */
   const all = dom.msgsContainer.querySelectorAll('.msg-system');
-  if (all.length > 5) all[0].remove();
+  if (all.length > 6) all[0].remove();
 }
 
 /* ── Render a single message bubble ── */

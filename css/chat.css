@@ -53,23 +53,32 @@
 .msg-system {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin: 6px 16px;
-  color: var(--text-muted, #8b949e);
+  gap: 8px;
+  margin: 8px 12px;
   font-size: 11.5px;
-  font-style: italic;
+  font-weight: 600;
   text-align: center;
-  animation: msgIn .25s ease;
+  animation: msgIn .3s ease;
   user-select: none;
   pointer-events: none;
+  border-radius: 20px;
+  padding: 4px 12px;
+  width: fit-content;
+  align-self: center;
 }
 .msg-system::before,
 .msg-system::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border, rgba(255,255,255,.08));
+  content: none;
+}
+.msg-system-enter {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+.msg-system-leave {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 .msg-group:nth-child(5n+1) { transform: rotate(-0.4deg); }
 .msg-group:nth-child(5n+2) { transform: rotate(0.35deg); }
