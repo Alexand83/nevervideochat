@@ -103,12 +103,9 @@ export async function joinRoom(roomId) {
           const info = presences[0];
           if (info.ts && Date.now() - info.ts > STALE_MS) return;
           const leftKey = roomIdStr + ':' + uid;
-          const leftAt = state.presenceLeftAt[leftKey];
-          if (leftAt) delete state.presenceLeftAt[leftKey];
-          if (!leftAt || Date.now() - leftAt >= 10000) {
-            showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
-            addSystemMessage(`👤 ${info.name} è entrato nella chat`, roomIdStr);
-          }
+          if (state.presenceLeftAt[leftKey]) delete state.presenceLeftAt[leftKey];
+          showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
+          addSystemMessage(`👤 ${info.name} è entrato nella chat`, roomIdStr);
         });
       }
 
