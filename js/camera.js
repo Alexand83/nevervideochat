@@ -1105,54 +1105,59 @@ async function initRemoteVolumeControl(uid) {
   if (cw._volumeHandlersAttached) return;
   cw._volumeHandlersAttached = true;
 
-  /* Su iOS video.volume è read-only: nascondi lo slider, lascia solo il mute */
+  /* Su iOS video.volume è read-only: lo slider controlla solo mute (0%=muto, >0%=audio) */
   const isIOSDevice = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isIOSDevice && wrap) {
-    wrap.style.display = 'none';
-    if (thumb) thumb.style.display = 'none';
-  }
 
   let lastVolumePct = 100;
+  const getVid = () => isIOSDevice ? (cw.el?.querySelector('video') || video) : video;
   const setVolumeFromPct = (pct) => {
     const clamped = Math.max(0, Math.min(100, pct));
     lastVolumePct = clamped;
     const vol = clamped / 100;
-    if (remoteGain) remoteGain.gain.value = vol;
-    else { video.volume = vol; if (vol > 0) video.muted = false; }
+    if (remoteGain) {
+      remoteGain.gain.value = vol;
+    } else if (!isIOSDevice) {
+      getVid().volume = vol;
+      if (vol > 0) getVid().muted = false;
+    }
     if (fill) fill.style.width = clamped + '%';
     if (thumb) thumb.style.left = clamped + '%';
   };
   if (wrap || fill) setVolumeFromPct(100);
 
   let isMuted = false;
+  const applyMute = (muted) => {
+    isMuted = muted;
+    if (remoteGain) remoteGain.gain.value = isMuted ? 0 : lastVolumePct / 100;
+    else getVid().muted = isMuted;
+    muteBtn?.setAttribute('aria-pressed', String(isMuted));
+    if (muteBtn) muteBtn.textContent = isMuted ? '🔇' : '🔊';
+  };
+
   if (muteBtn) {
-    const toggleMute = () => {
-      isMuted = !isMuted;
-      /* Su iOS: usa sempre il video corrente (non la closure stale) */
-      const vid = isIOSDevice
-        ? (cw.el?.querySelector('video') || video)
-        : video;
-      if (remoteGain) remoteGain.gain.value = isMuted ? 0 : lastVolumePct / 100;
-      else vid.muted = isMuted;
-      muteBtn.setAttribute('aria-pressed', String(isMuted));
-      muteBtn.textContent = isMuted ? '🔇' : '🔊';
-    };
+    const toggleMute = () => applyMute(!isMuted);
     muteBtn.addEventListener('click', toggleMute);
-    /* Fallback touchend per iOS (click può non sparare dopo touchstart passive) */
     if (isIOSDevice) {
       muteBtn.addEventListener('touchend', (e) => { e.preventDefault(); toggleMute(); }, { passive: false });
     }
   }
 
-  if (wrap && !isIOSDevice) {
+  if (wrap) {
     const onInput = (e) => {
       const rect = wrap.getBoundingClientRect();
       if (rect.width <= 0) return;
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const x = clientX - rect.left;
       const pct = (x / rect.width) * 100;
-      setVolumeFromPct(pct);
-      if (isMuted && pct > 0) { isMuted = false; if (muteBtn) { muteBtn.setAttribute('aria-pressed', 'false'); muteBtn.textContent = '🔊'; } }
+      if (isIOSDevice) {
+        /* Su iOS volume non controllabile: slider = toggle mute a 0% */
+        const shouldMute = pct < 5;
+        setVolumeFromPct(shouldMute ? 0 : 100);
+        applyMute(shouldMute);
+      } else {
+        setVolumeFromPct(pct);
+        if (isMuted && pct > 0) applyMute(false);
+      }
     };
     wrap.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -1177,7 +1182,7 @@ async function initRemoteVolumeControl(uid) {
       };
       document.addEventListener('touchmove', move, { passive: false });
       document.addEventListener('touchend', end);
-    });
+    }, { passive: false });
   }
 }
 
