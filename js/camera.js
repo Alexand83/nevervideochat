@@ -1021,9 +1021,33 @@ async function initRemoteVolumeControl(uid) {
       if (!resumeOk) {
         remoteCtx.close().catch(() => {});
         remoteCtx = null;
-        /* Se il video è già unmutato (es. Chrome play button già toccato) l'audio
-           esce direttamente dall'elemento HTML — non serve overlay. */
-        if (!video.muted) return;
+        /* Se il video è già unmutato (es. badge audio toccato) l'audio esce
+           dall'elemento HTML. Web Audio non può analizzare su iOS/Chrome iOS
+           (createMediaStreamSource restituisce zero). Fallback: pc.getStats()
+           ogni 150ms per rilevare il livello audio e accendere il glow. */
+        if (!video.muted) {
+          const fallbackPc = state.incomingPCs[uid];
+          if (fallbackPc && cw && !cw._statsInterval) {
+            cw._statsInterval = setInterval(async () => {
+              if (!state.cameraWindows[uid]) {
+                clearInterval(cw._statsInterval);
+                cw._statsInterval = null;
+                return;
+              }
+              try {
+                const stats = await fallbackPc.getStats();
+                let level = 0;
+                stats.forEach(s => {
+                  if (s.type === 'inbound-rtp' && s.kind === 'audio')
+                    level = s.audioLevel ?? 0;
+                });
+                const el = state.cameraWindows[uid]?.el;
+                if (el) el.classList.toggle('cam-speaking', level > 0.008);
+              } catch (_) {}
+            }, 150);
+          }
+          return;
+        }
         /* Altrimenti mostra overlay tap (non-Chrome o Chrome senza play button) */
         if (cw?.el && !cw.el.querySelector('.cam-tap-audio') && !cw.el.querySelector('.cam-chrome-play')) {
           const ov = document.createElement('div');
@@ -1147,6 +1171,10 @@ function closeRemoteVolumeContext(uid) {
   if (cw.remoteVolumeCtx) {
     cw.remoteVolumeCtx.close().catch(() => {});
     cw.remoteVolumeCtx = null;
+  }
+  if (cw._statsInterval) {
+    clearInterval(cw._statsInterval);
+    cw._statsInterval = null;
   }
 }
 
