@@ -1855,24 +1855,42 @@ export async function handleWebRTCSignal(payload) {
         if (pc.connectionState === 'failed') {
           if (state.incomingPCs[from] !== pc) return;
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
-          /* Se la connessione non si è mai stabilita (wasEverConnected = false),
-             limitiamo a 1 solo tentativo: l'utente non ha mai visto la cam,
-             quindi il retry aggressivo sarebbe solo spam. */
-          const maxRetry = wasEverConnected ? MAX_RECONNECT : 1;
-          removeRemoteCameraFromGrid(from).then(() => {
-            if (reconnectAttempts >= maxRetry) return;
+          /* Su Chrome mobile dietro NAT stretto (carrier-grade NAT) ICE può
+             fallire entro ~1s causando la finestra apri-e-chiudi.
+             Invece di chiudere subito, mostriamo un overlay "Riconnessione…"
+             e ritentiamo MAX_RECONNECT volte con delay crescente. */
+          if (reconnectAttempts < MAX_RECONNECT) {
             reconnectAttempts++;
-            const delay = reconnectAttempts * 2000;
+            const delay = Math.min(reconnectAttempts * 3000, 9000);
+            const cwF = state.cameraWindows[from];
+            if (cwF?.el) {
+              const wrapF = cwF.el.querySelector('.cam-win-video-wrap') || cwF.el;
+              if (!wrapF.querySelector('.cam-reconnecting')) {
+                const ov = document.createElement('div');
+                ov.className = 'cam-reconnecting';
+                ov.textContent = '⟳ Riconnessione…';
+                wrapF.appendChild(ov);
+              }
+            }
             setTimeout(() => {
               if (pc._createdInRoom && String(state.activeRoom) !== String(pc._createdInRoom)) return;
               if (state.manuallyClosedCameras[from]) return;
+              state.cameraWindows[from]?.el?.querySelector('.cam-reconnecting')?.remove();
               const user = findUser(from);
-              if (user?.hasCamera && user?.online && !state.cameraWindows[from] && !state.incomingPCs[from]) {
-                delete state.pendingCamRequests[from];
-                requestPublicCamera(from);
+              if (user?.hasCamera && user?.online && !state.incomingPCs[from]) {
+                removeRemoteCameraFromGrid(from).then(() => {
+                  if (!state.cameraWindows[from] && !state.incomingPCs[from]) {
+                    delete state.pendingCamRequests[from];
+                    requestPublicCamera(from);
+                  }
+                }).catch(() => {});
+              } else {
+                removeRemoteCameraFromGrid(from).catch(() => {});
               }
             }, delay);
-          }).catch(() => {});
+          } else {
+            removeRemoteCameraFromGrid(from).catch(() => {});
+          }
         }
       });
       /* Retry play() quando la connessione è pronta. Un solo reattach alla prima connected per evitare flicker. */
