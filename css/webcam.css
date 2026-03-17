@@ -336,6 +336,25 @@
   cursor: grabbing;
 }
 
+/* ── Overlay "Tocca per sentire audio" (Chrome mobile, AudioContext suspended) ── */
+.cam-tap-audio {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.65);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
 /* ── Solo voce: placeholder in area video (testo quando video off) ── */
 .cam-solo-voce-placeholder {
   position: absolute;

@@ -176,30 +176,22 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       videoEl.style.display = 'block';
     }
     const doPlay = () => {
-      videoEl.play().then(() => {
-        if (!isOwn) initRemoteVolumeControl(uid);
-      }).catch(() => {});
+      videoEl.play().catch(() => {});
     };
     if (!isOwn) requestAnimationFrame(() => doPlay());
     else doPlay();
-    /* Propria cam: forza primo frame senza riattaccare lo stream (evita zoom/flash quando il browser ritarda) */
+    /* Propria cam: forza primo frame — riattacca srcObject finché videoWidth è 0 */
     if (isOwn && stream?.getVideoTracks?.()?.length) {
-      const forceFirstFrame = (reattach = false) => {
+      const forceFirstFrame = () => {
         if (!state.cameraWindows[uid]?.stream || state.cameraWindows[uid].stream !== stream) return;
-        if (videoEl.videoWidth > 0) {
-          if (!reattach) videoEl.play().catch(() => {});
-          return;
-        }
-        if (reattach) {
-          videoEl.srcObject = null;
-          videoEl.srcObject = stream;
-        }
-    videoEl.play().catch(() => {});
+        if (videoEl.videoWidth > 0) return;
+        videoEl.srcObject = null;
+        videoEl.srcObject = stream;
+        videoEl.play().catch(() => {});
       };
-      videoEl.addEventListener('loadeddata', () => forceFirstFrame(false), { once: true });
-      videoEl.addEventListener('canplay', () => forceFirstFrame(false), { once: true });
-      /* Solo se dopo 400ms è ancora nero, riattacca (una volta) per evitare flash inutili */
-      setTimeout(() => forceFirstFrame(videoEl.videoWidth === 0), 400);
+      videoEl.addEventListener('loadeddata', forceFirstFrame, { once: true });
+      videoEl.addEventListener('canplay',    forceFirstFrame, { once: true });
+      setTimeout(forceFirstFrame, 400);
     }
     if (!isOwn) {
       /* Indicatore "sta parlando" e volume: avvia subito se c'è audio, così il bordo si illumina anche se play() è in ritardo */
@@ -244,15 +236,14 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         }
         
         const tracks = stream?.getTracks() || [];
+        /* Qualsiasi track live (audio o video) conta come "connessione attiva" */
         const hasActiveTracks = tracks.some(t => t.readyState === 'live');
-        const videoTrack = tracks.find(t => t.kind === 'video');
-        const isVideoLive = videoTrack?.readyState === 'live';
         
         /* CRITICO: Per cam nella grid degli eventi, chiudi immediatamente se il flusso è morto */
         const cw = state.cameraWindows[uid];
         const isInEventsGrid = cw?.isEventsGrid;
         
-        if (hasActiveTracks && isVideoLive) {
+        if (hasActiveTracks) {
           lastActiveTime = Date.now();
         } else {
           const timeSinceLastActive = Date.now() - lastActiveTime;
@@ -606,6 +597,9 @@ export async function removeRemoteCameraFromGrid(uid) {
   const u = state.users.find(u => u.id === uid);
   if (u) u.hasCamera = false;
   /* Non rimuovere l'utente dalla stanza: resta in lista (presence); aggiorniamo solo hasCamera. */
+  /* Pulisci cooldown e pending così l'utente può ri-richiedere subito (cam auto-chiusa, non manuale) */
+  clearPendingCamRequest(uid);
+  delete state.camReqCooldowns[uid];
   renderUsers();
 }
 
@@ -950,54 +944,73 @@ async function initRemoteVolumeControl(uid) {
   let remoteGain = null;
   let analyser = null;
 
+  /* Helper: rimuovi overlay "Tap to hear" */
+  const removeTapOverlay = () => cw?.el?.querySelector?.('.cam-tap-audio')?.remove();
+
   if (audioTrack) {
     try {
       remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (remoteCtx.state === 'suspended') await remoteCtx.resume().catch(() => {});
-      const src = remoteCtx.createMediaStreamSource(new MediaStream([audioTrack]));
-      remoteGain = remoteCtx.createGain();
-      remoteGain.gain.value = 1;
-      src.connect(remoteGain);
-      remoteGain.connect(remoteCtx.destination);
-      video.muted = true; /* audio da Web Audio, non dal video */
+      /* resume() può fallire su Chrome mobile senza gesto dell'utente */
+      const resumeOk = await remoteCtx.resume().then(() => remoteCtx.state === 'running').catch(() => false);
 
-      /* stesso stream per indicatore "sta parlando" + tick tiene vivo il contesto (altrimenti audio si stacca dopo ~1s) */
-      analyser = remoteCtx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.75;
-      src.connect(analyser);
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const SPEAKING_THRESHOLD = 18;
-      function tick() {
-        if (!state.cameraWindows[uid]) return;
-        if (remoteCtx.state === 'suspended') remoteCtx.resume().catch(() => {});
-        analyser.getByteFrequencyData(data);
-        const avg = data.reduce((a, b) => a + b, 0) / data.length;
-        const win = state.cameraWindows[uid]?.el;
-        if (win) win.classList.toggle('cam-speaking', avg > SPEAKING_THRESHOLD);
-        if (cw.remoteVolumeCtx) cw.remoteSpeakRaf = requestAnimationFrame(tick);
+      if (!resumeOk) {
+        /* Chrome mobile: contesto ancora suspended → chiudi e usa il tag video direttamente.
+           L'audio arriverà senza Web Audio; l'utente può toccare la cam per attivare Web Audio. */
+        remoteCtx.close().catch(() => {});
+        remoteCtx = null;
+        video.muted = false;
+        video.play().catch(() => {});
+
+        /* Overlay "Tap to hear" — scompare al primo tap e rilancia initRemoteVolumeControl */
+        if (cw?.el && !cw.el.querySelector('.cam-tap-audio')) {
+          const ov = document.createElement('div');
+          ov.className = 'cam-tap-audio';
+          ov.textContent = '🔇 Tocca per sentire l\'audio';
+          (cw.el.querySelector('.cam-win-video-wrap') || cw.el).appendChild(ov);
+          const activateAudio = () => {
+            removeTapOverlay();
+            closeRemoteVolumeContext(uid);
+            initRemoteVolumeControl(uid);
+          };
+          cw.el.addEventListener('click',      activateAudio, { once: true });
+          cw.el.addEventListener('touchstart', activateAudio, { once: true, passive: true });
+        }
+      } else {
+        /* Contesto running (PC o Safari/mobile dopo interazione) → pipeline Web Audio completa */
+        const src = remoteCtx.createMediaStreamSource(new MediaStream([audioTrack]));
+        remoteGain = remoteCtx.createGain();
+        remoteGain.gain.value = 1;
+        src.connect(remoteGain);
+        remoteGain.connect(remoteCtx.destination);
+        video.muted = true; /* audio da Web Audio */
+        removeTapOverlay();
+
+        analyser = remoteCtx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.75;
+        src.connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const SPEAKING_THRESHOLD = 18;
+        function tick() {
+          if (!state.cameraWindows[uid]) return;
+          if (remoteCtx.state === 'suspended') remoteCtx.resume().catch(() => {});
+          analyser.getByteFrequencyData(data);
+          const avg = data.reduce((a, b) => a + b, 0) / data.length;
+          const win = state.cameraWindows[uid]?.el;
+          if (win) win.classList.toggle('cam-speaking', avg > SPEAKING_THRESHOLD);
+          if (cw.remoteVolumeCtx) cw.remoteSpeakRaf = requestAnimationFrame(tick);
+        }
+        cw.remoteVolumeCtx = remoteCtx;
+        cw.remoteSpeakRaf = requestAnimationFrame(tick);
       }
-      cw.remoteVolumeCtx = remoteCtx;
-      cw.remoteSpeakRaf = requestAnimationFrame(tick);
-    } catch (err) { console.warn('[Camera] Remote Web Audio failed:', err); }
-  }
-
-  if (!remoteGain) video.muted = false;
-
-  /* Chrome (soprattutto mobile) richiede un user gesture per far partire l'audio.
-     Riprendi l'AudioContext al primo tap su volume/mute così il viewer sente il broadcaster. */
-  const resumeCtxOnUserGesture = () => {
-    if (remoteCtx?.state === 'suspended') {
-      remoteCtx.resume().then(() => {
-        if (remoteGain) remoteGain.gain.value = isMuted ? 0 : lastVolumePct / 100;
-      }).catch(() => {});
-    }
-    /* Fallback senza Web Audio: unmute il video solo in risposta a gesture (Chrome altrimenti blocca) */
-    if (!remoteGain && video.muted && lastVolumePct > 0) {
+    } catch (err) {
+      console.warn('[Camera] Remote Web Audio failed:', err);
       video.muted = false;
       video.play().catch(() => {});
     }
-  };
+  }
+
+  if (!remoteGain) video.muted = false;
 
   let lastVolumePct = 100;
   const setVolumeFromPct = (pct) => {
@@ -1014,7 +1027,6 @@ async function initRemoteVolumeControl(uid) {
   let isMuted = false;
   if (muteBtn) {
     muteBtn.addEventListener('click', () => {
-      resumeCtxOnUserGesture();
       isMuted = !isMuted;
       if (remoteGain) remoteGain.gain.value = isMuted ? 0 : lastVolumePct / 100;
       else video.muted = isMuted;
@@ -1025,7 +1037,6 @@ async function initRemoteVolumeControl(uid) {
 
   if (wrap) {
     const onInput = (e) => {
-      resumeCtxOnUserGesture();
       const rect = wrap.getBoundingClientRect();
       if (rect.width <= 0) return;
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
