@@ -278,6 +278,22 @@ export function createCameraWindow(uid, stream, name, isOwn) {
           console.log('[Camera] Track ended for', uid, '- kind:', track.kind);
           checkStreamHealth();
         });
+        /* Bug Chrome Android documentato (Twilio issue #931): il track remoto diventa
+           briefly .muted poi .unmuted ma il video resta nero. Al primo unmute,
+           se il video non ha ancora frame, riattacchiamo srcObject. */
+        if (track.kind === 'video') {
+          track.addEventListener('unmute', () => {
+            const cw = state.cameraWindows[uid];
+            if (!cw || cw.isOwn) return;
+            const vid = cw.el?.querySelector('video');
+            if (!vid || vid.videoWidth > 0) return;
+            console.log('[Camera] Chrome Android track unmute recovery for', uid);
+            const ts = [...(cw.stream?.getVideoTracks() || []), ...(cw.stream?.getAudioTracks() || [])];
+            vid.srcObject = null;
+            vid.srcObject = new MediaStream(ts);
+            vid.play().catch(() => {});
+          });
+        }
       });
       
       /* Controlla immediatamente */
@@ -566,7 +582,7 @@ export function resetCameraStateOnDisconnect() {
  * Usata quando: timeout flusso, disconnect 15s, connection failed dopo retry, refresh pagina altrui.
  * NON imposta manuallyClosedCameras così la cam può essere richiesta di nuovo quando tornano.
  */
-export async function removeRemoteCameraFromGrid(uid) {
+export async function removeRemoteCameraFromGrid(uid, opts = {}) {
   const cw = state.cameraWindows[uid];
   if (!cw) return;
   if (cw.streamCheckInterval) {
@@ -591,11 +607,15 @@ export async function removeRemoteCameraFromGrid(uid) {
     try { state.incomingPCs[uid].close(); } catch {}
     delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid];
     }
-  for (const room of Object.values(state.rooms)) {
-    if (room.users[uid]) room.users[uid].hasCamera = false;
+  /* keepHasCamera=true durante reconnect automatico: il broadcaster ha ancora la cam aperta,
+     azzerarla causerebbe il reject dell'offer di riconnessione. */
+  if (!opts.keepHasCamera) {
+    for (const room of Object.values(state.rooms)) {
+      if (room.users[uid]) room.users[uid].hasCamera = false;
+    }
+    const u = state.users.find(u => u.id === uid);
+    if (u) u.hasCamera = false;
   }
-  const u = state.users.find(u => u.id === uid);
-  if (u) u.hasCamera = false;
   /* Non rimuovere l'utente dalla stanza: resta in lista (presence); aggiorniamo solo hasCamera. */
   /* Pulisci cooldown e pending così l'utente può ri-richiedere subito (cam auto-chiusa, non manuale) */
   clearPendingCamRequest(uid);
@@ -1533,7 +1553,7 @@ export async function sharePublicCameraTo(toUid) {
         console.log('[WebRTC] Outgoing disconnected for', toUid, '— sending ICE restart offer');
         pc.createOffer({ iceRestart: true })
           .then(offer => pc.setLocalDescription(offer))
-          .then(() => broadcast('webrtc', toUid, { sigType: 'offer', sdp: pc.localDescription.sdp, ctx: 'public' }))
+          .then(() => broadcast('webrtc', toUid, { sigType: 'offer', sdp: pc.localDescription.sdp, ctx: 'public', room_id: state.cameraRoom }))
           .catch(err => console.warn('[WebRTC] ICE restart offer failed:', err));
       }
       if (['disconnected','failed','closed'].includes(pc.connectionState)) {
@@ -1684,11 +1704,22 @@ export async function handleWebRTCSignal(payload) {
         if (!isPublic) return; /* only process public offers */
         /* Ignora offerta propria: Firebase recapita il messaggio anche al mittente, non creare incoming PC per se stessi */
         if (from && state.currentUser?.id && String(from) === String(state.currentUser.id)) return;
-        /* Accetta offerta SOLO se il broadcaster ha la cam nella NOSTRA stanza attiva (evita di aprire cam in stanze sbagliate) */
+        /* Accetta offerta se: (a) hasCamera=true in locale, oppure (b) room_id dell'offer
+           coincide con la stanza attiva. Il caso (b) copre la race condition in cui l'offer
+           arriva prima del broadcast cam-opened, o durante reconnect quando removeRemoteCameraFromGrid
+           ha già azzerato hasCamera. */
         const offererHasCamInMyRoom = !!state.rooms[state.activeRoom]?.users[from]?.hasCamera;
-        if (!offererHasCamInMyRoom) {
-          console.log('[WebRTC] Rejecting offer from', (from || '').slice(0, 8) + '… — no camera in current room', state.activeRoom);
+        const offerRoomId = payload.room_id != null ? String(payload.room_id) : null;
+        const offerRoomMatches = offerRoomId === String(state.activeRoom);
+        if (!offererHasCamInMyRoom && !offerRoomMatches) {
+          console.log('[WebRTC] Rejecting offer from', (from || '').slice(0, 8) + '… — no camera in current room', state.activeRoom, 'offer room_id=', offerRoomId);
           return;
+        }
+        /* Offer accettata: se hasCamera era temporaneamente false (race condition), correggilo */
+        if (!offererHasCamInMyRoom && state.rooms[state.activeRoom]?.users[from]) {
+          state.rooms[state.activeRoom].users[from].hasCamera = true;
+          const uFix = findUser(from);
+          if (uFix) uFix.hasCamera = true;
         }
         /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
         const prev = state._incomingOfferDone[from] || Promise.resolve();
@@ -1832,6 +1863,12 @@ export async function handleWebRTCSignal(payload) {
         if (pc.connectionState === 'connected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
           clearTimeout(connectingTimeout);
         }
+
+        if (pc.connectionState === 'connected') {
+          wasEverConnected = true;
+          /* Rimozione overlay reconnect se la connessione si è stabilita */
+          state.cameraWindows[from]?.el?.querySelector('.cam-reconnecting')?.remove();
+        }
         
         /* CRITICO: Per disconnected, NON chiudere immediatamente - potrebbe riconnettersi */
         /* Chiudi solo se rimane disconnected per più di 15 secondi */
@@ -1851,7 +1888,6 @@ export async function handleWebRTCSignal(payload) {
         }
         
         /* CRITICO: Se si riconnette, cancella il timer di chiusura */
-        if (pc.connectionState === 'connected') wasEverConnected = true;
         if (pc.connectionState === 'connected' || pc.connectionState === 'connecting') {
           const cw = state.cameraWindows[from];
           if (cw?.disconnectTimer) {
@@ -1890,8 +1926,10 @@ export async function handleWebRTCSignal(payload) {
                  broadcaster), non interferire: lasciamo che si stabilisca. */
               if (state.incomingPCs[from]) return;
               const user = findUser(from);
-              if (user?.hasCamera && user?.online) {
-                removeRemoteCameraFromGrid(from).then(() => {
+              if (user?.online) {
+                /* keepHasCamera=true: il broadcaster ha ancora la cam — non azzeriamo
+                   il flag così l'offer di riconnessione non viene rifiutata. */
+                removeRemoteCameraFromGrid(from, { keepHasCamera: true }).then(() => {
                   if (!state.cameraWindows[from] && !state.incomingPCs[from]) {
                     delete state.pendingCamRequests[from];
                     requestPublicCamera(from);
