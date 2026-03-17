@@ -199,51 +199,45 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       setTimeout(forceFirstFrame, 400);
     }
     if (!isOwn) {
-      /* Badge audio nell'header: sempre visibile indipendentemente da CSS/z-index/overlay.
-         Al primo tap/click ovunque sulla finestra: avvia video + audio e rimuove il badge. */
-      const isMobileDevice = ('ontouchstart' in window) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const audioBadge = document.createElement('button');
-      audioBadge.className = 'cam-audio-badge';
-      audioBadge.textContent = '🔇 Tap';
-      audioBadge.setAttribute('aria-label', 'Attiva audio');
-      const hdr = win.querySelector('.cam-win-hdr');
-      if (hdr) {
-        /* Inserisci PRIMA del tasto X: se lo appendiamo dopo, su mobile si sovrappone
-           al close button e il tap chiude la finestra invece di attivare l'audio. */
-        const closeBtn = hdr.querySelector('.cam-win-close-btn');
-        closeBtn ? hdr.insertBefore(audioBadge, closeBtn) : hdr.appendChild(audioBadge);
-      }
+      /* Chrome iOS (CriOS) non può avviare AudioContext né riprodurre audio senza
+         gesto utente esplicito: mostriamo un badge nell'header + ascoltiamo il primo
+         tap sulla finestra. Per tutti gli altri browser l'audio parte in automatico. */
+      const isChromeIOS = /CriOS/i.test(navigator.userAgent);
 
-      let audioActivated = false;
-      const activateAudio = () => {
-        if (audioActivated) return;
-        audioActivated = true;
-        audioBadge.remove();
-        win.querySelector('.cam-tap-audio')?.remove();
-        win.querySelector('.cam-chrome-play')?.remove();
-        const vid2 = win.querySelector('video');
-        if (vid2) {
-          vid2.muted = false;
-          vid2.play().catch(() => { vid2.muted = true; });
+      if (isChromeIOS) {
+        const audioBadge = document.createElement('button');
+        audioBadge.className = 'cam-audio-badge';
+        audioBadge.textContent = '🔇 Tap';
+        audioBadge.setAttribute('aria-label', 'Attiva audio');
+        const hdr = win.querySelector('.cam-win-hdr');
+        if (hdr) {
+          const closeBtn = hdr.querySelector('.cam-win-close-btn');
+          closeBtn ? hdr.insertBefore(audioBadge, closeBtn) : hdr.appendChild(audioBadge);
         }
-        closeRemoteVolumeContext(uid);
-        initRemoteVolumeControl(uid);
-      };
-      /* Ascolto su tutta la finestra (header, video, footer) */
-      win.addEventListener('click',      activateAudio, { once: true });
-      win.addEventListener('touchstart', activateAudio, { once: true, passive: true });
-
-      /* Su desktop: prova a partire in auto dopo 350ms; se funziona rimuove il badge */
-      if (!isMobileDevice) {
-        setTimeout(async () => {
-          const hasTracks = state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length;
-          if (hasTracks) await initRemoteVolumeControl(uid);
-          if (state.cameraWindows[uid]?.remoteVolumeCtx) {
-            audioActivated = true;
-            audioBadge.remove();
-            win.querySelector('.cam-tap-audio')?.remove();
-          }
-        }, 350);
+        let audioActivated = false;
+        const activateAudio = () => {
+          if (audioActivated) return;
+          audioActivated = true;
+          audioBadge.remove();
+          win.querySelector('.cam-tap-audio')?.remove();
+          win.querySelector('.cam-chrome-play')?.remove();
+          const vid2 = win.querySelector('video');
+          if (vid2) { vid2.muted = false; vid2.play().catch(() => { vid2.muted = true; }); }
+          closeRemoteVolumeContext(uid);
+          initRemoteVolumeControl(uid);
+        };
+        win.addEventListener('click',      activateAudio, { once: true });
+        win.addEventListener('touchstart', activateAudio, { once: true, passive: true });
+      } else {
+        /* Safari iOS, desktop Chrome/Firefox/Safari, Android: comportamento originale */
+        if (stream?.getAudioTracks?.()?.length) {
+          initRemoteVolumeControl(uid);
+        } else {
+          setTimeout(() => {
+            if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length)
+              initRemoteVolumeControl(uid);
+          }, 500);
+        }
       }
       updateRemoteVideoVisibility(uid);
       /* Polling ogni 400ms per 12s: finché il video è nero e il track è vivo, ricrea l'elemento */
