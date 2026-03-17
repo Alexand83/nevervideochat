@@ -1887,22 +1887,27 @@ export async function handleWebRTCSignal(payload) {
         if (!isPublic) return; /* only process public offers */
         /* Ignora offerta propria: Firebase recapita il messaggio anche al mittente, non creare incoming PC per se stessi */
         if (from && state.currentUser?.id && String(from) === String(state.currentUser.id)) return;
-        /* Accetta offerta se: (a) hasCamera=true in locale, oppure (b) room_id dell'offer
-           coincide con la stanza attiva. Il caso (b) copre la race condition in cui l'offer
-           arriva prima del broadcast cam-opened, o durante reconnect quando removeRemoteCameraFromGrid
-           ha già azzerato hasCamera. */
+        /* Accetta offerta solo se l'offerer ha la cam attiva in questa stanza.
+           La race condition (offer arriva prima di cam-opened) è ora gestita a monte:
+           firebase-client.js non sovrascrive più to=me, quindi questa offer è
+           genuinamente indirizzata a noi da qualcuno che ci ha già accettato. */
         const offererHasCamInMyRoom = !!state.rooms[state.activeRoom]?.users[from]?.hasCamera;
         const offerRoomId = payload.room_id != null ? String(payload.room_id) : null;
-        const offerRoomMatches = offerRoomId === String(state.activeRoom);
-        if (!offererHasCamInMyRoom && !offerRoomMatches) {
-          console.log('[WebRTC] Rejecting offer from', (from || '').slice(0, 8) + '… — no camera in current room', state.activeRoom, 'offer room_id=', offerRoomId);
-          return;
-        }
-        /* Offer accettata: se hasCamera era temporaneamente false (race condition), correggilo */
-        if (!offererHasCamInMyRoom && state.rooms[state.activeRoom]?.users[from]) {
-          state.rooms[state.activeRoom].users[from].hasCamera = true;
-          const uFix = findUser(from);
-          if (uFix) uFix.hasCamera = true;
+        if (!offererHasCamInMyRoom) {
+          /* Fallback: accetta se room_id coincide E c'è già un incomingPC per questo peer
+             (reconnect: hasCamera fu azzerato ma la connessione era valida) */
+          const hasExistingPC = !!state.incomingPCs[from];
+          const offerRoomMatches = offerRoomId != null && offerRoomId === String(state.activeRoom);
+          if (!hasExistingPC && !offerRoomMatches) {
+            console.log('[WebRTC] Rejecting offer from', (from || '').slice(0, 8) + '… — no camera in current room', state.activeRoom, 'offer room_id=', offerRoomId);
+            return;
+          }
+          /* Correggilo se è solo una race condition */
+          if (state.rooms[state.activeRoom]?.users[from]) {
+            state.rooms[state.activeRoom].users[from].hasCamera = true;
+            const uFix = findUser(from);
+            if (uFix) uFix.hasCamera = true;
+          }
         }
         /* Serializza per peer: replay Firebase può consegnare la stessa offer più volte; la seconda deve aspettare la prima e poi uscire. */
         const prev = state._incomingOfferDone[from] || Promise.resolve();

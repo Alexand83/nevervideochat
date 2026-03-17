@@ -229,12 +229,9 @@ export function createBroadcastChannel() {
     /* Per webrtc passiamo _ts così handleWebRTCSignal può scartare replay vecchi (child_added su Firebase consegna tutti i messaggi passati al subscribe) */
     let payloadWithTs = event === 'webrtc' ? { ...payload, _ts: ts } : payload;
     if (event === 'webrtc') {
-      /* Offer/ICE di stanza: payload.to può essere errato (replay/ordine Firebase). Forziamo to=me così camera.js non fa SKIP. Solo ctx==='private' resta targeted. */
-      const isRoomIce = payloadWithTs?.sigType === 'ice' && payloadWithTs?.from && payloadWithTs?.ctx !== 'private';
-      const isRoomOffer = payloadWithTs?.sigType === 'offer' && payloadWithTs?.from && payloadWithTs?.ctx !== 'private';
-      if ((isRoomIce || isRoomOffer) && state.currentUser?.id) {
-        payloadWithTs = { ...payloadWithTs, to: state.currentUser.id };
-      }
+      /* NON sovrascrivere payload.to: broadcast() imposta già to=destinatario corretto.
+         Sovrascrivere to=currentUser causava la ricezione di offer/ICE altrui da parte di tutti
+         gli utenti nella stanza, aprendo camera window non richieste. */
       const toMe = payloadWithTs?.to != null && state.currentUser?.id != null && String(payloadWithTs.to) === String(state.currentUser.id);
       if (toMe) console.log('[WebRTC-FLOW] Firebase RX webrtc for me', (payloadWithTs.sigType || ''), 'from=', (v.from || '').slice(0, 8) + '…');
     }
