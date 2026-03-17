@@ -48,6 +48,29 @@
   animation: msgIn .25s ease;
   transform-origin: left center;
 }
+
+/* Messaggi di sistema (entra/esce) */
+.msg-system {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 16px;
+  color: var(--text-muted, #8b949e);
+  font-size: 11.5px;
+  font-style: italic;
+  text-align: center;
+  animation: msgIn .25s ease;
+  user-select: none;
+  pointer-events: none;
+}
+.msg-system::before,
+.msg-system::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border, rgba(255,255,255,.08));
+}
 .msg-group:nth-child(5n+1) { transform: rotate(-0.4deg); }
 .msg-group:nth-child(5n+2) { transform: rotate(0.35deg); }
 .msg-group:nth-child(5n+3) { transform: rotate(-0.25deg); }

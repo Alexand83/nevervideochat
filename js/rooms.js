@@ -5,6 +5,7 @@ import { DEFAULT_ROOM_ID } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast, escHtml } from './utils.js';
+import { addSystemMessage } from './chat.js';
 import { syncPresence, updateOwnPresence, renderUsers, findUser } from './users.js';
 import { createPresenceChannel } from './firebase-client.js';
 
@@ -145,6 +146,7 @@ export async function joinRoom(roomId) {
         const justRejoined = leftAt && (Date.now() - leftAt < 30000);
         if (!wasAlreadyOnline && !justRejoined) {
           showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
+          addSystemMessage(`👤 ${info.name} è entrato nella chat`, roomIdStr);
         }
       }
     })
@@ -161,13 +163,17 @@ export async function joinRoom(roomId) {
         /* Double-check: se è ancora in presenceState() non rimuovere (falso leave, es. cam off / tab switch) */
         const currentPresence = presenceCh.presenceState();
         if (Object.prototype.hasOwnProperty.call(currentPresence, uid)) return;
+        const leaveName = state.rooms[roomIdStr].users[uid]?.name || uid;
         delete state.rooms[roomIdStr].users[uid];
         state.presenceLeftAt[roomIdStr + ':' + uid] = Date.now();
         if (state.cameraWindows[uid]) {
           const { closeCameraWindow } = await import('./camera.js?v=20260318');
           await closeCameraWindow(uid);
         }
-        if (roomIdStr === String(state.activeRoom)) renderUsers();
+        if (roomIdStr === String(state.activeRoom)) {
+          renderUsers();
+          addSystemMessage(`👋 ${leaveName} ha lasciato la chat`, roomIdStr);
+        }
       }, 2000);
     })
     .subscribe(async status => {

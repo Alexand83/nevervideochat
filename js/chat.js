@@ -102,6 +102,22 @@ export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, qu
   }
 }
 
+/* ── System message (enter/leave) nel feed chat ── */
+export function addSystemMessage(text, roomId) {
+  const rId = roomId || state.activeRoom;
+  if (rId !== state.activeRoom) return;
+  if (!dom.msgsContainer) return;
+  if (dom.welcomeBanner?.parentNode) dom.welcomeBanner.remove();
+  const el = document.createElement('div');
+  el.className = 'msg-system';
+  el.textContent = text;
+  dom.msgsContainer.appendChild(el);
+  scrollToBottom();
+  /* Rimuovi messaggi di sistema vecchi se ne accumula troppi (max 5) */
+  const all = dom.msgsContainer.querySelectorAll('.msg-system');
+  if (all.length > 5) all[0].remove();
+}
+
 /* ── Render a single message bubble ── */
 export function renderMessage(msg) {
   if (dom.welcomeBanner?.parentNode) dom.welcomeBanner.remove();
