@@ -355,6 +355,23 @@
   -webkit-backdrop-filter: blur(4px);
 }
 
+/* ── Badge audio nell'header (sempre visibile, per iOS Chrome e mobile) ── */
+.cam-audio-badge {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(255,255,255,.25);
+  background: rgba(0,0,0,.45);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.cam-audio-badge:active { background: rgba(255,255,255,.2); }
+
 /* ── Pulsante Play per Chrome (autoplay policy) ── */
 .cam-chrome-play {
   position: absolute;

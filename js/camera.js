@@ -199,44 +199,46 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       setTimeout(forceFirstFrame, 400);
     }
     if (!isOwn) {
-      /* Pulsante Play universale: mostrato subito su tutti i browser.
-         Su desktop / Safari dove AudioContext parte senza gesto, viene
-         auto-rimosso dopo 350ms. Su Chrome mobile (AudioContext bloccato)
-         rimane visibile finché l'utente tocca. */
-      const playWrap = win.querySelector('.cam-win-video-wrap') || win;
-      const playBtn = document.createElement('button');
-      playBtn.className = 'cam-chrome-play';
-      playBtn.setAttribute('aria-label', 'Attiva audio');
-      playBtn.innerHTML = '<span class="cam-chrome-play-icon">▶</span><span class="cam-chrome-play-label">Tocca per l\'audio</span>';
-      playWrap.appendChild(playBtn);
-      const activatePlay = () => {
-        playBtn.remove();
+      /* Badge audio nell'header: sempre visibile indipendentemente da CSS/z-index/overlay.
+         Al primo tap/click ovunque sulla finestra: avvia video + audio e rimuove il badge. */
+      const isMobileDevice = ('ontouchstart' in window) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const audioBadge = document.createElement('button');
+      audioBadge.className = 'cam-audio-badge';
+      audioBadge.textContent = '🔇 Tap';
+      audioBadge.setAttribute('aria-label', 'Attiva audio');
+      const hdr = win.querySelector('.cam-win-hdr');
+      if (hdr) hdr.appendChild(audioBadge);
+
+      let audioActivated = false;
+      const activateAudio = () => {
+        if (audioActivated) return;
+        audioActivated = true;
+        audioBadge.remove();
         win.querySelector('.cam-tap-audio')?.remove();
-        const vid2 = $(`cam-vid-${safeUid}`) || win.querySelector('video');
-        if (vid2) { vid2.muted = false; vid2.play().catch(() => { vid2.muted = true; }); }
+        win.querySelector('.cam-chrome-play')?.remove();
+        const vid2 = win.querySelector('video');
+        if (vid2) {
+          vid2.muted = false;
+          vid2.play().catch(() => { vid2.muted = true; });
+        }
         closeRemoteVolumeContext(uid);
         initRemoteVolumeControl(uid);
       };
-      playBtn.addEventListener('click',      activatePlay, { once: true });
-      playBtn.addEventListener('touchstart', activatePlay, { once: true, passive: true });
+      /* Ascolto su tutta la finestra (header, video, footer) */
+      win.addEventListener('click',      activateAudio, { once: true });
+      win.addEventListener('touchstart', activateAudio, { once: true, passive: true });
 
-      /* Su mobile NON avviamo Web Audio automaticamente: Chrome (e altri) mentono
-         su AudioContext.state='running' senza gesto → il pulsante verrebbe rimosso
-         prima che l'utente possa vederlo. Su desktop (no touch) proviamo in auto. */
-      const isMobileDevice = ('ontouchstart' in window) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      /* Su desktop: prova a partire in auto dopo 350ms; se funziona rimuove il badge */
       if (!isMobileDevice) {
-        const tryAutoAudio = async () => {
-          const tracks = state.cameraWindows[uid]?.stream?.getAudioTracks?.() || [];
-          if (!tracks.length) await new Promise(r => setTimeout(r, 500));
-          if (state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length) {
-            await initRemoteVolumeControl(uid);
-          }
+        setTimeout(async () => {
+          const hasTracks = state.cameraWindows[uid]?.stream?.getAudioTracks?.()?.length;
+          if (hasTracks) await initRemoteVolumeControl(uid);
           if (state.cameraWindows[uid]?.remoteVolumeCtx) {
-            playBtn.remove();
+            audioActivated = true;
+            audioBadge.remove();
             win.querySelector('.cam-tap-audio')?.remove();
           }
-        };
-        setTimeout(tryAutoAudio, 350);
+        }, 350);
       }
       updateRemoteVideoVisibility(uid);
       /* Polling ogni 400ms per 12s: finché il video è nero e il track è vivo, ricrea l'elemento */
