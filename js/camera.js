@@ -1007,42 +1007,45 @@ async function initRemoteVolumeControl(uid) {
   const removeTapOverlay = () => cw?.el?.querySelector?.('.cam-tap-audio')?.remove();
 
   if (audioTrack) {
+    /* Chrome iOS (CriOS): AudioContext.resume() riporta 'running' come falso positivo
+       ma createMediaStreamSource non riceve dati reali. Saltiamo Web Audio e usiamo
+       direttamente getStats() per il glow. L'audio esce dall'elemento <video>. */
+    const isChromeIOS = /CriOS/i.test(navigator.userAgent);
+    if (isChromeIOS) {
+      if (!video.muted) {
+        const fallbackPc = state.incomingPCs[uid];
+        if (fallbackPc && cw && !cw._statsInterval) {
+          cw._statsInterval = setInterval(async () => {
+            if (!state.cameraWindows[uid]) {
+              clearInterval(cw._statsInterval);
+              cw._statsInterval = null;
+              return;
+            }
+            try {
+              const stats = await fallbackPc.getStats();
+              let level = 0;
+              stats.forEach(s => {
+                if (s.type === 'inbound-rtp' && s.kind === 'audio')
+                  level = s.audioLevel ?? 0;
+              });
+              const el = state.cameraWindows[uid]?.el;
+              if (el) el.classList.toggle('cam-speaking', level > 0.008);
+            } catch (_) {}
+          }, 150);
+        }
+      }
+      return;
+    }
+
     try {
       remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
-      /* resume() può fallire su Chrome mobile senza gesto dell'utente */
+      /* resume() può fallire su mobile senza gesto dell'utente */
       const resumeOk = await remoteCtx.resume().then(() => remoteCtx.state === 'running').catch(() => false);
 
       if (!resumeOk) {
         remoteCtx.close().catch(() => {});
         remoteCtx = null;
-        /* Se il video è già unmutato (es. badge audio toccato) l'audio esce
-           dall'elemento HTML. Web Audio non può analizzare su iOS/Chrome iOS
-           (createMediaStreamSource restituisce zero). Fallback: pc.getStats()
-           ogni 150ms per rilevare il livello audio e accendere il glow. */
-        if (!video.muted) {
-          const fallbackPc = state.incomingPCs[uid];
-          if (fallbackPc && cw && !cw._statsInterval) {
-            cw._statsInterval = setInterval(async () => {
-              if (!state.cameraWindows[uid]) {
-                clearInterval(cw._statsInterval);
-                cw._statsInterval = null;
-                return;
-              }
-              try {
-                const stats = await fallbackPc.getStats();
-                let level = 0;
-                stats.forEach(s => {
-                  if (s.type === 'inbound-rtp' && s.kind === 'audio')
-                    level = s.audioLevel ?? 0;
-                });
-                const el = state.cameraWindows[uid]?.el;
-                if (el) el.classList.toggle('cam-speaking', level > 0.008);
-              } catch (_) {}
-            }, 150);
-          }
-          return;
-        }
-        /* Altrimenti mostra overlay tap (non-Chrome o Chrome senza play button) */
+        /* Mostra overlay tap */
         if (cw?.el && !cw.el.querySelector('.cam-tap-audio') && !cw.el.querySelector('.cam-chrome-play')) {
           const ov = document.createElement('div');
           ov.className = 'cam-tap-audio';
