@@ -1030,25 +1030,8 @@ async function initRemoteVolumeControl(uid) {
             } catch (_) {}
           }, 150);
         }
-        /* Volume via createMediaElementSource + GainNode (workaround iOS video.volume read-only).
-         TUTTO SINCRONO: il contesto del gesto utente (tap badge) si perde al primo await;
-         creare AudioContext + collegare il grafo prima di qualsiasi await è indispensabile
-         affinché resume() venga accettato da iOS. */
-        try {
-          remoteCtx = new (window.AudioContext || window.webkitAudioContext)();
-          const src = remoteCtx.createMediaElementSource(video);
-          remoteGain = remoteCtx.createGain();
-          remoteGain.gain.value = 1;
-          src.connect(remoteGain);
-          remoteGain.connect(remoteCtx.destination);
-          cw.remoteVolumeCtx = remoteCtx;
-          remoteCtx.resume().catch(e => console.warn('[Camera] iOS ctx resume error:', e));
-        } catch (e) {
-          console.warn('[Camera] iOS createMediaElementSource GainNode failed:', e);
-          remoteCtx = null;
-          remoteGain = null;
-          cw.remoteVolumeCtx = null;
-        }
+        /* Su iOS video.volume è read-only: non è possibile controllare il volume via JS.
+         Lo slider funziona come mute toggle (0% = muto, qualsiasi valore = audio pieno). */
       }
       /* Salta il blocco Web Audio standard, vai al setup mute/volume */
     } else {
@@ -1118,9 +1101,7 @@ async function initRemoteVolumeControl(uid) {
   if (cw._volumeHandlersAttached) return;
   cw._volumeHandlersAttached = true;
 
-  /* Su iOS video.volume è read-only.
-     Se remoteGain (GainNode via createMediaElementSource) è disponibile, il volume è controllabile normalmente.
-     Altrimenti lo slider funziona come mute toggle (fallback). */
+  /* Su iOS video.volume è read-only: lo slider funziona come mute toggle (0% = muto, >0% = audio). */
   const isIOSDevice = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   let lastVolumePct = 100;
@@ -1164,8 +1145,8 @@ async function initRemoteVolumeControl(uid) {
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const x = clientX - rect.left;
       const pct = (x / rect.width) * 100;
-      if (isIOSDevice && !remoteGain) {
-        /* Fallback iOS senza GainNode: slider = toggle mute a 0% */
+      if (isIOSDevice) {
+        /* Su iOS volume non controllabile: slider = toggle mute a 0% */
         const shouldMute = pct < 5;
         setVolumeFromPct(shouldMute ? 0 : 100);
         applyMute(shouldMute);
