@@ -240,21 +240,64 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         }
       }
       updateRemoteVideoVisibility(uid);
-      /* Polling ogni 400ms per 12s: finché il video è nero e il track è vivo, ricrea l'elemento */
+      /* Polling ogni 400ms per 20s: finché il video è nero e il track è vivo, ricrea l'elemento.
+         Su Chrome Android il decoder WebRTC può impiegare >12s ad avviarsi (bug noto). */
       let pollCount = 0;
+      const MAX_POLL = 50; /* 50 × 400ms = 20s */
       const pollInterval = setInterval(() => {
         pollCount++;
         const cw = state.cameraWindows[uid];
-        if (pollCount > 30 || !cw || cw.stream !== stream) {
+        if (pollCount > MAX_POLL || !cw || cw.stream !== stream) {
           clearInterval(pollInterval);
           if (cw) cw._remoteVideoPollInterval = null;
           return;
         }
         const v = cw.el?.querySelector('video');
         if (v?.videoWidth > 0) { clearInterval(pollInterval); cw._remoteVideoPollInterval = null; return; }
-        if (stream.getVideoTracks().some(t => t.readyState === 'live')) replaceRemoteVideoElement(uid);
+        if (stream.getVideoTracks().some(t => t.readyState === 'live')) {
+          /* Ogni 4 tentativi (~1.6s) alterna tra: track.enabled toggle e rimpiazzo elemento.
+             Il toggle enabled forza il decoder Chrome Android a ripartire senza creare DOM nuovo. */
+          if (pollCount % 4 === 0) {
+            const vt = stream.getVideoTracks()[0];
+            if (vt) { vt.enabled = false; setTimeout(() => { vt.enabled = true; }, 80); }
+          } else {
+            replaceRemoteVideoElement(uid);
+          }
+        }
       }, 400);
       if (state.cameraWindows[uid]) state.cameraWindows[uid]._remoteVideoPollInterval = pollInterval;
+
+      /* Long-term monitor via requestVideoFrameCallback (se supportato) o fallback raf.
+         Continua a monitorare anche dopo il poll di 20s: se il video torna nero (freeze),
+         forza un srcObject refresh. Utile per Chrome Android dove il decoder può freezare. */
+      const videoElForRvfc = $(`cam-vid-${safeUid}`);
+      if (videoElForRvfc && typeof videoElForRvfc.requestVideoFrameCallback === 'function') {
+        let lastFrameW = 0;
+        let rvfcFrozenCount = 0;
+        const rvfcLoop = (now, meta) => {
+          const cwCur = state.cameraWindows[uid];
+          if (!cwCur || cwCur.stream !== stream) return; /* stream cambiato: stop */
+          const vidCur = cwCur.el?.querySelector('video');
+          if (!vidCur) return;
+          if (meta.width > 0 && meta.height > 0) {
+            lastFrameW = meta.width;
+            rvfcFrozenCount = 0;
+          } else if (lastFrameW > 0) {
+            /* Frame width tornato a 0 → freeze/black */
+            rvfcFrozenCount++;
+            if (rvfcFrozenCount >= 3) {
+              rvfcFrozenCount = 0;
+              console.log('[Camera] rvfc freeze detected, recovering', uid);
+              const ts = [...(cwCur.stream?.getVideoTracks() || []), ...(cwCur.stream?.getAudioTracks() || [])];
+              vidCur.srcObject = null;
+              vidCur.srcObject = new MediaStream(ts);
+              vidCur.play().catch(() => {});
+            }
+          }
+          vidCur.requestVideoFrameCallback(rvfcLoop);
+        };
+        videoElForRvfc.requestVideoFrameCallback(rvfcLoop);
+      }
     }
     /* CRITICO: Monitora il flusso per rilevare quando si interrompe */
     /* Chiudi la cam dopo 30 secondi di assenza di flusso */
@@ -317,7 +360,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
         });
         /* Bug Chrome Android documentato (Twilio issue #931): il track remoto diventa
            briefly .muted poi .unmuted ma il video resta nero. Al primo unmute,
-           se il video non ha ancora frame, riattacchiamo srcObject. */
+           se il video non ha ancora frame, riattacchiamo srcObject + toggle enabled. */
         if (track.kind === 'video') {
           track.addEventListener('unmute', () => {
             const cw = state.cameraWindows[uid];
@@ -325,10 +368,20 @@ export function createCameraWindow(uid, stream, name, isOwn) {
             const vid = cw.el?.querySelector('video');
             if (!vid || vid.videoWidth > 0) return;
             console.log('[Camera] Chrome Android track unmute recovery for', uid);
-            const ts = [...(cw.stream?.getVideoTracks() || []), ...(cw.stream?.getAudioTracks() || [])];
-            vid.srcObject = null;
-            vid.srcObject = new MediaStream(ts);
-            vid.play().catch(() => {});
+            /* Toggle enabled: forza Chrome Android a riavviare il decoder */
+            track.enabled = false;
+            setTimeout(() => {
+              track.enabled = true;
+              const cwNow = state.cameraWindows[uid];
+              if (!cwNow) return;
+              const vidNow = cwNow.el?.querySelector('video');
+              if (!vidNow || vidNow.videoWidth > 0) return;
+              /* Ancora nero dopo toggle: riattacca srcObject */
+              const ts = [...(cwNow.stream?.getVideoTracks() || []), ...(cwNow.stream?.getAudioTracks() || [])];
+              vidNow.srcObject = null;
+              vidNow.srcObject = new MediaStream(ts);
+              vidNow.play().catch(() => {});
+            }, 150);
           });
         }
       });
@@ -1256,12 +1309,12 @@ function replaceRemoteVideoElement(uid) {
   requestAnimationFrame(() => {
     newV.play().catch(() => {});
   });
-  /* Reinizializza audio:
-     - Se non c'è AudioContext: il vecchio initRemoteVolumeControl ha referenze al vecchio <video>.
-     - Se c'è AudioContext (iOS GainNode): il createMediaElementSource punta al vecchio <video>,
-       va riconnesso al nuovo. */
+  /* Reinizializza audio solo se non c'è già un AudioContext attivo.
+     Se remoteVolumeCtx esiste (GainNode via Web Audio su non-iOS) non serve reinit:
+     il GainNode è connesso all'audio track, non all'elemento video. */
   const cwForAudio = state.cameraWindows[uid];
-  if (cwForAudio && cwForAudio.stream?.getAudioTracks?.()?.length) {
+  if (cwForAudio && !cwForAudio.remoteVolumeCtx &&
+      cwForAudio.stream?.getAudioTracks?.()?.length) {
     closeRemoteVolumeContext(uid);
     initRemoteVolumeControl(uid);
   }
