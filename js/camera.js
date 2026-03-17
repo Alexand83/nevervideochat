@@ -199,40 +199,13 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       setTimeout(forceFirstFrame, 400);
     }
     if (!isOwn) {
-      /* Chrome iOS (CriOS): AudioContext dà falsi positivi su resume() → badge obbligatorio.
-         Safari iOS + tutti gli altri browser: autoplay funziona dopo interazione utente → auto-init. */
-      const isChromeIOS = /CriOS/i.test(navigator.userAgent);
-      const isSafariIOS = !isChromeIOS && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      /* iOS (Chrome e Safari): tenta autoplay diretto dopo l'interazione utente.
+         Se il browser blocca l'audio, initRemoteVolumeControl mostrerà il piccolo
+         overlay "🔇 Tocca per sentire l'audio" — nessun badge nell'header. */
+      const isAnyIOS = /CriOS|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-      if (isChromeIOS) {
-        /* Badge ▶ Play solo su Chrome iOS */
-        const audioBadge = document.createElement('button');
-        audioBadge.className = 'cam-audio-badge';
-        audioBadge.textContent = '▶ Play';
-        audioBadge.setAttribute('aria-label', 'Attiva audio');
-        const hdr = win.querySelector('.cam-win-hdr');
-        if (hdr) {
-          const closeBtn = hdr.querySelector('.cam-win-close-btn');
-          closeBtn ? hdr.insertBefore(audioBadge, closeBtn) : hdr.appendChild(audioBadge);
-        }
-        let audioActivated = false;
-        const activateAudio = () => {
-          if (audioActivated) return;
-          audioActivated = true;
-          audioBadge.remove();
-          win.querySelector('.cam-tap-audio')?.remove();
-          win.querySelector('.cam-chrome-play')?.remove();
-          const vid2 = win.querySelector('video');
-          if (vid2) { vid2.muted = false; vid2.play().catch(() => { vid2.muted = true; }); }
-          closeRemoteVolumeContext(uid);
-          initRemoteVolumeControl(uid);
-        };
-        win.addEventListener('click',      activateAudio, { once: true });
-        win.addEventListener('touchstart', activateAudio, { once: true, passive: true });
-      } else if (isSafariIOS) {
-        /* Safari iOS: sblocca l'audio automaticamente (l'utente ha già interagito con la pagina).
-           Aspettiamo la promessa di play() prima di chiamare initRemoteVolumeControl,
-           così video.muted ha il valore corretto quando la funzione gira. */
+      if (isAnyIOS) {
+        /* Autoplay su tutti gli iOS: sblocca l'audio subito, fallback overlay al tap */
         const tryAutoAudio = () => {
           const vid2 = win.querySelector('video');
           if (!vid2 || !state.cameraWindows[uid]) return;
