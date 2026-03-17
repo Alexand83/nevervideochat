@@ -82,68 +82,35 @@ export async function joinRoom(roomId) {
 
   presenceCh
     .on('presence', { event: 'sync' }, () => {
-      const presenceState = presenceCh.presenceState();
-      /* Annulla leave in sospeso per utenti ancora presenti (Supabase invia leave+join quando qualcuno fa track(), es. cam on/off) */
-      Object.keys(presenceState).forEach(uid => {
-        const timerKey = roomIdStr + ':' + uid;
-        if (state.presenceLeaveTimers[timerKey]) {
-          clearTimeout(state.presenceLeaveTimers[timerKey]);
-          delete state.presenceLeaveTimers[timerKey];
-        }
-      });
-      syncPresence(presenceState, roomIdStr);
-      /* CRITICO: Renderizza utenti dopo il sync della presenza */
-      if (roomIdStr === String(state.activeRoom)) {
-        renderUsers();
-      }
+      syncPresence(presenceCh.presenceState(), roomIdStr);
+      if (roomIdStr === String(state.activeRoom)) renderUsers();
     })
     .on('presence', { event: 'join' }, ({ key, newPresences }) => {
       const uid = String(key);
       if (uid === String(state.currentUser.id)) return;
-      /* Annulla leave in sospeso: era un falso leave da track() (es. cam on/off), non una vera uscita */
-      const timerKey = roomIdStr + ':' + uid;
-      if (state.presenceLeaveTimers[timerKey]) {
-        clearTimeout(state.presenceLeaveTimers[timerKey]);
-        delete state.presenceLeaveTimers[timerKey];
-      }
       const info = newPresences[0];
       if (!state.rooms[roomIdStr]) return;
-      
-      /* CRITICO: Logica di preservazione hasCamera migliorata */
-      /* Se hasCamera è già true nell'utente esistente, preservalo SEMPRE a meno che la presenza non dica esplicitamente false */
+
       const existingUser = state.rooms[roomIdStr].users[uid];
       const globalUser = findUser(uid);
-      
       let hasCamera;
-      if (info.hasCamera === true) {
-        /* La presenza dice esplicitamente true - usa quello */
-        hasCamera = true;
-      } else if (info.hasCamera === false) {
-        /* La presenza dice esplicitamente false - usa quello */
-        hasCamera = false;
-      } else {
-        /* hasCamera è undefined o null nella presenza - preserva quello esistente */
-        /* Controlla sia in room.users che in state.users per maggiore robustezza */
-        if (existingUser?.hasCamera === true || globalUser?.hasCamera === true) {
-          hasCamera = true;
-        } else {
-          hasCamera = false;
-        }
-      }
-      
+      if (info.hasCamera === true)       hasCamera = true;
+      else if (info.hasCamera === false)  hasCamera = false;
+      else hasCamera = existingUser?.hasCamera === true || globalUser?.hasCamera === true;
+
       state.rooms[roomIdStr].users[uid] = {
         id: uid, name: info.name, username: info.username || null,
         isGuest: info.isGuest, online: true,
-        hasCamera: hasCamera, avatarUrl: info.avatarUrl || null,
+        hasCamera, avatarUrl: info.avatarUrl || null,
       };
+
       if (roomIdStr === String(state.activeRoom)) {
         renderUsers();
-        /* Toast solo per join veri: non se era già online (track/update), non se ha appena rientrato dopo breve disconnect */
         const wasAlreadyOnline = existingUser?.online;
         const leftKey = roomIdStr + ':' + uid;
         const leftAt = state.presenceLeftAt[leftKey];
         if (leftAt) delete state.presenceLeftAt[leftKey];
-        const justRejoined = leftAt && (Date.now() - leftAt < 30000);
+        const justRejoined = leftAt && (Date.now() - leftAt < 10000);
         if (!wasAlreadyOnline && !justRejoined) {
           showToast(`👤 ${info.name} joined #${state.rooms[roomIdStr].name}`);
           addSystemMessage(`👤 ${info.name} è entrato nella chat`, roomIdStr);
@@ -154,27 +121,17 @@ export async function joinRoom(roomId) {
       const uid = String(key);
       if (!state.rooms[roomIdStr]) return;
       if (uid === String(state.currentUser?.id)) return;
-      /* Debounce: Supabase invia leave+join quando qualcuno fa track() (es. cam on/off). Aspettiamo 2s: se arriva sync/join con l'utente ancora presente, annulliamo. */
-      const timerKey = roomIdStr + ':' + uid;
-      if (state.presenceLeaveTimers[timerKey]) clearTimeout(state.presenceLeaveTimers[timerKey]);
-      state.presenceLeaveTimers[timerKey] = setTimeout(async () => {
-        delete state.presenceLeaveTimers[timerKey];
-        if (!state.rooms[roomIdStr]) return;
-        /* Double-check: se è ancora in presenceState() non rimuovere (falso leave, es. cam off / tab switch) */
-        const currentPresence = presenceCh.presenceState();
-        if (Object.prototype.hasOwnProperty.call(currentPresence, uid)) return;
-        const leaveName = state.rooms[roomIdStr].users[uid]?.name || uid;
-        delete state.rooms[roomIdStr].users[uid];
-        state.presenceLeftAt[roomIdStr + ':' + uid] = Date.now();
-        if (state.cameraWindows[uid]) {
-          const { closeCameraWindow } = await import('./camera.js?v=20260318');
-          await closeCameraWindow(uid);
-        }
-        if (roomIdStr === String(state.activeRoom)) {
-          renderUsers();
-          addSystemMessage(`👋 ${leaveName} ha lasciato la chat`, roomIdStr);
-        }
-      }, 2000);
+      const leaveName = state.rooms[roomIdStr].users[uid]?.name || uid;
+      delete state.rooms[roomIdStr].users[uid];
+      state.presenceLeftAt[roomIdStr + ':' + uid] = Date.now();
+      if (state.cameraWindows[uid]) {
+        const { closeCameraWindow } = await import('./camera.js?v=20260318');
+        await closeCameraWindow(uid);
+      }
+      if (roomIdStr === String(state.activeRoom)) {
+        renderUsers();
+        addSystemMessage(`👋 ${leaveName} ha lasciato la chat`, roomIdStr);
+      }
     })
     .subscribe(async status => {
       if (status === 'SUBSCRIBED') {
