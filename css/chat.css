@@ -169,7 +169,8 @@
   line-height: 1.4;
   font-size: 13px;
   position: relative;
-  flex: 1;
+  /* NON allargare il bubble: altrimenti azioni/reactions finiscono lontane a destra */
+  flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
@@ -264,7 +265,8 @@
 .msg-text {
   line-height: 1.4;
   font-size: 13px;
-  flex: 1;
+  /* NON far espandere il testo: così le actions restano vicine alla fine del testo */
+  flex: 0 1 auto;
   min-width: 0;
 }
 /* Rich text (colore, grandezza, grassetto) nei messaggi: gli span con style hanno priorità */
