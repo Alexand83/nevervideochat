@@ -67,6 +67,16 @@ function _setNetBadge(uid, mode) {
   el.classList.toggle('net-p2p',  mode === 'P2P');
 }
 
+function _noteCandidateNetType(uid, candType) {
+  const cw = state.cameraWindows?.[uid];
+  if (!cw) return;
+  cw._sawAnyIceCand = true;
+  if (candType === 'relay') {
+    cw._sawRelayIceCand = true;
+    _setNetBadge(uid, 'RELAY');
+  }
+}
+
 function startNetModeMonitor(uid, pc) {
   if (!uid || !pc) return;
   const cw = state.cameraWindows?.[uid];
@@ -80,6 +90,8 @@ function startNetModeMonitor(uid, pc) {
       if (cwCur?.netCheckInterval) { clearInterval(cwCur.netCheckInterval); cwCur.netCheckInterval = null; }
       return;
     }
+    /* Se abbiamo visto un relay candidate, il tipo è già noto. */
+    if (cwCur._sawRelayIceCand) return;
     const mode = await _deriveNetModeFromStats(pc);
     if (mode && mode !== last) {
       last = mode;
@@ -1797,9 +1809,13 @@ export async function sharePublicCameraTo(toUid) {
     tracks.forEach(t => pc.addTrack(t, state.localStream));
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) {
-        console.log('[WebRTC-FLOW] TX ICE dir=out to', (toUid || '').slice(0, 8) + '…', 'type=', candidate.type);
+        const cStr = candidate.candidate || '';
+        const candType = candidate.type || (cStr.includes(' typ relay ') ? 'relay' :
+                                            cStr.includes(' typ srflx ') ? 'srflx' :
+                                            cStr.includes(' typ host ') ? 'host' : 'unknown');
+        console.log('[WebRTC-FLOW] TX ICE dir=out to', (toUid || '').slice(0, 8) + '…', 'type=', candType);
         /* Serialize so Firebase/JSON round-trip preserves candidate (RTCIceCandidate may not survive) */
-        const candidatePayload = { candidate: candidate.candidate, sdpMid: candidate.sdpMid ?? null, sdpMLineIndex: candidate.sdpMLineIndex ?? 0 };
+        const candidatePayload = { candidate: cStr, sdpMid: candidate.sdpMid ?? null, sdpMLineIndex: candidate.sdpMLineIndex ?? 0 };
         broadcast('webrtc', toUid, { sigType: 'ice', candidate: candidatePayload, ctx: 'public', dir: 'out' });
       }
     };
@@ -2050,7 +2066,12 @@ export async function handleWebRTCSignal(payload) {
       state.incomingPCs[from] = pc;
       pc.onicecandidate = ({ candidate: c }) => {
         if (c) {
-          const candidatePayload = { candidate: c.candidate, sdpMid: c.sdpMid ?? null, sdpMLineIndex: c.sdpMLineIndex ?? 0 };
+          const cStr = c.candidate || '';
+          const candType = c.type || (cStr.includes(' typ relay ') ? 'relay' :
+                                      cStr.includes(' typ srflx ') ? 'srflx' :
+                                      cStr.includes(' typ host ') ? 'host' : 'unknown');
+          _noteCandidateNetType(from, candType);
+          const candidatePayload = { candidate: cStr, sdpMid: c.sdpMid ?? null, sdpMLineIndex: c.sdpMLineIndex ?? 0 };
           broadcast('webrtc', from, { sigType: 'ice', candidate: candidatePayload, ctx: 'public', dir: 'in' });
         }
       };
@@ -2267,6 +2288,10 @@ export async function handleWebRTCSignal(payload) {
         console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'iceConnectionState=', pc.iceConnectionState, 'connectionState=', pc.connectionState);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
           setTimeout(() => retryPlay('ICE-connected', true), 200);
+          /* Fallback per browser che non espongono selected candidate pair:
+             se abbiamo visto candidati ma non relay, assumiamo P2P quando ICE è connesso. */
+          const cw = state.cameraWindows?.[from];
+          if (cw && cw._sawAnyIceCand && !cw._sawRelayIceCand) _setNetBadge(from, 'P2P');
         }
       });
       
@@ -2400,6 +2425,8 @@ export async function handleWebRTCSignal(payload) {
                                           candidate.candidate?.includes(' typ srflx ') ? 'srflx' : 
                                           candidate.candidate?.includes(' typ host ') ? 'host' : 'unknown');
         const pcType = pc === state.outgoingPCs[from] ? 'outgoing' : 'incoming';
+        /* Aggiorna badge rete: se vediamo un relay candidate, sappiamo che è TURN. */
+        if (pcType === 'incoming') _noteCandidateNetType(from, candType);
         if (!pc.remoteDescription) {
           pc._pendingCandidates = pc._pendingCandidates || [];
           pc._pendingCandidates.push(iceCandidate);
