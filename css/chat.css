@@ -175,7 +175,8 @@
   max-width: 100%;
   box-sizing: border-box;
   letter-spacing: 0.01em;
-  background: transparent;
+  /* Style 24: subtle tagged bubble (no vertical stripe) */
+  background: rgba(255,255,255,0.03);
   box-shadow: none;
 }
 .msg-bubble .msg-quote {
@@ -186,53 +187,53 @@
 .msg-group:nth-child(5n+1) .msg-bubble {
   border-left-color: #22d3ee;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.03);
 }
 .msg-group:nth-child(5n+2) .msg-bubble {
   border-left-color: #fb7185;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.03);
 }
 .msg-group:nth-child(5n+3) .msg-bubble {
   border-left-color: #4ade80;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.03);
 }
 .msg-group:nth-child(5n+4) .msg-bubble {
   border-left-color: #a78bfa;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.03);
 }
 .msg-group:nth-child(5n) .msg-bubble {
   border-left-color: #fbbf24;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.03);
 }
 /* Messaggi propri: bordo più marcato + sfondo leggermente accent */
 .msg-group.own:nth-child(5n+1) .msg-bubble {
   border-left-color: #67e8f9;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.04);
 }
 .msg-group.own:nth-child(5n+2) .msg-bubble {
   border-left-color: #fda4af;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.04);
 }
 .msg-group.own:nth-child(5n+3) .msg-bubble {
   border-left-color: #86efac;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.04);
 }
 .msg-group.own:nth-child(5n+4) .msg-bubble {
   border-left-color: #c4b5fd;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.04);
 }
 .msg-group.own:nth-child(5n) .msg-bubble {
   border-left-color: #fde047;
   box-shadow: none;
-  background: transparent;
+  background: rgba(255,255,255,0.04);
 }
 
 /* Quote / Reply block dentro il bubble */
@@ -870,9 +871,11 @@
 
 /* Message actions row (Reply, Add reaction) — sempre visibili */
 .msg-actions {
+  /* Style 24: wrap actions as small tags */
   display: flex;
   align-items: center;
-  gap: 2px;
+  flex-wrap: wrap;
+  gap: 4px;
   flex-shrink: 0;
   opacity: 1;
 }
@@ -880,12 +883,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: var(--r1);
-  background: transparent;
-  color: var(--tx2);
+  background: var(--bg2);
+  border: 1px solid var(--border-subtle);
+  color: var(--tx0);
+  font-weight: 700;
   font-size: 11px;
-  border: none;
   cursor: pointer;
   transition: background var(--tf), color var(--tf);
 }
