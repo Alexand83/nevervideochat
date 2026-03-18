@@ -1,23 +1,22 @@
 /* ================================================================
-   Firebase Functions — Metered TURN credentials proxy (secure)
-   - Keeps Metered API key server-side (Secrets)
+   Firebase Functions — Metered TURN credentials proxy
+   - Keeps Metered API key server-side (Runtime Config)
    - Returns ICE servers array to the client
    - Basic CORS + rate limit + short cache
+   NOTE: functions.config() / Runtime Config is deprecated (Mar 2027).
+         This is a temporary workaround when Secret Manager (Blaze)
+         isn't available. Migrate to Params/Secrets when possible.
 ================================================================ */
 
 const { onRequest } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
+const functions = require("firebase-functions");
 
 const cors = require("cors");
 
-// Secret to set: firebase functions:secrets:set METERED_API_KEY
-const METERED_API_KEY = defineSecret("METERED_API_KEY");
-
-// Optional comma-separated allowed origins (no wildcard). Example:
-// firebase functions:secrets:set NVC_ALLOWED_ORIGINS
-// value: https://nevervideochat.com,https://www.nevervideochat.com
-const NVC_ALLOWED_ORIGINS = defineSecret("NVC_ALLOWED_ORIGINS");
+function getRuntimeConfig() {
+  try { return functions.config() || {}; } catch { return {}; }
+}
 
 const corsMiddleware = cors({
   origin(origin, cb) {
@@ -25,7 +24,8 @@ const corsMiddleware = cors({
       // No Origin header (same-origin / curl) → allow
       if (!origin) return cb(null, true);
 
-      const raw = (NVC_ALLOWED_ORIGINS.value() || "").trim();
+      const cfg = getRuntimeConfig();
+      const raw = String(cfg?.nvc?.allowed_origins || "").trim();
       if (!raw) {
         // If allow-list is not configured, allow the request but DO NOT reflect '*'
         // We just let CORS middleware set permissive headers for simple usage.
@@ -71,7 +71,6 @@ function rateLimitOk(ip) {
 exports.getIceServers = onRequest(
   {
     region: "europe-west1",
-    secrets: [METERED_API_KEY, NVC_ALLOWED_ORIGINS],
     // keep this low; it should be fast
     timeoutSeconds: 10,
     memory: "128MiB"
@@ -90,7 +89,8 @@ exports.getIceServers = onRequest(
           return res.status(200).json(_cache);
         }
 
-        const apiKey = (METERED_API_KEY.value() || "").trim();
+        const cfg = getRuntimeConfig();
+        const apiKey = String(cfg?.metered?.apikey || "").trim();
         if (!apiKey) return res.status(500).json({ error: "missing_metered_api_key" });
 
         const url = `https://djconsole.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(apiKey)}`;
