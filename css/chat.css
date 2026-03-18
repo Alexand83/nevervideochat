@@ -127,7 +127,8 @@
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  /* Componenti del messaggio più vicini (testo/reactions/actions) */
+  gap: 4px 8px;
 }
 
 .msg-meta {
@@ -157,12 +158,12 @@
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  padding: 5px 10px 5px 12px;
+  gap: 4px 8px;
+  padding: 4px 8px 4px 10px;
   border-radius: 0 10px 10px 0;
   border: none;
-  /* Minimal left marker (no colorful vertical stripe) */
-  border-left: 2px solid var(--border-subtle);
+  /* La “barra verticale” deve esistere solo sul reply/quote */
+  border-left: none !important;
   word-break: break-word;
   overflow-wrap: anywhere;
   line-height: 1.4;
@@ -175,8 +176,6 @@
   letter-spacing: 0.01em;
   background: transparent;
   box-shadow: none;
-  /* Override palette rules that set a colorful border-left-color */
-  border-left-color: var(--border-subtle) !important;
 }
 .msg-bubble .msg-quote {
   flex-basis: 100%;
@@ -241,7 +240,7 @@
   flex-direction: column;
   gap: 1px;
   padding: 3px 6px;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   background: transparent;
   /* Subtle quote marker (keeps quote understandable, but not colorful) */
   border-left: 2px solid var(--border-subtle);
@@ -839,7 +838,7 @@
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   min-height: 0;
   flex-shrink: 0;
 }
@@ -871,7 +870,7 @@
 .msg-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
   opacity: 1;
 }
@@ -879,7 +878,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px;
+  padding: 1px 6px;
   border-radius: var(--r1);
   background: transparent;
   color: var(--tx2);
