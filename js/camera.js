@@ -4,7 +4,7 @@
 /* VERSION MARKER — if you see this in logs, new code is running */
 console.log('%c[NVC] camera.js v20260318 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
-import { ICE_SERVERS_FALLBACK } from './config.js';
+import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL } from './config.js';
 import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
@@ -53,9 +53,13 @@ async function getIceConfig() {
       const fromRelative = await tryFetchIce('/api/ice');
       if (fromRelative) return fromRelative;
 
-      /* B) GitHub Pages: chiama direttamente la Cloud Function con URL assoluto */
+      /* B) GitHub Pages: preferisci Worker (se configurato), altrimenti Function URL assoluto */
       const host = String(window.location?.host || '');
       if (host.endsWith('github.io')) {
+        if (ICE_ENDPOINT_URL && String(ICE_ENDPOINT_URL).trim()) {
+          const fromWorker = await tryFetchIce(String(ICE_ENDPOINT_URL).trim());
+          if (fromWorker) return fromWorker;
+        }
         const projectId = 'nevervideochat'; /* Firebase Project ID (non project number) */
         const region = 'europe-west1';
         const fnUrl = `https://${region}-${projectId}.cloudfunctions.net/getIceServers`;

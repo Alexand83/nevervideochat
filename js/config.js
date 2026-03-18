@@ -43,6 +43,13 @@ export const ICE_SERVERS_FALLBACK = {
   rtcpMuxPolicy: 'require',
 };
 
+/**
+ * Optional ICE config endpoint (recommended on GitHub Pages).
+ * Set this to your Cloudflare Worker URL (e.g. "https://nvc-ice.<user>.workers.dev/ice").
+ * If empty, the app will fall back to Firebase Function URL (if available) and then Firestore.
+ */
+export const ICE_ENDPOINT_URL = '';
+
 export const EMOJI_CATEGORIES = {
   '😊': ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'],
   '👋': ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','☝️','👇','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','💪','🦵','🦶','👂','👃','👀','👅','👄','💋'],

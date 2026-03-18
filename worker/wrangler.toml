@@ -1,0 +1,11 @@
+name = "nvc-ice-proxy"
+main = "src/index.js"
+compatibility_date = "2026-03-18"
+
+# Set these with:
+#   wrangler secret put METERED_API_KEY
+#   wrangler secret put ALLOWED_ORIGINS
+#
+# ALLOWED_ORIGINS example:
+#   https://alexand83.github.io
+
