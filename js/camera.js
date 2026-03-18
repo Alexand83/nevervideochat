@@ -28,6 +28,71 @@ let _iceConfigCache = null;
 let _iceConfigFetchedAt = 0;
 const ICE_CONFIG_TTL_MS = 3_600_000; // 1 ora
 
+/* ── WebRTC transport indicator (P2P / RELAY) ─────────────────── */
+async function _deriveNetModeFromStats(pc) {
+  try {
+    const stats = await pc.getStats();
+    let selectedPair = null;
+    let transport = null;
+    stats.forEach(r => {
+      if (r.type === 'candidate-pair' && r.selected) selectedPair = r;
+      if (r.type === 'transport' && r.selectedCandidatePairId) transport = r;
+    });
+    if (!selectedPair && transport?.selectedCandidatePairId) selectedPair = stats.get(transport.selectedCandidatePairId) || null;
+    if (!selectedPair) return null;
+
+    const localId = selectedPair.localCandidateId;
+    const remoteId = selectedPair.remoteCandidateId;
+    const localCand = localId ? stats.get(localId) : null;
+    const remoteCand = remoteId ? stats.get(remoteId) : null;
+    const localType = localCand?.candidateType || null;
+    const remoteType = remoteCand?.candidateType || null;
+
+    if (localType === 'relay' || remoteType === 'relay') return 'RELAY';
+    if (localType === 'srflx' || remoteType === 'srflx') return 'P2P';
+    if (localType === 'host'  || remoteType === 'host')  return 'P2P';
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function _setNetBadge(uid, mode) {
+  const cw = state.cameraWindows?.[uid];
+  const el = cw?.el?.querySelector?.(`#cam-net-${safeId(uid)}`) || document.getElementById(`cam-net-${safeId(uid)}`);
+  if (!el) return;
+  if (!mode) { el.textContent = '…'; el.classList.remove('net-relay','net-p2p'); return; }
+  el.textContent = mode;
+  el.classList.toggle('net-relay', mode === 'RELAY');
+  el.classList.toggle('net-p2p',  mode === 'P2P');
+}
+
+function startNetModeMonitor(uid, pc) {
+  if (!uid || !pc) return;
+  const cw = state.cameraWindows?.[uid];
+  if (!cw) return;
+  if (cw.netCheckInterval) { clearInterval(cw.netCheckInterval); cw.netCheckInterval = null; }
+  let last = null;
+
+  const tick = async () => {
+    const cwCur = state.cameraWindows?.[uid];
+    if (!cwCur || state.incomingPCs?.[uid] !== pc) {
+      if (cwCur?.netCheckInterval) { clearInterval(cwCur.netCheckInterval); cwCur.netCheckInterval = null; }
+      return;
+    }
+    const mode = await _deriveNetModeFromStats(pc);
+    if (mode && mode !== last) {
+      last = mode;
+      _setNetBadge(uid, mode);
+    } else if (!mode && !last) {
+      _setNetBadge(uid, null);
+    }
+  };
+
+  tick();
+  cw.netCheckInterval = setInterval(tick, 2000);
+}
+
 async function getIceConfig() {
   const now = Date.now();
   if (_iceConfigCache && (now - _iceConfigFetchedAt) < ICE_CONFIG_TTL_MS) return _iceConfigCache;
@@ -179,6 +244,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       <div class="cam-win-user-info">
         <span class="cam-win-avatar" style="background:${color}">${escHtml(init)}</span>
         <span class="cam-win-name">${escHtml(name)}</span>
+        ${!isOwn ? `<span class="cam-net-badge" id="cam-net-${safeUid}" title="Connessione WebRTC">…</span>` : ''}
         ${isOwn ? '<span class="cam-win-you-tag">You</span>' : ''}
       </div>
       ${viewersBtnHtml}
@@ -593,6 +659,10 @@ export async function closeCameraWindow(uid) {
   if (camWin?.remoteVideoCheckInterval) {
     clearInterval(camWin.remoteVideoCheckInterval);
     camWin.remoteVideoCheckInterval = null;
+  }
+  if (camWin?.netCheckInterval) {
+    clearInterval(camWin.netCheckInterval);
+    camWin.netCheckInterval = null;
   }
   
   if (camWin?.isEventsGrid) {
@@ -2354,6 +2424,9 @@ function openRemoteCamWindow(uid, stream, userName = null) {
   clearPendingCamRequest(String(uid));
   const user = findUser(uid);
   createCameraWindow(uid, stream, userName || user?.name || uid, false);
+  /* Aggiorna badge rete (P2P/RELAY) per questa connessione */
+  const pc = state.incomingPCs?.[uid];
+  if (pc) startNetModeMonitor(uid, pc);
 }
 
 /* ── Private video call ───────────────────────────────────────── */
