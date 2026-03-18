@@ -1343,13 +1343,20 @@ async function renderFinalLeaderboard(gameType) {
   if (!state.fb || !container) return;
   
   try {
+    // Avoid Firestore compound-index requirements:
+    // if we use where + where + orderBy, Firestore may throw "requires an index".
+    // Instead: fetch filtered docs, sort client-side, then slice top 10.
+    const roomId = String(state.activeRoom);
+    const gType  = String(gameType);
     const snap = await state.fb.firestore.collection('game_scores')
-      .where('room_id', '==', state.activeRoom)
-      .where('game_type', '==', gameType)
-      .orderBy('score', 'desc')
-      .limit(10)
+      .where('room_id', '==', roomId)
+      .where('game_type', '==', gType)
       .get();
-    const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    const data = snap.docs
+      .map(d => ({ ...d.data(), id: d.id }))
+      .map(entry => ({ ...entry, score: Number(entry.score ?? 0) || 0 }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
     
     let leaderboardHtml = '<div class="games-panel-content"><div class="game-leaderboard-final">';
     leaderboardHtml += '<div class="game-leaderboard-title">🏆 Classifica Finale</div>';
@@ -1391,12 +1398,16 @@ async function showScores() {
   if (!state.fb) return;
   
   try {
+    // Same strategy: avoid orderBy index requirements.
+    const roomId = String(state.activeRoom);
     const snap = await state.fb.firestore.collection('game_scores')
-      .where('room_id', '==', state.activeRoom)
-      .orderBy('score', 'desc')
-      .limit(10)
+      .where('room_id', '==', roomId)
       .get();
-    const data = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    const data = snap.docs
+      .map(d => ({ ...d.data(), id: d.id }))
+      .map(entry => ({ ...entry, score: Number(entry.score ?? 0) || 0 }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
     
     if (!data || data.length === 0) {
       showToast('📊 Nessun punteggio ancora! Sii il primo a giocare!');
