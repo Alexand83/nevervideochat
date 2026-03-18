@@ -181,7 +181,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
       videoEl.style.display = 'block';
     }
     const doPlay = () => {
-      videoEl.play().catch(() => {});
+    videoEl.play().catch(() => {});
     };
     if (!isOwn) requestAnimationFrame(() => doPlay());
     else doPlay();
@@ -1844,8 +1844,8 @@ export async function handleWebRTCSignal(payload) {
     } else if (payload?.sigType === 'offer' && payload?.to != null) {
       console.log('[WebRTC-FLOW] SKIP offer to!=me', 'to=', String(payload.to).slice(0, 12), 'me=', (String(state.currentUser?.id || '')).slice(0, 12));
     }
-    return;
-  }
+          return;
+        }
   if (sigType === 'ice' && candidate) console.log('[WebRTC-FLOW] RX ICE for me from', (from || '').slice(0, 8) + '…', toMeIceFallback && !toMeStrict ? (hasIncomingPC ? '(fallback: incomingPC)' : '(fallback: public ICE)') : '');
 
   /* Firebase replay: ignora SOLO le offer troppo vecchie (evita cam che riappaiono al refresh). ICE e answer non vanno mai filtrati per _ts altrimenti la connessione non si stabilisce. */
@@ -2102,8 +2102,8 @@ export async function handleWebRTCSignal(payload) {
                    il flag così l'offer di riconnessione non viene rifiutata. */
                 removeRemoteCameraFromGrid(from, { keepHasCamera: true }).then(() => {
                   if (!state.cameraWindows[from] && !state.incomingPCs[from]) {
-                    delete state.pendingCamRequests[from];
-                    requestPublicCamera(from);
+                delete state.pendingCamRequests[from];
+                requestPublicCamera(from);
                   }
                 }).catch(() => {});
               } else {
