@@ -435,7 +435,15 @@ export function createCameraWindow(uid, stream, name, isOwn) {
               clearInterval(streamCheckInterval);
               streamCheckInterval = null;
             }
-            removeRemoteCameraFromGrid(uid).catch(() => {});
+            /* Non è un vero "cam-closed": non azzerare hasCamera (l'utente potrebbe avere ancora la cam attiva).
+               Rimuovi la finestra/PC e ritenta la richiesta. */
+            removeRemoteCameraFromGrid(uid, { keepHasCamera: true }).then(() => {
+              const u = findUser(uid);
+              if (u?.online && !state.manuallyClosedCameras?.[uid]) {
+                delete state.pendingCamRequests[uid];
+                requestPublicCamera(uid);
+              }
+            }).catch(() => {});
           }
         }
       };
@@ -2128,7 +2136,14 @@ export async function handleWebRTCSignal(payload) {
           console.warn('[WebRTC-FLOW] INCOMING TIMEOUT', CONNECTING_TIMEOUT_MS / 1000, 's for', from, '| connectionState=', pc.connectionState, 'iceState=', pc.iceConnectionState, '→ remove remote cam (user stays in list)');
           try { pc.close(); } catch {}
           delete state.incomingPCs[from]; delete state.pendingIncomingICE[from];
-          removeRemoteCameraFromGrid(from).catch(() => {});
+          /* Timeout non equivale a cam spenta: non azzerare hasCamera, ritenta richiesta */
+          removeRemoteCameraFromGrid(from, { keepHasCamera: true }).then(() => {
+            const u = findUser(from);
+            if (u?.online && !state.manuallyClosedCameras?.[from]) {
+              delete state.pendingCamRequests[from];
+              requestPublicCamera(from);
+            }
+          }).catch(() => {});
         }
       }, CONNECTING_TIMEOUT_MS);
 
@@ -2155,7 +2170,13 @@ export async function handleWebRTCSignal(payload) {
               /* Dopo 15s ancora disconnected/failed: togli dalla grid (come refresh). Non dipendere da hasActiveTracks: può restare "live" anche con connessione morta. */
               if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
                 console.log('[WebRTC] Still disconnected/failed after 15s for', from, '- removing camera from grid');
-                removeRemoteCameraFromGrid(from).catch(() => {});
+                removeRemoteCameraFromGrid(from, { keepHasCamera: true }).then(() => {
+                  const u = findUser(from);
+                  if (u?.online && !state.manuallyClosedCameras?.[from]) {
+                    delete state.pendingCamRequests[from];
+                    requestPublicCamera(from);
+                  }
+                }).catch(() => {});
               }
               if (cw) delete cw.disconnectTimer;
             }, 15000);
