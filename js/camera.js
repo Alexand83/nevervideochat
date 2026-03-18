@@ -2410,14 +2410,15 @@ export async function handleWebRTCSignal(payload) {
          Bufferizza solo se abbiamo una richiesta pendente o una finestra/PC per questo peer:
          evita di accumulare ICE per broadcaster che non abbiamo mai richiesto (stesso UID su più tab). */
       if (dir === 'out' && !pc) {
-        const shouldBuffer = !!state.pendingCamRequests[from] || !!state.cameraWindows[from];
-        if (!shouldBuffer) return;
+        /* Bufferizza SEMPRE (cap) per evitare race: su mobile/5G ICE può arrivare prima della PC.
+           L'offer non solicitata è già filtrata sopra, e il buffer è capped a 100 per peer. */
         state.pendingIncomingICE[from] = state.pendingIncomingICE[from] || [];
         /* Cap a 100: evita crescita illimitata in caso di flood di candidati ICE */
         if (state.pendingIncomingICE[from].length < 100) {
           const iceTs = payload._ts ?? payload.ts ?? Date.now();
           state.pendingIncomingICE[from].push({ c: iceCandidate, _ts: iceTs });
         }
+        console.log('[WebRTC-FLOW] ICE from', (from || '').slice(0, 8) + '…', 'dir=out → BUFFER (no incoming PC yet) size=', state.pendingIncomingICE[from].length);
         return;
       }
       if (pc) {
