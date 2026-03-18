@@ -263,7 +263,9 @@ export function renderMessage(msg) {
     deleteBtn.addEventListener('click', () => confirmDeleteMessage(msg.id));
     actionsRow.appendChild(deleteBtn);
   }
-  content.append(meta, bubble, actionsRow);
+  /* UX: actions devono stare "vicine" al testo (dentro msg-bubble) */
+  bubble.appendChild(actionsRow);
+  content.append(meta, bubble);
   group.append(avatar, content);
   group.dataset.msgId = msg.id;
   dom.msgsContainer.appendChild(group);
