@@ -705,6 +705,18 @@ export async function connectFirebase() {
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
         if (isCurrentUser || state.cameraWindows[targetId]) await closeAllCamerasForUser(targetId);
+        /* Cache last-known name + suppress "leave" system message (kick). */
+        try {
+          const uidStr = String(targetId);
+          const isGlobal = payload?.is_global === true;
+          const kickRoom = payload?.room_id ?? null;
+          for (const rId of Object.keys(state.rooms || {})) {
+            const u = state.rooms[rId]?.users?.[uidStr];
+            if (u?.name) state.lastKnownNames[uidStr] = u.name;
+            const inScope = isGlobal ? true : (kickRoom ? String(kickRoom) === String(rId) : (String(rId) === String(state.activeRoom)));
+            if (inScope) state.suppressLeaveSystemMsg[String(rId) + ':' + uidStr] = { ts: Date.now(), reason: 'kick' };
+          }
+        } catch (_) {}
         if (isCurrentUser) {
           /* Replay-safe: verify kick still in DB */
           try {
@@ -746,6 +758,15 @@ export async function connectFirebase() {
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
         if (isCurrentUser || state.cameraWindows[targetId]) await closeAllCamerasForUser(targetId);
+        /* Cache last-known name + suppress "leave" system message (ban). */
+        try {
+          const uidStr = String(targetId);
+          for (const rId of Object.keys(state.rooms || {})) {
+            const u = state.rooms[rId]?.users?.[uidStr];
+            if (u?.name) state.lastKnownNames[uidStr] = u.name;
+            state.suppressLeaveSystemMsg[String(rId) + ':' + uidStr] = { ts: Date.now(), reason: 'ban' };
+          }
+        } catch (_) {}
         if (isCurrentUser) {
           /* Replay-safe: verify ban still exists in DB (avoid stale broadcast after unban) */
           try {

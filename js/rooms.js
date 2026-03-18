@@ -127,8 +127,12 @@ export async function joinRoom(roomId) {
       const uid = String(key);
       if (!state.rooms[roomIdStr]) return;
       if (uid === String(state.currentUser?.id)) return;
-      const leaveName = state.rooms[roomIdStr].users[uid]?.name || uid;
+      const roomUsers = state.rooms[roomIdStr].users || {};
+      const knownName = roomUsers[uid]?.name || state.lastKnownNames?.[uid] || null;
+      const leaveName = (knownName && String(knownName).trim()) ? String(knownName).trim() : 'Guest';
       seenUids.delete(uid); /* rimuovi da seenUids così un futuro re-ingresso viene notificato */
+      /* Prima di rimuoverlo dalla lista, salva il nome per messaggi futuri */
+      if (roomUsers[uid]?.name) state.lastKnownNames[uid] = roomUsers[uid].name;
       delete state.rooms[roomIdStr].users[uid];
       state.presenceLeftAt[roomIdStr + ':' + uid] = Date.now();
       if (state.cameraWindows[uid]) {
@@ -137,7 +141,15 @@ export async function joinRoom(roomId) {
       }
       if (roomIdStr === String(state.activeRoom)) {
         renderUsers();
-        addSystemMessage(`👋 ${leaveName} ha lasciato la chat`, roomIdStr);
+        const supKey = roomIdStr + ':' + uid;
+        const sup = state.suppressLeaveSystemMsg?.[supKey] || null;
+        const shouldSuppress = !!(sup && sup.ts && (Date.now() - sup.ts < 30000));
+        if (shouldSuppress) {
+          /* Consumiamo la soppressione: evita doppioni "kick/ban" + "leave" */
+          delete state.suppressLeaveSystemMsg[supKey];
+        } else {
+          addSystemMessage(`👋 ${leaveName} ha lasciato la chat`, roomIdStr);
+        }
       }
     })
     .subscribe(async status => {

@@ -8,6 +8,7 @@ import { broadcast }      from './broadcast.js';
 import { clearBroadcastHistory } from './firebase-client.js';
 import { hasPermission, loadUserPermissions } from './permissions.js';
 import { renderUsers }    from './users.js';
+import { addSystemMessage } from './chat.js';
 
 let currentUserRole = null;
 
@@ -647,6 +648,15 @@ async function kickUser(userId, userName) {
   if (!state.fb) return;
 
   try {
+    const uidStr = String(userId);
+    const displayName =
+      (userName && String(userName).trim()) ||
+      state.rooms?.[String(state.activeRoom)]?.users?.[uidStr]?.name ||
+      state.lastKnownNames?.[uidStr] ||
+      state.users?.find?.(u => String(u.id) === uidStr)?.name ||
+      'Guest';
+    state.lastKnownNames[uidStr] = displayName;
+
     /* Scrivi in DB così il client della vittima verifica e esce davvero (e rimuove presenza) */
     const mins = 5;
     const expiresAt = new Date(Date.now() + mins * 60 * 1000).toISOString();
@@ -658,12 +668,13 @@ async function kickUser(userId, userName) {
     }
     broadcast('user-kicked', String(userId), { room_id: null, expires_at: expiresAt, is_global: true });
     /* Togli subito dalla lista in tutte le stanze (kick globale) */
-    const uidStr = String(userId);
     for (const rId of Object.keys(state.rooms || {})) {
+      state.suppressLeaveSystemMsg[String(rId) + ':' + uidStr] = { ts: Date.now(), reason: 'kick' };
       if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
     }
     renderUsers();
-    showToast(`👢 Kicked ${escHtml(userName)}`);
+    if (state.activeRoom) addSystemMessage(`👢 ${displayName} è stato kickato`, String(state.activeRoom));
+    showToast(`👢 Kicked ${escHtml(displayName)}`);
     loadUsers();
   } catch (err) {
     console.error('[Admin] Kick error:', err);
@@ -760,9 +771,18 @@ async function banUser(userId, userName) {
   if (!state.fb) return;
   
   try {
+    const uidStr = String(userId);
+    const displayName =
+      (userName && String(userName).trim()) ||
+      state.rooms?.[String(state.activeRoom)]?.users?.[uidStr]?.name ||
+      state.lastKnownNames?.[uidStr] ||
+      state.users?.find?.(u => String(u.id) === uidStr)?.name ||
+      'Guest';
+    state.lastKnownNames[uidStr] = displayName;
+
     await state.fb.firestore.collection('banned_users').doc(String(userId)).set({
       user_id: String(userId),
-      username: escHtml(userName).substring(0, 50),
+      username: escHtml(displayName).substring(0, 50),
       reason: escHtml(sanitizedReason),
       banned_by: String(state.currentUser.id),
       banned_at: new Date(),
@@ -772,13 +792,14 @@ async function banUser(userId, userName) {
     /* Broadcast ban event */
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin' });
     /* Togli subito dalla lista in tutte le stanze (come kick/disconnect) */
-    const uidStr = String(userId);
     for (const rId of Object.keys(state.rooms || {})) {
+      state.suppressLeaveSystemMsg[String(rId) + ':' + uidStr] = { ts: Date.now(), reason: 'ban' };
       if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
     }
     renderUsers();
     await clearBroadcastHistory(); /* niente replay al reconnect */
-    showToast(`🚫 Banned ${userName}`);
+    if (state.activeRoom) addSystemMessage(`🚫 ${displayName} è stato bannato`, String(state.activeRoom));
+    showToast(`🚫 Banned ${displayName}`);
     loadUsers();
     loadBannedUsers();
   } catch (err) {

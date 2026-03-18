@@ -10,7 +10,7 @@ import { addIgnoredUser, removeIgnoredUser, loadDeviceSettings, saveDeviceSettin
 import { broadcast }         from './broadcast.js';
 import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260318';
 import { openPrivateChat, closePChat } from './private-chat.js';
-import { sendMessage, clearReplyTo }  from './chat.js';
+import { sendMessage, clearReplyTo, addSystemMessage }  from './chat.js';
 import { sendTypingEvent } from './users.js';
 import { joinRoom, getAvailableRooms } from './rooms.js';
 import { hasPermission } from './permissions.js';
@@ -663,10 +663,19 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
   const mins = minutes || 5;
   
   try {
+    const uidStr = String(userId);
+    const displayName =
+      (userName && String(userName).trim()) ||
+      state.rooms?.[String(state.activeRoom)]?.users?.[uidStr]?.name ||
+      state.lastKnownNames?.[uidStr] ||
+      state.users?.find?.(u => String(u.id) === uidStr)?.name ||
+      'Guest';
+    state.lastKnownNames[uidStr] = displayName;
+
     const expiresAt = new Date(Date.now() + mins * 60 * 1000).toISOString();
     const roomId = isGlobal ? null : state.activeRoom;
     const col = state.fb.firestore.collection('kicked_users');
-    const payload = { user_id: userId, username: userName || null, kicked_by: state.currentUser.id, expires_at: expiresAt };
+    const payload = { user_id: userId, username: displayName || null, kicked_by: state.currentUser.id, expires_at: expiresAt };
     
     if (isGlobal) {
       const roomsSnap = await state.fb.firestore.collection('rooms').get();
@@ -683,13 +692,27 @@ async function handleKickUser(userId, userName, minutes, isGlobal) {
     /* Broadcast kick event */
     broadcast('user-kicked', userId, { room_id: roomId, expires_at: expiresAt, is_global: isGlobal });
 
+    /* System message immediato: kick */
+    if (isGlobal) {
+      if (state.activeRoom) addSystemMessage(`👢 ${displayName} è stato kickato`, String(state.activeRoom));
+      for (const rId of Object.keys(state.rooms || {})) {
+        state.suppressLeaveSystemMsg[String(rId) + ':' + uidStr] = { ts: Date.now(), reason: 'kick' };
+      }
+    } else {
+      addSystemMessage(`👢 ${displayName} è stato kickato`, String(state.activeRoom));
+      state.suppressLeaveSystemMsg[String(state.activeRoom) + ':' + uidStr] = { ts: Date.now(), reason: 'kick' };
+    }
+
     /* Togli subito l'utente kickato dalla lista (chi ha kickato lo vede sparire) */
-    const uidStr = String(userId);
     if (isGlobal) {
       for (const rId of Object.keys(state.rooms)) {
+        const n = state.rooms[rId]?.users?.[uidStr]?.name;
+        if (n) state.lastKnownNames[uidStr] = n;
         if (state.rooms[rId]?.users[uidStr]) delete state.rooms[rId].users[uidStr];
       }
     } else if (state.rooms[state.activeRoom]?.users[uidStr]) {
+      const n = state.rooms[state.activeRoom]?.users?.[uidStr]?.name;
+      if (n) state.lastKnownNames[uidStr] = n;
       delete state.rooms[state.activeRoom].users[uidStr];
     }
     renderUsers();
@@ -801,9 +824,18 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
   if (!state.fb) return false;
   
   try {
+    const uidStr = String(userId);
+    const displayName =
+      (userName && String(userName).trim()) ||
+      state.rooms?.[String(state.activeRoom)]?.users?.[uidStr]?.name ||
+      state.lastKnownNames?.[uidStr] ||
+      state.users?.find?.(u => String(u.id) === uidStr)?.name ||
+      'Guest';
+    state.lastKnownNames[uidStr] = displayName;
+
     await state.fb.firestore.collection('banned_users').doc(String(userId)).set({
       user_id: userId,
-      username: userName,
+      username: displayName,
       reason: reason || 'Banned by admin/mod',
       banned_by: state.currentUser.id,
       expires_at: expiresAt,
@@ -816,6 +848,12 @@ async function handleBanUser(userId, userName, reason, expiresAt) {
     broadcast('user-banned', userId, { reason: reason || 'Banned by admin/mod', expires_at: expiresAt });
     const { clearBroadcastHistory } = await import('./firebase-client.js');
     await clearBroadcastHistory(); /* niente replay al reconnect */
+
+    /* System message immediato: ban */
+    if (state.activeRoom) addSystemMessage(`🚫 ${displayName} è stato bannato`, String(state.activeRoom));
+    for (const rId of Object.keys(state.rooms || {})) {
+      state.suppressLeaveSystemMsg[String(rId) + ':' + uidStr] = { ts: Date.now(), reason: 'ban' };
+    }
     /* If banned user is current user, show ban overlay */
     if (String(userId) === String(state.currentUser?.id)) {
       /* Leave all rooms and show ban overlay */

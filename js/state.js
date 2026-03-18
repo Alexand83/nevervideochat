@@ -71,6 +71,12 @@ export const state = {
   /* Quando abbiamo rimosso un utente dalla room (leave/sync timer): { 'roomId:uid': timestamp }. Usato per non mostrare toast "joined" al rientro dopo breve disconnect. */
   presenceLeftAt: {},
 
+  /* Last-known display names: { [uid]: name } — usato per messaggi sistema (kick/ban/leave) */
+  lastKnownNames: {},
+  /* Sopprimi messaggi "ha lasciato la chat" quando l'uscita è causata da kick/ban.
+     { 'roomId:uid': { ts:number, reason:'kick'|'ban' } } */
+  suppressLeaveSystemMsg: {},
+
   /* Context menu */
   contextTargetUID: null,
 
