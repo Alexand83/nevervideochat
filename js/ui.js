@@ -267,6 +267,90 @@ function cancelRecording() {
   clearInterval(state.recordingTimer); dom.voiceRecStrip.hidden = true; dom.recTimer.textContent = '0:00';
 }
 
+/* ── Dictation (speech-to-text) ───────────────────────────────── */
+export function initDictation() {
+  if (!dom.dictateBtn || !dom.msgInput) return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    /* Firefox non supporta Web Speech API: mostra il pulsante ma al clic spiega le alternative */
+    dom.dictateBtn.addEventListener('click', () => {
+      const isWin = /Win/i.test(navigator.platform);
+      const hint = isWin ? ' Su Windows puoi usare Win+H per la dettatura di sistema.' : '';
+      showToast('🎙️ La dettatura vocale non è supportata in Firefox. Usa Chrome, Edge o Safari.' + hint);
+    });
+    dom.dictateBtn.setAttribute('title', 'Dettatura (non supportata in Firefox — usa Chrome/Edge/Safari)');
+    return;
+  }
+  let recognition = null;
+  let isDictating = false;
+
+  const insertTextAtCursor = (text) => {
+    if (!text?.trim()) return;
+    dom.msgInput.focus();
+    const sel = window.getSelection();
+    if (sel && dom.msgInput.contains(sel.anchorNode)) {
+      document.execCommand('insertText', false, text.trim() + ' ');
+    } else {
+      const range = document.createRange();
+      range.selectNodeContents(dom.msgInput);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      document.execCommand('insertText', false, text.trim() + ' ');
+    }
+    sendTypingEvent();
+  };
+
+  const startDictation = () => {
+    if (isDictating) return;
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = document.documentElement.lang || navigator.language || 'it-IT';
+
+    recognition.onresult = (e) => {
+      let final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      }
+      if (final) insertTextAtCursor(final);
+    };
+    recognition.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'aborted') return;
+      showToast('⚠️ Errore dettatura: ' + (e.error || 'unknown'));
+    };
+    recognition.onend = () => {
+      if (!isDictating) {
+        dom.dictateBtn?.classList.remove('dictating');
+        dom.dictateBtn?.setAttribute('aria-pressed', 'false');
+      }
+    };
+    try {
+      recognition.start();
+      isDictating = true;
+      dom.dictateBtn.classList.add('dictating');
+      dom.dictateBtn.setAttribute('aria-pressed', 'true');
+      showToast('🎙️ Dettatura attiva — clicca di nuovo per fermare');
+    } catch (err) {
+      showToast('⚠️ Impossibile avviare la dettatura');
+    }
+  };
+
+  const stopDictation = () => {
+    if (!isDictating) return;
+    isDictating = false;
+    try { recognition?.stop(); } catch {}
+    recognition = null;
+    dom.dictateBtn?.classList.remove('dictating');
+    dom.dictateBtn?.setAttribute('aria-pressed', 'false');
+  };
+
+  dom.dictateBtn.addEventListener('click', () => {
+    if (isDictating) stopDictation();
+    else startDictation();
+  });
+}
+
 /* ── Context menu ──────────────────────────────────────────────── */
 export function openContextMenu(uid, anchor) {
   const user = findUser(uid); if (!user || uid === state.currentUser?.id) return;

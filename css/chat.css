@@ -662,6 +662,32 @@
   display: block;
 }
 
+.dictate-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  background: var(--bg2);
+  color: var(--tx1);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background var(--tf), color var(--tf), border-color var(--tf);
+}
+.dictate-btn:hover { background: var(--bg-hover); color: var(--tx0); }
+.dictate-btn.dictating {
+  background: var(--clr-danger);
+  color: #fff;
+  border-color: var(--clr-danger);
+  animation: dictate-pulse 1.2s ease-in-out infinite;
+}
+.dictate-btn svg { width: 16px; height: 16px; }
+@keyframes dictate-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .7; }
+}
+
 .send-btn {
   width: 30px;
   height: 30px;

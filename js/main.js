@@ -15,7 +15,7 @@ import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, init
 import { setPChatDeps } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js?v=20260318';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
-         initVoiceRecording, initContextMenu, openContextMenu,
+         initVoiceRecording, initDictation, initContextMenu, openContextMenu,
          initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js';
 import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
@@ -105,7 +105,7 @@ async function init() {
     import('./firebase-client.js').then(({ clearDisconnectGrace }) => clearDisconnectGrace());
   });
   /* 1. Init UI subsystems */
-  initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording();
+  initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording(); initDictation();
   initMentionDropdown();
   initContextMenu(); initCameraSystem(); initCallControls();
   initMobilePanel(); initPanelResize();

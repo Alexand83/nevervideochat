@@ -36,6 +36,7 @@ export const dom = {
   /* Chat input */
   chatInputArea:    $('chatInputArea'),
   msgInput:         $('msgInput'),
+  dictateBtn:       $('dictateBtn'),
   sendBtn:          $('sendBtn'),
   boldBtn:          $('boldBtn'),
   colorPicker:      $('colorPicker'),
