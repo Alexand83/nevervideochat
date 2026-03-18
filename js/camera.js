@@ -34,19 +34,33 @@ async function getIceConfig() {
   try {
     /* 1) Prefer endpoint sicuro (/api/ice) che genera credenziali TURN via Metered API (server-side). */
     try {
-      const r = await fetch('/api/ice', { method: 'GET', credentials: 'omit' });
-      if (r && r.ok) {
+      const tryFetchIce = async (url) => {
+        const r = await fetch(url, { method: 'GET', credentials: 'omit' });
+        if (!r || !r.ok) return null;
         const data = await r.json().catch(() => null);
-        if (data && Array.isArray(data.iceServers) && data.iceServers.length > 0) {
-          _iceConfigCache = {
-            iceServers:           data.iceServers,
-            iceCandidatePoolSize: data.iceCandidatePoolSize ?? 10,
-            bundlePolicy:         data.bundlePolicy         ?? 'max-bundle',
-            rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
-          };
-          _iceConfigFetchedAt = now;
-          return _iceConfigCache;
-        }
+        if (!data || !Array.isArray(data.iceServers) || data.iceServers.length === 0) return null;
+        _iceConfigCache = {
+          iceServers:           data.iceServers,
+          iceCandidatePoolSize: data.iceCandidatePoolSize ?? 10,
+          bundlePolicy:         data.bundlePolicy         ?? 'max-bundle',
+          rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
+        };
+        _iceConfigFetchedAt = now;
+        return _iceConfigCache;
+      };
+
+      /* A) Se hosti su Firebase Hosting (o reverse-proxy), funziona il rewrite /api/ice */
+      const fromRelative = await tryFetchIce('/api/ice');
+      if (fromRelative) return fromRelative;
+
+      /* B) GitHub Pages: chiama direttamente la Cloud Function con URL assoluto */
+      const host = String(window.location?.host || '');
+      if (host.endsWith('github.io')) {
+        const projectId = 'nevervideochat'; /* Firebase Project ID (non project number) */
+        const region = 'europe-west1';
+        const fnUrl = `https://${region}-${projectId}.cloudfunctions.net/getIceServers`;
+        const fromFn = await tryFetchIce(fnUrl);
+        if (fromFn) return fromFn;
       }
     } catch (_) { /* ignore, fallback below */ }
 
