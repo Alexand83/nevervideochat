@@ -9,7 +9,7 @@ import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers 
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
-         closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318';
+         closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318b';
 import { clearPendingCamRequest } from './storage.js';
 
 /** Messaggi broadcast più vecchi di questo non mostrano toast/UI (evita replay al login/reconnect) */
@@ -164,7 +164,7 @@ export async function showDisconnectedOverlay(forceShow) {
 
   /* Resetta stato camera così al re-ingresso (guest/login) la cam non risulta attiva in Eventi */
   try {
-    const { resetCameraStateOnDisconnect } = await import('./camera.js?v=20260318');
+    const { resetCameraStateOnDisconnect } = await import('./camera.js?v=20260318b');
     resetCameraStateOnDisconnect();
   } catch (e) {
     console.warn('[Supabase] resetCameraStateOnDisconnect failed:', e);
@@ -583,7 +583,7 @@ export async function connectSupabase() {
         const targetId = payload.to || payload.user_id;
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
-        const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260318b');
         if (isCurrentUser || state.cameraWindows[targetId]) {
           await closeAllCamerasForUser(targetId);
         }
@@ -634,7 +634,7 @@ export async function connectSupabase() {
         const targetId = payload.to || payload.user_id;
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
         
-        const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260318b');
         if (isCurrentUser || state.cameraWindows[targetId]) {
           await closeAllCamerasForUser(targetId);
         }
@@ -704,7 +704,7 @@ export async function connectSupabase() {
           }
         } catch (_) { return; }
         
-        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260318');
+        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260318b');
         if (isCurrentUser) {
           await closeAllCamerasForUser(targetId);
         } else if (state.cameraWindows[targetId]) {
@@ -797,7 +797,7 @@ export async function connectSupabase() {
         if (!state.currentUser || !targetId) return;
         const isCurrentUser = String(targetId) === String(state.currentUser.id);
         try {
-          const { closeAllCamerasForUser } = await import('./camera.js?v=20260318');
+          const { closeAllCamerasForUser } = await import('./camera.js?v=20260318b');
           if (isCurrentUser || state.cameraWindows[targetId]) {
             await closeAllCamerasForUser(targetId);
           }

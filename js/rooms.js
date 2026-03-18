@@ -136,7 +136,7 @@ export async function joinRoom(roomId) {
       delete state.rooms[roomIdStr].users[uid];
       state.presenceLeftAt[roomIdStr + ':' + uid] = Date.now();
       if (state.cameraWindows[uid]) {
-        const { closeCameraWindow } = await import('./camera.js?v=20260318');
+        const { closeCameraWindow } = await import('./camera.js?v=20260318b');
         await closeCameraWindow(uid);
       }
       if (roomIdStr === String(state.activeRoom)) {
@@ -342,7 +342,7 @@ export function switchRoom(roomId) {
     }
     /* Re-insert own camera into Events grid if it was active in this room */
     if (state.localStream && String(state.cameraRoom) === roomIdStr) {
-      import('./camera.js?v=20260318').then(async ({ insertCameraIntoEventsGrid }) => {
+      import('./camera.js?v=20260318b').then(async ({ insertCameraIntoEventsGrid }) => {
         if (state.activeRoom === roomIdStr) {
           const ownCamWin = state.cameraWindows[state.currentUser.id];
           /* CRITICO: Se la cam esiste già, ri-inserirla nella grid invece di ricrearla */
@@ -361,7 +361,7 @@ export function switchRoom(roomId) {
             }
           } else if (!ownCamWin) {
             /* La cam non esiste - crearla */
-            const { createCameraWindow } = await import('./camera.js?v=20260318');
+            const { createCameraWindow } = await import('./camera.js?v=20260318b');
             createCameraWindow(state.currentUser.id, state.localStream, 'You', true);
           }
         }
@@ -377,7 +377,7 @@ export function switchRoom(roomId) {
         /* Only close if still away from the Events room and camera is still for that room */
         if (state.activeRoom !== previousRoomId && state.cameraRoom === previousRoomId) {
           console.log('[Events Room] User away > 1 min — closing camera');
-          const { closeCameraWindow } = await import('./camera.js?v=20260318');
+          const { closeCameraWindow } = await import('./camera.js?v=20260318b');
           closeCameraWindow(state.currentUser.id);
         }
       }, 60000);
@@ -446,7 +446,7 @@ export function switchRoom(roomId) {
     if (room) {
       const requestEventsRoomCams = async (label) => {
         if (state.activeRoom !== roomIdStr) return;
-        const { requestPublicCamera } = await import('./camera.js?v=20260318');
+        const { requestPublicCamera } = await import('./camera.js?v=20260318b');
         const allUsers = Object.values(room.users);
         const usersWithCam = allUsers.filter(user =>
           user.hasCamera && user.online && String(user.id) !== String(state.currentUser?.id)

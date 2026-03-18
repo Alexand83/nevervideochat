@@ -13,7 +13,7 @@ import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomT
 import { renderUsers, setOpenContextMenu } from './users.js';
 import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js';
 import { setPChatDeps } from './private-chat.js';
-import { initCameraSystem, initCallControls } from './camera.js?v=20260318';
+import { initCameraSystem, initCallControls } from './camera.js?v=20260318b';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initDictation, initContextMenu, openContextMenu,
          initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js';
@@ -89,7 +89,7 @@ async function init() {
       if (state.cameraWindows) {
         for (const uid of Object.keys(state.cameraWindows)) {
           if (String(uid) !== String(state.currentUser?.id)) {
-            const { closeCameraWindow } = await import('./camera.js?v=20260318');
+            const { closeCameraWindow } = await import('./camera.js?v=20260318b');
             await closeCameraWindow(uid).catch(() => {});
           }
         }
