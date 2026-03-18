@@ -32,6 +32,25 @@ async function getIceConfig() {
   const now = Date.now();
   if (_iceConfigCache && (now - _iceConfigFetchedAt) < ICE_CONFIG_TTL_MS) return _iceConfigCache;
   try {
+    /* 1) Prefer endpoint sicuro (/api/ice) che genera credenziali TURN via Metered API (server-side). */
+    try {
+      const r = await fetch('/api/ice', { method: 'GET', credentials: 'omit' });
+      if (r && r.ok) {
+        const data = await r.json().catch(() => null);
+        if (data && Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+          _iceConfigCache = {
+            iceServers:           data.iceServers,
+            iceCandidatePoolSize: data.iceCandidatePoolSize ?? 10,
+            bundlePolicy:         data.bundlePolicy         ?? 'max-bundle',
+            rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
+          };
+          _iceConfigFetchedAt = now;
+          return _iceConfigCache;
+        }
+      }
+    } catch (_) { /* ignore, fallback below */ }
+
+    /* 2) Fallback: Firestore config/ice_servers (static). */
     const snap = await state.fb?.firestore.collection('config').doc('ice_servers').get();
     if (snap?.exists) {
       const data = snap.data();
