@@ -48,7 +48,7 @@ export const ICE_SERVERS_FALLBACK = {
  * Set this to your Cloudflare Worker URL (e.g. "https://nvc-ice.<user>.workers.dev/ice").
  * If empty, the app will fall back to Firebase Function URL (if available) and then Firestore.
  */
-export const ICE_ENDPOINT_URL = '';
+export const ICE_ENDPOINT_URL = 'https://nvc-ice-proxy.tmalex.workers.dev/ice';
 
 export const EMOJI_CATEGORIES = {
   '😊': ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'],
