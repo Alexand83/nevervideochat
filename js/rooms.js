@@ -5,8 +5,8 @@ import { DEFAULT_ROOM_ID } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast, escHtml } from './utils.js';
-import { addSystemMessage } from './chat.js';
-import { syncPresence, updateOwnPresence, renderUsers, findUser } from './users.js';
+import { addSystemMessage } from './chat.js?v=20260453';
+import { syncPresence, updateOwnPresence, renderUsers, findUser } from './users.js?v=20260453';
 import { createPresenceChannel } from './firebase-client.js';
 
 /* Forward refs set by main.js */

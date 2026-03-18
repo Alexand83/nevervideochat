@@ -122,10 +122,14 @@ export function renderUsers() {
     if (safeUrl) {
       av.classList.add('has-photo');
       av.style.cssText = `background-image:url(${safeUrl});background-size:cover;background-position:center;background-color:transparent`;
+      av.dataset.avatarUrl = safeUrl;
     } else {
       av.style.backgroundColor = avatarColor(displayName);
       av.textContent = initials(displayName);
+      av.dataset.avatarColor = av.style.backgroundColor;
+      av.dataset.avatarInitial = av.textContent;
     }
+    av.dataset.avatarName = displayName;
     const dot = document.createElement('span');
     dot.className = `status-dot${user.online ? '' : ' offline'}`;
     av.appendChild(dot);

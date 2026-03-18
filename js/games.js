@@ -4,7 +4,7 @@
 import { state } from './state.js';
 import { dom } from './dom.js';
 import { showToast, escHtml, avatarColor, initials } from './utils.js';
-import { findUser } from './users.js';
+import { findUser } from './users.js?v=20260453';
 import { broadcastAll } from './broadcast.js';
 import { getAvailableRooms } from './rooms.js';
 

@@ -5,8 +5,8 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast, playNotificationSound } from './utils.js';
-import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js';
-import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js';
+import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js?v=20260453';
+import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js?v=20260453';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
          closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318b';

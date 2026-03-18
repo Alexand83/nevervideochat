@@ -12,16 +12,16 @@
   justify-content: center;
   z-index: 1200;
   padding: var(--s4);
-  backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   /* shown/hidden via hidden attr — [hidden] wins */
 }
 
 /* ── Login: sfondo dedicato con gradient e scritta NeverVideoChat ── */
 #authModal.nvc-modal-backdrop {
   background: linear-gradient(145deg, #0d1117 0%, #161b22 35%, #1c2128 50%, #21262d 100%);
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 #authModal.nvc-modal-backdrop::before {
   content: 'NeverVideoChat';
@@ -35,6 +35,7 @@
   letter-spacing: 0.02em;
   white-space: nowrap;
   pointer-events: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 #authModal .nvc-modal.auth-modal {
@@ -84,6 +85,67 @@
   flex-shrink: 0;
 }
 .nvc-modal-close-btn:hover { background: var(--bg3); color: var(--tx0); }
+
+/* ── Avatar lightbox (enlarge avatar) ─────────────────────────── */
+.avatar-lightbox-backdrop {
+  z-index: 2000; /* above camera windows + context menu */
+}
+.avatar-lightbox {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: var(--r4);
+  box-shadow: var(--sh-xl);
+  overflow: hidden;
+  animation: nvc-modal-in 0.18s ease;
+}
+.avatar-lightbox-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg2), var(--bg1));
+}
+.avatar-lightbox-name {
+  font-weight: 800;
+  font-size: var(--fz-sm);
+  color: var(--tx0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.avatar-lightbox-media {
+  padding: var(--s4);
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.32);
+}
+.avatar-lightbox-img {
+  display: block;
+  width: min(680px, 96vw);
+  height: auto;
+  max-height: calc(100vh - 140px);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  background: #000;
+  object-fit: cover;
+}
+.avatar-lightbox-placeholder {
+  width: min(340px, 78vw);
+  aspect-ratio: 1 / 1;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  font-size: 92px;
+  font-weight: 900;
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.08);
+  -webkit-user-select: none;
+  user-select: none;
+}
 
 /* ── Shared form controls ── */
 .auth-field {

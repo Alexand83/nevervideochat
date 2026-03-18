@@ -5,13 +5,13 @@ import { EMOJI_CATEGORIES }  from './config.js';
 import { state }             from './state.js';
 import { dom }               from './dom.js';
 import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js';
-import { findUser, checkIsMuted, renderUsers } from './users.js';
+import { findUser, checkIsMuted, renderUsers } from './users.js?v=20260453';
 import { addIgnoredUser, removeIgnoredUser, loadDeviceSettings, saveDeviceSettings } from './storage.js';
 import { broadcast }         from './broadcast.js';
 import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260318b';
 import { openPrivateChat, closePChat } from './private-chat.js';
-import { sendMessage, clearReplyTo, addSystemMessage }  from './chat.js';
-import { sendTypingEvent } from './users.js';
+import { sendMessage, clearReplyTo, addSystemMessage }  from './chat.js?v=20260453';
+import { sendTypingEvent } from './users.js?v=20260453';
 import { joinRoom, getAvailableRooms } from './rooms.js';
 import { hasPermission } from './permissions.js';
 
@@ -19,6 +19,136 @@ import { hasPermission } from './permissions.js';
 let _uploadToStorage = null;
 let _supabaseReady   = null;
 export function setUIDeps(upload, supaReady) { _uploadToStorage = upload; _supabaseReady = supaReady; }
+
+/* ── Avatar lightbox (enlarge avatar image) ────────────────────── */
+let _avatarLbBackdrop = null;
+let _avatarLbMedia = null;
+let _avatarLbName = null;
+let _avatarLbCloseBtn = null;
+let _avatarLbOpen = false;
+let _prevBodyOverflow = '';
+
+function _ensureAvatarLightbox() {
+  if (_avatarLbBackdrop) return;
+  const backdrop = document.createElement('div');
+  backdrop.id = 'avatarLightbox';
+  backdrop.className = 'nvc-modal-backdrop avatar-lightbox-backdrop';
+  backdrop.hidden = true;
+  backdrop.setAttribute('role', 'dialog');
+  backdrop.setAttribute('aria-modal', 'true');
+  backdrop.innerHTML = `
+    <div class="avatar-lightbox" role="document">
+      <div class="avatar-lightbox-hdr">
+        <div class="avatar-lightbox-name" id="avatarLightboxName"></div>
+        <button class="nvc-modal-close-btn avatar-lightbox-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="avatar-lightbox-media" id="avatarLightboxMedia"></div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  _avatarLbBackdrop = backdrop;
+  _avatarLbMedia = backdrop.querySelector('#avatarLightboxMedia');
+  _avatarLbName = backdrop.querySelector('#avatarLightboxName');
+  _avatarLbCloseBtn = backdrop.querySelector('.avatar-lightbox-close');
+
+  _avatarLbCloseBtn.addEventListener('click', () => closeAvatarLightbox());
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeAvatarLightbox();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && _avatarLbOpen) closeAvatarLightbox();
+  });
+}
+
+function _parseBgUrl(bgImage) {
+  const s = String(bgImage || '').trim();
+  if (!s || s === 'none') return null;
+  const m = s.match(/url\((['"]?)(.*?)\1\)/i);
+  return m?.[2] || null;
+}
+
+function _getAvatarInfoFromElement(el) {
+  if (!el) return null;
+  const name =
+    el.getAttribute('data-avatar-name') ||
+    el.getAttribute('title') ||
+    el.closest('.user-item')?.querySelector('.user-item-name')?.textContent ||
+    el.closest('.msg-group')?.querySelector('.msg-sender')?.textContent ||
+    '';
+
+  const url =
+    el.getAttribute('data-avatar-url') ||
+    el.dataset?.avatarUrl ||
+    _parseBgUrl(el.style?.backgroundImage) ||
+    _parseBgUrl(getComputedStyle(el).backgroundImage);
+
+  const initial = (el.getAttribute('data-avatar-initial') || el.textContent || '').trim().slice(0, 2);
+  const color =
+    el.getAttribute('data-avatar-color') ||
+    el.style?.backgroundColor ||
+    getComputedStyle(el).backgroundColor ||
+    '#111';
+
+  return { name, url, initial, color };
+}
+
+export function openAvatarLightbox({ name = '', url = null, initial = '', color = '#111' } = {}) {
+  _ensureAvatarLightbox();
+  if (!_avatarLbBackdrop || !_avatarLbMedia) return;
+
+  _avatarLbMedia.innerHTML = '';
+  _avatarLbName.textContent = (name || 'Avatar').trim();
+
+  if (url) {
+    const img = document.createElement('img');
+    img.className = 'avatar-lightbox-img';
+    img.alt = (name || 'Avatar').trim();
+    img.src = url;
+    img.loading = 'eager';
+    _avatarLbMedia.appendChild(img);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'avatar-lightbox-placeholder';
+    ph.style.background = color;
+    ph.textContent = (initial || '?').slice(0, 2).toUpperCase();
+    _avatarLbMedia.appendChild(ph);
+  }
+
+  _prevBodyOverflow = document.body.style.overflow || '';
+  document.body.style.overflow = 'hidden';
+  _avatarLbBackdrop.hidden = false;
+  _avatarLbOpen = true;
+}
+
+export function closeAvatarLightbox() {
+  if (!_avatarLbBackdrop) return;
+  _avatarLbBackdrop.hidden = true;
+  _avatarLbOpen = false;
+  document.body.style.overflow = _prevBodyOverflow;
+}
+
+export function initAvatarLightbox() {
+  _ensureAvatarLightbox();
+  /* Capture phase to win against existing click handlers (context menu). */
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!t || !(t instanceof Element)) return;
+    const av = t.closest(
+      '.msg-avatar, .user-item-avatar, .pchat-avatar, .cam-win-avatar, ' +
+      '#headerAvatarChip, .hdr-avatar-chip, ' +
+      '#profileAvatarDisplay, .profile-avatar, #profileAvatarChangeBtn'
+    );
+    if (!av) return;
+    const info = _getAvatarInfoFromElement(av);
+    if (!info) return;
+    /* If it's an avatar without photo and without initial, skip. */
+    if (!info.url && !info.initial) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    openAvatarLightbox(info);
+  }, true);
+}
 
 /* ── Rich-text toolbar ─────────────────────────────────────────── */
 /** Applica colore/grandezza/grassetto da settings a state e alla toolbar (chiamata da main/auth dopo load settings). */

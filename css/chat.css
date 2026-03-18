@@ -25,7 +25,7 @@
   flex-direction: column;
   gap: 6px;
   scroll-behavior: smooth;
-  background: linear-gradient(180deg, var(--bg0) 0%, #0a0e14 50%, var(--bg0) 100%);
+  background: var(--bg0);
 }
 
 /* Welcome banner */
@@ -45,7 +45,8 @@
   align-items: center;
   gap: 8px;
   padding: 2px 0;
-  animation: msgIn .25s ease;
+  /* Versione più lineare e meno costosa su device vecchi */
+  animation: none;
   transform-origin: left center;
 }
 
@@ -59,6 +60,7 @@
   font-weight: 600;
   text-align: center;
   animation: msgIn .3s ease;
+  -webkit-user-select: none;
   user-select: none;
   pointer-events: none;
   border-radius: 20px;
@@ -85,7 +87,13 @@
 .msg-group:nth-child(5n+3) { transform: rotate(-0.25deg); }
 .msg-group:nth-child(5n+4) { transform: rotate(0.5deg); }
 .msg-group:nth-child(5n)   { transform: rotate(-0.15deg); }
-.msg-group:hover { transform: rotate(0deg) scale(1.002); }
+/* Niente rotazioni per grafica più pulita */
+.msg-group:nth-child(5n+1),
+.msg-group:nth-child(5n+2),
+.msg-group:nth-child(5n+3),
+.msg-group:nth-child(5n+4),
+.msg-group:nth-child(5n) { transform: none; }
+.msg-group:hover { transform: none; }
 
 @keyframes msgIn {
   from { opacity: 0; }
@@ -104,6 +112,7 @@
   color: #fff;
   flex-shrink: 0;
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   transition: opacity var(--tf), transform var(--tf);
   box-shadow: 0 0 0 1px rgba(255,255,255,.08);
@@ -163,7 +172,8 @@
   max-width: 100%;
   box-sizing: border-box;
   letter-spacing: 0.01em;
-  background: var(--bg1);
+  background: transparent;
+  box-shadow: none;
 }
 .msg-bubble .msg-quote {
   flex-basis: 100%;
@@ -172,54 +182,54 @@
 /* Palette a rotazione: cyan → coral → lime → violet → amber */
 .msg-group:nth-child(5n+1) .msg-bubble {
   border-left-color: #22d3ee;
-  box-shadow: -2px 0 12px rgba(34, 211, 238, .15), inset 0 0 0 1px rgba(255,255,255,.03);
-  background: linear-gradient(90deg, rgba(34, 211, 238, .06) 0%, var(--bg1) 24px);
+  box-shadow: none;
+  background: transparent;
 }
 .msg-group:nth-child(5n+2) .msg-bubble {
   border-left-color: #fb7185;
-  box-shadow: -2px 0 12px rgba(251, 113, 133, .15), inset 0 0 0 1px rgba(255,255,255,.03);
-  background: linear-gradient(90deg, rgba(251, 113, 133, .06) 0%, var(--bg1) 24px);
+  box-shadow: none;
+  background: transparent;
 }
 .msg-group:nth-child(5n+3) .msg-bubble {
   border-left-color: #4ade80;
-  box-shadow: -2px 0 12px rgba(74, 222, 128, .15), inset 0 0 0 1px rgba(255,255,255,.03);
-  background: linear-gradient(90deg, rgba(74, 222, 128, .06) 0%, var(--bg1) 24px);
+  box-shadow: none;
+  background: transparent;
 }
 .msg-group:nth-child(5n+4) .msg-bubble {
   border-left-color: #a78bfa;
-  box-shadow: -2px 0 12px rgba(167, 139, 250, .15), inset 0 0 0 1px rgba(255,255,255,.03);
-  background: linear-gradient(90deg, rgba(167, 139, 250, .06) 0%, var(--bg1) 24px);
+  box-shadow: none;
+  background: transparent;
 }
 .msg-group:nth-child(5n) .msg-bubble {
   border-left-color: #fbbf24;
-  box-shadow: -2px 0 12px rgba(251, 191, 36, .15), inset 0 0 0 1px rgba(255,255,255,.03);
-  background: linear-gradient(90deg, rgba(251, 191, 36, .06) 0%, var(--bg1) 24px);
+  box-shadow: none;
+  background: transparent;
 }
 /* Messaggi propri: bordo più marcato + sfondo leggermente accent */
 .msg-group.own:nth-child(5n+1) .msg-bubble {
   border-left-color: #67e8f9;
-  box-shadow: 2px 0 14px rgba(34, 211, 238, .25), inset 0 0 0 1px rgba(255,255,255,.05);
-  background: linear-gradient(90deg, rgba(34, 211, 238, .12) 0%, var(--bg2) 28px);
+  box-shadow: none;
+  background: transparent;
 }
 .msg-group.own:nth-child(5n+2) .msg-bubble {
   border-left-color: #fda4af;
-  box-shadow: 2px 0 14px rgba(251, 113, 133, .25), inset 0 0 0 1px rgba(255,255,255,.05);
-  background: linear-gradient(90deg, rgba(251, 113, 133, .12) 0%, var(--bg2) 28px);
+  box-shadow: none;
+  background: transparent;
 }
 .msg-group.own:nth-child(5n+3) .msg-bubble {
   border-left-color: #86efac;
-  box-shadow: 2px 0 14px rgba(74, 222, 128, .25), inset 0 0 0 1px rgba(255,255,255,.05);
-  background: linear-gradient(90deg, rgba(74, 222, 128, .12) 0%, var(--bg2) 28px);
+  box-shadow: none;
+  background: transparent;
 }
 .msg-group.own:nth-child(5n+4) .msg-bubble {
   border-left-color: #c4b5fd;
-  box-shadow: 2px 0 14px rgba(167, 139, 250, .25), inset 0 0 0 1px rgba(255,255,255,.05);
-  background: linear-gradient(90deg, rgba(167, 139, 250, .12) 0%, var(--bg2) 28px);
+  box-shadow: none;
+  background: transparent;
 }
 .msg-group.own:nth-child(5n) .msg-bubble {
   border-left-color: #fde047;
-  box-shadow: 2px 0 14px rgba(251, 191, 36, .25), inset 0 0 0 1px rgba(255,255,255,.05);
-  background: linear-gradient(90deg, rgba(251, 191, 36, .12) 0%, var(--bg2) 28px);
+  box-shadow: none;
+  background: transparent;
 }
 
 /* Quote / Reply block dentro il bubble */
@@ -229,7 +239,7 @@
   gap: 1px;
   padding: 3px 6px;
   margin-bottom: 3px;
-  background: var(--bg0);
+  background: transparent;
   border-left: 2px solid var(--accent);
   border-radius: 0;
   font-size: 11px;
@@ -1036,6 +1046,7 @@
   font-size: 19px;
   border-radius: var(--r1);
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   transition: background var(--tf), transform var(--tf);
 }
@@ -1094,6 +1105,7 @@
   font-weight: 600;
   text-align: center;
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   transition: background var(--tf);
 }
@@ -1112,6 +1124,7 @@
   font-size: var(--fz-xs);
   border-radius: var(--r1);
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   transition: background var(--tf);
 }

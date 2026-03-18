@@ -10,13 +10,13 @@ import { initFirebaseClient, connectFirebase, connectRoom } from './firebase-cli
 import { applyAuthIdentity, getOrCreateGuestIdentity,
          initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser, loadUserSettingsFromProfile } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
-import { renderUsers, setOpenContextMenu } from './users.js';
-import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js';
+import { renderUsers, setOpenContextMenu } from './users.js?v=20260453';
+import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js?v=20260453';
 import { setPChatDeps } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js?v=20260318b';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
-         initVoiceRecording, initDictation, initContextMenu, openContextMenu,
-         initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js';
+         initVoiceRecording, initDictation, initAvatarLightbox, initContextMenu, openContextMenu,
+         initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js?v=20260453';
 import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
 import { initGames, handleGameCommand } from './games.js';
@@ -110,6 +110,7 @@ async function init() {
   /* 1. Init UI subsystems */
   initToolbar(); initImageAttach(); initEmojiPicker(); initVoiceRecording(); initDictation();
   initMentionDropdown();
+  initAvatarLightbox();
   initContextMenu(); initCameraSystem(); initCallControls();
   initMobilePanel(); initPanelResize();
   initAuthModal(); initProfileModal(); initSettingsModal();

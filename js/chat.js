@@ -4,7 +4,7 @@
 import { state }          from './state.js';
 import { dom }            from './dom.js';
 import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml, safeAvatarUrl } from './utils.js';
-import { findUser, ensureUser, stopTyping } from './users.js';
+import { findUser, ensureUser, stopTyping } from './users.js?v=20260453';
 import { hasPermission } from './permissions.js';
 
 /* Forward refs — set by main.js to avoid circular deps */
@@ -142,10 +142,15 @@ export function renderMessage(msg) {
     avatar.style.backgroundImage    = `url(${safeUrl})`;
     avatar.style.backgroundSize     = 'cover';
     avatar.style.backgroundPosition = 'center';
+    avatar.dataset.avatarUrl = safeUrl;
   } else {
     avatar.style.background = color; avatar.textContent = init;
+    avatar.dataset.avatarColor = color;
+    avatar.dataset.avatarInitial = init;
   }
-  if (!isMine && _openContextMenu) avatar.addEventListener('click', () => _openContextMenu(msg.userId, avatar));
+  avatar.dataset.avatarName = displayName;
+  /* Context menu on right-click / long-press gesture; single tap/click reserved for avatar enlarge. */
+  if (!isMine && _openContextMenu) avatar.addEventListener('contextmenu', (e) => { e.preventDefault(); _openContextMenu(msg.userId, avatar); });
 
   const content = document.createElement('div');
   content.className = 'msg-content';
