@@ -390,6 +390,21 @@ export function setReplyTo(userId, name, html) {
     t.innerHTML = processHtml(html || '');
     return (t.textContent || '').slice(0, 80);
   })();
+
+  /* UX: when user clicks "Reply", focus the message composer immediately. */
+  try {
+    if (dom.msgInput) {
+      dom.msgInput.focus();
+      const sel = window.getSelection?.();
+      if (sel && sel.rangeCount) sel.removeAllRanges();
+      const range = document.createRange?.();
+      if (range) {
+        range.selectNodeContents(dom.msgInput);
+        range.collapse(false); /* caret at end */
+        sel?.addRange(range);
+      }
+    }
+  } catch (_) {}
 }
 export function clearReplyTo() {
   state.replyTo = null;

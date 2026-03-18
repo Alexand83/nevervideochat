@@ -161,7 +161,8 @@
   padding: 5px 10px 5px 12px;
   border-radius: 0 10px 10px 0;
   border: none;
-  border-left: 4px solid;
+  /* Minimal left marker (no colorful vertical stripe) */
+  border-left: 2px solid var(--border-subtle);
   word-break: break-word;
   overflow-wrap: anywhere;
   line-height: 1.4;
@@ -174,6 +175,8 @@
   letter-spacing: 0.01em;
   background: transparent;
   box-shadow: none;
+  /* Override palette rules that set a colorful border-left-color */
+  border-left-color: var(--border-subtle) !important;
 }
 .msg-bubble .msg-quote {
   flex-basis: 100%;
@@ -240,7 +243,8 @@
   padding: 3px 6px;
   margin-bottom: 3px;
   background: transparent;
-  border-left: 2px solid var(--accent);
+  /* Subtle quote marker (keeps quote understandable, but not colorful) */
+  border-left: 2px solid var(--border-subtle);
   border-radius: 0;
   font-size: 11px;
 }
