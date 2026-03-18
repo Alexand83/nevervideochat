@@ -20,6 +20,7 @@ import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
 import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
 import { initGames, handleGameCommand } from './games.js';
+import { initDebugOverlay } from './debug-overlay.js';
 
 /* ── Wire cross-module forward references ── */
 setOpenContextMenu(openContextMenu);   /* users.js → context menu */
@@ -63,6 +64,8 @@ function filterCookieWarnings() {
 async function init() {
   /* Filtra warning cookie prima di inizializzare */
   filterCookieWarnings();
+  /* Debug overlay (enable via ?debug=1) */
+  initDebugOverlay();
 
   /* Versione in header vicino al logo */
   const appVersionEl = document.getElementById('appVersion');
