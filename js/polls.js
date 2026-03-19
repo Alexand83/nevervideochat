@@ -45,6 +45,8 @@ function _toMillis(ts) {
 function _setPanelVisible(visible) {
   if (!dom.pollsPanel) return;
   dom.pollsPanel.hidden = !visible;
+  // Keep CSS class in sync; panel starts with class="hidden" in HTML.
+  dom.pollsPanel.classList.toggle('hidden', !visible);
 }
 
 function _renderEmpty() {
@@ -180,22 +182,38 @@ async function _subscribePollWidget() {
   const query = col
     .where('scope', '==', scope)
     .orderBy('expires_at', 'desc')
-    .limit(1);
+    .limit(20);
 
   _unsubPoll = query.onSnapshot(
     (snap) => {
-      const doc = snap.docs?.[0] || null;
-      if (!doc) {
+      const docs = snap.docs || [];
+      if (!docs.length) {
         _renderEmpty();
         return;
       }
 
-      const poll = { id: doc.id, ...doc.data() };
-      if (_pollShouldHideNow(poll)) {
+      // Pick the first poll that is actually displayable in the widget.
+      // This avoids "empty widget" when the latest poll is disabled/cancelled.
+      let selected = null;
+      for (const d of docs) {
+        const p = { id: d.id, ...d.data() };
+        if (_pollShouldHideNow(p)) continue;
+        if (p.cancelled_at) continue;
+        const expMs = _toMillis(p.expires_at);
+        const ended = expMs != null ? expMs <= Date.now() : false;
+        const resultsVisible = _pollShouldShowResults(p);
+        if (resultsVisible || ended || p.is_active === true) {
+          selected = { doc: d, poll: p };
+          break;
+        }
+      }
+
+      if (!selected) {
         _renderEmpty();
         return;
       }
 
+      const { doc, poll } = selected;
       _currentPollId = doc.id;
       const options = _extractOptionsArray(poll);
 
@@ -388,19 +406,30 @@ async function _createOrUpdatePollFromForm(editPollId = null) {
 
   try {
   const question = (_getAdminEl('pollQuestion')?.value || '').trim().substring(0, 300);
+  const optionsRaw = (_getAdminEl('pollOptions')?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const scopeType = _getAdminEl('pollScopeType')?.value || 'room';
+  const roomChoice = _getAdminEl('pollRoomId')?.value || '';
+  const durationRaw = parseInt(_getAdminEl('pollDurationMin')?.value, 10);
+
   if (!question) {
-    showToast('⚠️ Poll question is required.');
+    showToast('⚠️ Inserisci la domanda del sondaggio.');
     return;
   }
-
-  const optionsRaw = (_getAdminEl('pollOptions')?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
   if (optionsRaw.length < 2) {
-    showToast('⚠️ Provide at least 2 options (one per line).');
+    showToast('⚠️ Inserisci almeno 2 opzioni (una per riga).');
+    return;
+  }
+  if (!Number.isFinite(durationRaw) || durationRaw < 1) {
+    showToast('⚠️ Inserisci una durata valida in minuti (minimo 1).');
+    return;
+  }
+  if (scopeType === 'room' && !roomChoice && !_getAdminEl('pollRoomId')?.disabled) {
+    showToast('⚠️ Seleziona una stanza per il sondaggio.');
     return;
   }
   const options = optionsRaw.slice(0, 8).map((t, i) => ({ id: `o${i + 1}`, text: t.substring(0, 120) }));
 
-  const durationMin = Math.max(1, Math.min(10080, parseInt(_getAdminEl('pollDurationMin')?.value, 10) || 1));
+  const durationMin = Math.max(1, Math.min(10080, durationRaw || 1));
   const expiresAt = new Date(Date.now() + durationMin * 60 * 1000);
 
   const { scope, scope_type, scope_id } = _pollScopeFromAdmin();
@@ -522,7 +551,46 @@ async function loadPollsAdminList() {
     return;
   }
 
+  const available = [];
+  const autoClosed = [];
+  const others = [];
+  const now = Date.now();
+
   polls.forEach((p) => {
+    const expMs = _toMillis(p.expires_at);
+    const ended = expMs != null ? expMs <= now : false;
+    if (p.cancelled_at) {
+      others.push(p);
+      return;
+    }
+    if (ended) {
+      autoClosed.push(p);
+      return;
+    }
+    if (p.is_active === true) {
+      available.push(p);
+      return;
+    }
+    others.push(p);
+  });
+
+  const renderSection = (title, items) => {
+    const section = document.createElement('div');
+    section.className = 'admin-list-section';
+    const hdr = document.createElement('h4');
+    hdr.style.margin = '10px 0 8px 0';
+    hdr.textContent = `${title} (${items.length})`;
+    section.appendChild(hdr);
+    if (!items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'admin-empty';
+      empty.textContent = '—';
+      section.appendChild(empty);
+      listEl.appendChild(section);
+      return;
+    }
+
+    items.forEach((p) => {
     const expMs = _toMillis(p.expires_at);
     const isEnded = expMs != null ? expMs <= Date.now() : false;
     const status = p.cancelled_at ? 'Cancelled' : (p.is_active ? (isEnded ? 'Ended' : 'Active') : 'Disabled');
@@ -559,8 +627,14 @@ async function loadPollsAdminList() {
       await loadPollsAdminList();
     });
 
-    listEl.appendChild(item);
-  });
+      section.appendChild(item);
+    });
+    listEl.appendChild(section);
+  };
+
+  renderSection('Disponibili', available);
+  renderSection('Chiusi automaticamente', autoClosed);
+  renderSection('Altri (disabilitati/cancellati)', others);
 }
 
 export async function loadPollsAdmin() {
