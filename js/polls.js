@@ -200,7 +200,7 @@ async function _subscribePollWidget() {
     (snap) => {
       const docs = snap.docs || [];
       if (!docs.length) {
-        _renderScopeEmpty();
+        _renderEmpty();
         return;
       }
 
@@ -221,7 +221,9 @@ async function _subscribePollWidget() {
       }
 
       if (!selected) {
-        _renderScopeEmpty();
+        // All recent polls are outside visibility window (expired+5m/cancelled/disabled):
+        // hide the column and restore normal layout.
+        _renderEmpty();
         return;
       }
 

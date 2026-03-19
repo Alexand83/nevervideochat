@@ -135,7 +135,33 @@
 }
 
 @media (max-width: 768px) {
-  .polls-panel { display: none !important; }
+  .polls-panel {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.08));
+  }
+  .polls-panel.hidden {
+    display: none;
+  }
+  .polls-hdr {
+    padding: 8px 10px;
+  }
+  .polls-title {
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+  .polls-widget {
+    max-height: 170px;
+    padding: 10px;
+    gap: 8px;
+  }
+  .polls-option-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
 }
 
 /* Messages container — sfondo tipo "nastro" */

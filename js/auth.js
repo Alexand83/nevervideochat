@@ -274,9 +274,7 @@ export function initAuthModal() {
 
   dom.guestContinueBtn?.addEventListener('click', async () => {
     if (!state.fb?.auth?.signInAnonymously) {
-      state.currentUser = getOrCreateGuestIdentity();
-      dom.authModal.hidden = true;
-      _finishInit?.();
+      showAuthError('loginError', 'Guest login non disponibile al momento. Riprova tra poco.');
       return;
     }
     const btn = dom.guestContinueBtn;
@@ -297,10 +295,9 @@ export function initAuthModal() {
       dom.authModal.hidden = true;
       _finishInit?.();
     } catch (err) {
-      console.warn('[Auth] Guest sign-in failed, using local identity:', err.message || err);
-      state.currentUser = getOrCreateGuestIdentity();
-      dom.authModal.hidden = true;
-      _finishInit?.();
+      console.warn('[Auth] Guest sign-in failed:', err.message || err);
+      showAuthError('loginError', 'Impossibile entrare come ospite ora. Controlla connessione/browser e riprova.');
+      showToast('⚠️ Guest login fallito: autenticazione richiesta per chat/presenza.');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = btn.dataset.origText || 'Continue as Guest'; }
     }
