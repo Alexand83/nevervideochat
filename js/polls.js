@@ -724,7 +724,7 @@ async function _submitVote(optionId) {
       return;
     }
 
-    await voteRef.create({
+    await voteRef.set({
       option_id: String(optionId),
       voted_at: new Date(),
     });
