@@ -148,6 +148,7 @@ export function renderMessage(msg) {
     avatar.dataset.avatarColor = color;
     avatar.dataset.avatarInitial = init;
   }
+  avatar.dataset.avatarUserId = String(msg.userId || '');
   avatar.dataset.avatarName = displayName;
   /* Context menu on right-click / long-press gesture; single tap/click reserved for avatar enlarge. */
   if (!isMine && _openContextMenu) avatar.addEventListener('contextmenu', (e) => { e.preventDefault(); _openContextMenu(msg.userId, avatar); });

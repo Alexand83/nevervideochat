@@ -146,6 +146,39 @@
   -webkit-user-select: none;
   user-select: none;
 }
+.avatar-lightbox-details {
+  display: grid;
+  gap: 6px;
+  padding: 0 var(--s4) var(--s3);
+}
+.avatar-lightbox-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  font-size: var(--fz-sm);
+}
+.avatar-lightbox-k {
+  color: var(--tx2);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.avatar-lightbox-v {
+  color: var(--tx0);
+  font-weight: 700;
+  text-align: right;
+}
+.avatar-lightbox-actions {
+  padding: 0 var(--s4) var(--s4);
+  display: grid;
+  gap: var(--s2);
+}
+.avatar-lightbox-profile-btn {
+  width: 100%;
+}
+.avatar-lightbox-pm-btn,
+.avatar-lightbox-menu-btn {
+  width: 100%;
+}
 
 /* ── Shared form controls ── */
 .auth-field {

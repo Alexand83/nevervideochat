@@ -129,6 +129,7 @@ export function renderUsers() {
       av.dataset.avatarColor = av.style.backgroundColor;
       av.dataset.avatarInitial = av.textContent;
     }
+    av.dataset.avatarUserId = String(user.id || '');
     av.dataset.avatarName = displayName;
     const dot = document.createElement('span');
     dot.className = `status-dot${user.online ? '' : ' offline'}`;

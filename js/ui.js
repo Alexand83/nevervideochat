@@ -25,6 +25,12 @@ let _avatarLbBackdrop = null;
 let _avatarLbMedia = null;
 let _avatarLbName = null;
 let _avatarLbCloseBtn = null;
+let _avatarLbDetails = null;
+let _avatarLbProfileBtn = null;
+let _avatarLbPmBtn = null;
+let _avatarLbMenuBtn = null;
+let _avatarLbActiveUserId = null;
+let _avatarLbAnchorEl = null;
 let _avatarLbOpen = false;
 let _prevBodyOverflow = '';
 
@@ -43,15 +49,47 @@ function _ensureAvatarLightbox() {
         <button class="nvc-modal-close-btn avatar-lightbox-close" type="button" aria-label="Close">✕</button>
       </div>
       <div class="avatar-lightbox-media" id="avatarLightboxMedia"></div>
+      <div class="avatar-lightbox-details" id="avatarLightboxDetails"></div>
+      <div class="avatar-lightbox-actions">
+        <button class="auth-btn-ghost avatar-lightbox-profile-btn" id="avatarLightboxProfileBtn" type="button" hidden>
+          Apri profilo
+        </button>
+        <button class="auth-btn-ghost avatar-lightbox-pm-btn" id="avatarLightboxPmBtn" type="button" hidden>
+          Apri chat privata
+        </button>
+        <button class="auth-btn-ghost avatar-lightbox-menu-btn" id="avatarLightboxMenuBtn" type="button" hidden>
+          Menu utente
+        </button>
+      </div>
     </div>
   `;
   document.body.appendChild(backdrop);
   _avatarLbBackdrop = backdrop;
   _avatarLbMedia = backdrop.querySelector('#avatarLightboxMedia');
   _avatarLbName = backdrop.querySelector('#avatarLightboxName');
+  _avatarLbDetails = backdrop.querySelector('#avatarLightboxDetails');
+  _avatarLbProfileBtn = backdrop.querySelector('#avatarLightboxProfileBtn');
+  _avatarLbPmBtn = backdrop.querySelector('#avatarLightboxPmBtn');
+  _avatarLbMenuBtn = backdrop.querySelector('#avatarLightboxMenuBtn');
   _avatarLbCloseBtn = backdrop.querySelector('.avatar-lightbox-close');
 
   _avatarLbCloseBtn.addEventListener('click', () => closeAvatarLightbox());
+  _avatarLbProfileBtn?.addEventListener('click', () => {
+    closeAvatarLightbox();
+    dom.headerProfileBtn?.click();
+  });
+  _avatarLbPmBtn?.addEventListener('click', () => {
+    const uid = _avatarLbActiveUserId;
+    if (!uid) return;
+    closeAvatarLightbox();
+    openPrivateChat(uid);
+  });
+  _avatarLbMenuBtn?.addEventListener('click', () => {
+    const uid = _avatarLbActiveUserId;
+    if (!uid || !_avatarLbAnchorEl) return;
+    closeAvatarLightbox();
+    openContextMenu(uid, _avatarLbAnchorEl);
+  });
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) closeAvatarLightbox();
   });
@@ -89,15 +127,51 @@ function _getAvatarInfoFromElement(el) {
     getComputedStyle(el).backgroundColor ||
     '#111';
 
-  return { name, url, initial, color };
+  const userId =
+    el.getAttribute('data-avatar-user-id') ||
+    el.dataset?.avatarUserId ||
+    el.closest('.user-item')?.dataset?.userId ||
+    null;
+
+  return { name, url, initial, color, userId: userId ? String(userId) : null };
 }
 
-export function openAvatarLightbox({ name = '', url = null, initial = '', color = '#111' } = {}) {
+function _deviceTypeLabel(deviceType) {
+  if (deviceType === 'mobile') return 'Mobile';
+  if (deviceType === 'tablet') return 'Tablet';
+  return 'Desktop';
+}
+
+function _buildAvatarDetails({ userId, fallbackName }) {
+  const me = state.currentUser || null;
+  const isMe = !!(me && userId && String(userId) === String(me.id));
+  const user = isMe ? me : (userId ? findUser(String(userId)) : null);
+  const role = user?.roleName || (user?.isGuest ? 'Guest' : 'Registered');
+  const status = user?.online === false ? 'Offline' : 'Online';
+  const device = _deviceTypeLabel(user?.deviceType);
+  const displayName = user?.name || user?.username || fallbackName || 'User';
+  const idLabel = userId ? String(userId).slice(0, 10) + (String(userId).length > 10 ? '…' : '') : 'n/a';
+
+  return {
+    isMe,
+    displayName,
+    rows: [
+      { k: 'Nome', v: displayName },
+      { k: 'Ruolo', v: role },
+      { k: 'Stato', v: status },
+      { k: 'Dispositivo', v: device },
+      { k: 'ID', v: idLabel },
+    ],
+  };
+}
+
+export function openAvatarLightbox({ name = '', url = null, initial = '', color = '#111', userId = null, anchorEl = null } = {}) {
   _ensureAvatarLightbox();
-  if (!_avatarLbBackdrop || !_avatarLbMedia) return;
+  if (!_avatarLbBackdrop || !_avatarLbMedia || !_avatarLbDetails) return;
 
   _avatarLbMedia.innerHTML = '';
-  _avatarLbName.textContent = (name || 'Avatar').trim();
+  const details = _buildAvatarDetails({ userId, fallbackName: name });
+  _avatarLbName.textContent = details.displayName;
 
   if (url) {
     const img = document.createElement('img');
@@ -114,6 +188,15 @@ export function openAvatarLightbox({ name = '', url = null, initial = '', color 
     _avatarLbMedia.appendChild(ph);
   }
 
+  _avatarLbDetails.innerHTML = details.rows
+    .map(r => `<div class="avatar-lightbox-row"><span class="avatar-lightbox-k">${escHtml(r.k)}</span><span class="avatar-lightbox-v">${escHtml(r.v)}</span></div>`)
+    .join('');
+  _avatarLbActiveUserId = details.isMe ? null : (userId ? String(userId) : null);
+  _avatarLbAnchorEl = anchorEl || null;
+  if (_avatarLbProfileBtn) _avatarLbProfileBtn.hidden = !details.isMe;
+  if (_avatarLbPmBtn) _avatarLbPmBtn.hidden = details.isMe || !_avatarLbActiveUserId;
+  if (_avatarLbMenuBtn) _avatarLbMenuBtn.hidden = details.isMe || !_avatarLbActiveUserId;
+
   _prevBodyOverflow = document.body.style.overflow || '';
   document.body.style.overflow = 'hidden';
   _avatarLbBackdrop.hidden = false;
@@ -124,6 +207,8 @@ export function closeAvatarLightbox() {
   if (!_avatarLbBackdrop) return;
   _avatarLbBackdrop.hidden = true;
   _avatarLbOpen = false;
+  _avatarLbActiveUserId = null;
+  _avatarLbAnchorEl = null;
   document.body.style.overflow = _prevBodyOverflow;
 }
 
@@ -133,11 +218,7 @@ export function initAvatarLightbox() {
   document.addEventListener('click', (e) => {
     const t = e.target;
     if (!t || !(t instanceof Element)) return;
-    const av = t.closest(
-      '.msg-avatar, .user-item-avatar, .pchat-avatar, .cam-win-avatar, ' +
-      '#headerAvatarChip, .hdr-avatar-chip, ' +
-      '#profileAvatarDisplay, .profile-avatar, #profileAvatarChangeBtn'
-    );
+    const av = t.closest('.msg-avatar, .user-item-avatar, .pchat-avatar, .cam-win-avatar');
     if (!av) return;
     const info = _getAvatarInfoFromElement(av);
     if (!info) return;
@@ -146,7 +227,7 @@ export function initAvatarLightbox() {
     e.preventDefault();
     e.stopPropagation();
     if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
-    openAvatarLightbox(info);
+    openAvatarLightbox({ ...info, anchorEl: av });
   }, true);
 }
 
