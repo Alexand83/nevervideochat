@@ -798,6 +798,10 @@
       <div class="admin-sidebar" role="navigation">
         <div class="admin-sidebar-section">
           <div class="admin-sidebar-title">Management</div>
+          <button class="admin-sidebar-item" data-tab="general" role="tab">
+            <span class="admin-sidebar-icon">⚙️</span>
+            <span class="admin-sidebar-label">General</span>
+          </button>
           <button class="admin-sidebar-item active" data-tab="rooms" role="tab">
             <span class="admin-sidebar-icon">🏠</span>
             <span class="admin-sidebar-label">Rooms</span>
@@ -859,6 +863,40 @@
 
       <!-- Admin Content Area -->
       <div class="admin-content">
+
+    <!-- General Admin Settings Tab -->
+    <div class="admin-tab-content" id="adminTabGeneral" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">General Settings</h3>
+        <div class="settings-section" style="max-width: 760px;">
+          <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="adminEnableAiModeration" style="width: auto;">
+            <span>🤖 Enable AI Moderation</span>
+          </label>
+          <p class="settings-hint">
+            When enabled, AI-based moderation checks can be applied to chat content. Only the owner can change these settings.
+          </p>
+          <div class="admin-general-mod-options" style="margin-top: 12px; padding-left: 4px;">
+            <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+              <input type="checkbox" id="adminModerateText" style="width: auto;">
+              <span>📝 Moderate text messages</span>
+            </label>
+            <p class="settings-hint" style="margin-top: 0; margin-bottom: 12px;">Block or flag offensive, hateful or inappropriate text.</p>
+            <label class="settings-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+              <input type="checkbox" id="adminModerateImages" style="width: auto;">
+              <span>🖼️ Moderate images</span>
+            </label>
+            <p class="settings-hint" style="margin-top: 0;">Detect explicit or pornographic images and block them from being sent.</p>
+          </div>
+          <div class="settings-actions">
+            <button class="auth-btn-primary" id="adminSaveGeneralBtn" type="button">💾 Save General Settings</button>
+          </div>
+          <p class="settings-hint" id="adminGeneralOwnerHint" hidden>
+            🔒 Only the owner can modify these options.
+          </p>
+        </div>
+      </div>
+    </div>
 
     <!-- Rooms Management Tab -->
     <div class="admin-tab-content active" id="adminTabRooms" role="tabpanel">

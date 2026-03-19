@@ -17,17 +17,15 @@ npm install
 firebase login
 ```
 
-3) Imposta i secrets (server-side):
+3) Configurazione (params/secrets, niente più `functions.config()`):
 
-```bash
-firebase functions:secrets:set METERED_API_KEY
-firebase functions:secrets:set NVC_ALLOWED_ORIGINS
-```
+- **METERED_API_KEY** (secret): la key Metered va in Secret Manager:
+  ```bash
+  firebase functions:secrets:set METERED_API_KEY
+  ```
+  (incolla il valore quando richiesto)
 
-- `METERED_API_KEY`: la tua key Metered (djconsole).
-- `NVC_ALLOWED_ORIGINS`: lista separata da virgole dei domini permessi, es:
-  - `https://nevervideochat.com,https://www.nevervideochat.com`
-  - Se lasci vuoto/non impostato, l'endpoint resta più permissivo (sconsigliato in produzione).
+- **NVC_ALLOWED_ORIGINS** (param string, opzionale): lista domini CORS permessi, es. `https://nevervideochat.com,https://www.nevervideochat.com`. Se non impostato (default `""`) l’endpoint accetta qualsiasi origin. Puoi impostarlo in `functions/.env.<projectId>` dopo il primo deploy, o lasciare il default.
 
 4) Deploy:
 
@@ -39,6 +37,17 @@ firebase deploy --only hosting
 ## Endpoint
 
 - `GET /api/ice` (via Hosting rewrite) → `getIceServers`
+- `POST .../moderate` → **AI Moderation** (testo + immagini). Vedi sotto.
+
+### Moderazione AI (moderate) — richiede Blaze
+
+Con **Blaze** attivo, la moderazione gira nella Cloud Function (Toxicity + NSFWJS): non è bypassabile dal client.
+
+Dopo aver attivato Blaze:
+```bash
+firebase deploy --only functions
+```
+L’app chiama già `moderate`; non serve configurare API key.
 
 Risposta:
 

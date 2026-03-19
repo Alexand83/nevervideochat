@@ -1,5 +1,6 @@
 **/node_modules/
 functions/.env
+functions/.env.*
 functions/.runtimeconfig.json
 *.log
 .firebase/

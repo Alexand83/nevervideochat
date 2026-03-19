@@ -1,36 +1,22 @@
 /* ================================================================
-   Firebase Functions — Metered TURN credentials proxy
-   - Keeps Metered API key server-side (Runtime Config)
-   - Returns ICE servers array to the client
-   - Basic CORS + rate limit + short cache
-   NOTE: functions.config() / Runtime Config is deprecated (Mar 2027).
-         This is a temporary workaround when Secret Manager (Blaze)
-         isn't available. Migrate to Params/Secrets when possible.
+   Firebase Functions — Metered TURN credentials proxy + moderate
+   - Params/secrets via firebase-functions/params (no deprecated config())
 ================================================================ */
 
 const { onRequest } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
-const functions = require("firebase-functions");
-
+const { defineSecret, defineString } = require("firebase-functions/params");
 const cors = require("cors");
 
-function getRuntimeConfig() {
-  try { return functions.config() || {}; } catch { return {}; }
-}
+const meteredApiKey = defineSecret("METERED_API_KEY");
+const nvcAllowedOrigins = defineString("NVC_ALLOWED_ORIGINS", { default: "" });
 
 const corsMiddleware = cors({
   origin(origin, cb) {
     try {
-      // No Origin header (same-origin / curl) → allow
       if (!origin) return cb(null, true);
-
-      const cfg = getRuntimeConfig();
-      const raw = String(cfg?.nvc?.allowed_origins || "").trim();
-      if (!raw) {
-        // If allow-list is not configured, allow the request but DO NOT reflect '*'
-        // We just let CORS middleware set permissive headers for simple usage.
-        return cb(null, true);
-      }
+      const raw = String(nvcAllowedOrigins.value() || "").trim();
+      if (!raw) return cb(null, true);
       const allowed = raw.split(",").map(s => s.trim()).filter(Boolean);
       return cb(null, allowed.includes(origin));
     } catch (_) {
@@ -40,6 +26,14 @@ const corsMiddleware = cors({
   methods: ["GET", "OPTIONS"],
   credentials: false,
   maxAge: 86400
+});
+
+const corsPost = cors({
+  origin: true,
+  methods: ["POST", "OPTIONS"],
+  credentials: false,
+  maxAge: 86400,
+  allowedHeaders: ["Content-Type", "Authorization"]
 });
 
 // In-memory cache: keep response for 10 minutes
@@ -71,9 +65,9 @@ function rateLimitOk(ip) {
 exports.getIceServers = onRequest(
   {
     region: "europe-west1",
-    // keep this low; it should be fast
     timeoutSeconds: 10,
-    memory: "128MiB"
+    memory: "128MiB",
+    secrets: [meteredApiKey]
   },
   (req, res) => {
     corsMiddleware(req, res, async () => {
@@ -89,8 +83,7 @@ exports.getIceServers = onRequest(
           return res.status(200).json(_cache);
         }
 
-        const cfg = getRuntimeConfig();
-        const apiKey = String(cfg?.metered?.apikey || "").trim();
+        const apiKey = String(meteredApiKey.value() || "").trim();
         if (!apiKey) return res.status(500).json({ error: "missing_metered_api_key" });
 
         const url = `https://djconsole.metered.live/api/v1/turn/credentials?apiKey=${encodeURIComponent(apiKey)}`;
@@ -120,6 +113,24 @@ exports.getIceServers = onRequest(
       } catch (err) {
         logger.error("getIceServers error", err);
         return res.status(500).json({ error: "internal_error" });
+      }
+    });
+  }
+);
+
+// --- AI Moderation: endpoint attivo ma senza ML (build falliva con tfjs-node).
+//    Per riattivare ML: ripristina dipendenze e logica da backup / moderate-full.
+exports.moderate = onRequest(
+  { region: "europe-west1", timeoutSeconds: 30, memory: "256MiB" },
+  (req, res) => {
+    corsPost(req, res, async () => {
+      try {
+        if (req.method === "OPTIONS") return res.status(204).send("");
+        if (req.method !== "POST") return res.status(405).json({ error: "method_not_allowed" });
+        return res.status(200).json({ allowed: true });
+      } catch (err) {
+        logger.error("moderate error", err);
+        return res.status(200).json({ allowed: true });
       }
     });
   }

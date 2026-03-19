@@ -738,6 +738,28 @@ export async function sendMessage() {
       /* Re-sanitize the filtered text */
       html = sanitiseHtml(filtered.text);
     }
+
+    /* AI moderation: text */
+    if (state.aiModerationEnabled && state.moderateText) {
+      const { moderateText } = await import('./moderation.js');
+      const mod = await moderateText(plainText.trim());
+      if (!mod.allowed) {
+        showToast(mod.reason || '🚫 Message blocked by moderation.');
+        return;
+      }
+    }
+  }
+
+  /* AI moderation: images (before upload so we don't store inappropriate content) */
+  if (hasImage && state.aiModerationEnabled && state.moderateImages && state.pendingImage?.dataUrl) {
+    const { moderateImage } = await import('./moderation.js');
+    const mod = await moderateImage(state.pendingImage.dataUrl);
+    if (!mod.allowed) {
+      state.pendingImage = null;
+      dom.imgPreviewStrip.hidden = true;
+      showToast(mod.reason || '🖼️ Image not allowed.');
+      return;
+    }
   }
 
   if (hasImage) {
