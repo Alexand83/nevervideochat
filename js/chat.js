@@ -739,15 +739,6 @@ export async function sendMessage() {
       html = sanitiseHtml(filtered.text);
     }
 
-    /* Moderazione leggera testo (solo blocklist, client-side) */
-    if (plainText.trim()) {
-      const { moderateText } = await import('./moderation.js');
-      const mod = moderateText(plainText.trim());
-      if (!mod.allowed) {
-        showToast(mod.reason || '🚫 Messaggio bloccato.');
-        return;
-      }
-    }
   }
 
   if (hasImage) {
