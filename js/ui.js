@@ -80,14 +80,14 @@ function _ensureAvatarLightbox() {
   });
   _avatarLbPmBtn?.addEventListener('click', () => {
     const uid = _avatarLbActiveUserId;
-    if (!uid || String(uid) === String(state.currentUser?.id)) return;
+    if (!uid || uid === 'me' || String(uid) === String(state.currentUser?.id)) return;
     closeAvatarLightbox();
     openPrivateChat(uid);
   });
   _avatarLbMenuBtn?.addEventListener('click', () => {
     const uid = _avatarLbActiveUserId;
     const anchorEl = _avatarLbAnchorEl;
-    if (!uid || !anchorEl || String(uid) === String(state.currentUser?.id)) return;
+    if (!uid || !anchorEl || uid === 'me' || String(uid) === String(state.currentUser?.id)) return;
     closeAvatarLightbox();
     openContextMenu(uid, anchorEl);
   });
@@ -565,7 +565,9 @@ export function initDictation() {
 
 /* ── Context menu ──────────────────────────────────────────────── */
 export function openContextMenu(uid, anchor) {
-  const user = findUser(uid); if (!user || String(uid) === String(state.currentUser?.id) || !anchor) return;
+  const user = findUser(uid);
+  if (!user || !anchor) return;
+  if (uid === 'me' || String(uid) === String(state.currentUser?.id)) return;
   state.contextTargetUID = uid;
   const color = avatarColor(user.name), init = initials(user.name);
   dom.ctxUserHdr.innerHTML = `<span style="display:inline-flex;align-items:center;gap:8px">
@@ -666,7 +668,7 @@ export function initContextMenu() {
   dom.ctxPrivateBtn.addEventListener('click', () => {
     const u = state.contextTargetUID;
     closeCtxMenu();
-    if (!u || String(u) === String(state.currentUser?.id)) return;
+    if (!u || u === 'me' || String(u) === String(state.currentUser?.id)) return;
     openPrivateChat(u);
   });
   dom.ctxCamBtn.addEventListener('click', () => {

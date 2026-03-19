@@ -21,6 +21,8 @@ function initOrGetPChat(uid) {
 }
 
 export function openPrivateChat(uid) {
+  /* Guard: never allow PM to self (uid can be 'me' or the actual currentUser id) */
+  if (!uid || uid === 'me' || String(uid) === String(state.currentUser?.id)) return;
   const chat = initOrGetPChat(uid);
   if (chat.popup) { if (chat.minimised) restorePChat(uid); return; }
   const user = findUser(uid); if (!user) return;
