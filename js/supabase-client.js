@@ -562,12 +562,12 @@ export async function connectSupabase() {
           const { updateEventsCamGrid } = await import('./rooms.js');
           updateEventsCamGrid();
           const isEventsRoom = camRoomData?.max_cams && camRoomData.max_cams >= 1 && camRoomData.max_cams <= 8;
-          if (isEventsRoom && !state.cameraWindows[fromId] && !state.incomingPCs?.[fromId] && !state.pendingCamRequests?.[fromId]) {
+          if (isEventsRoom && !state.cameraWindows[fromId] && !state.incomingPCs?.[fromId]) {
             setTimeout(() => {
               if (state.activeRoom !== camRoom) return;
-              if (state.cameraWindows[fromId] || state.incomingPCs?.[fromId] || state.pendingCamRequests?.[fromId]) return;
-              import('./camera.js?v=20260318b').then(({ requestPublicCamera }) => requestPublicCamera(fromId));
-            }, 1500);
+              if (state.cameraWindows[fromId] || state.incomingPCs?.[fromId]) return;
+              import('./camera.js?v=20260318b').then(({ requestPublicCamera }) => requestPublicCamera(fromId, { skipCooldown: true, forceRetry: true, pendingTtlMs: 5000, silentPendingExpiry: true }));
+            }, 500);
           }
         }
       })

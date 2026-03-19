@@ -8,16 +8,18 @@ import { showToast } from './utils.js';
 /* ── Pending cam-request helpers (auto-expire after 60s) ── */
 const _pendingTimers = {};
 
-export function setPendingCamRequest(uid, type, name) {
+export function setPendingCamRequest(uid, type, name, opts = {}) {
+  const ttlMs = Number.isFinite(opts.ttlMs) ? Math.max(1000, opts.ttlMs) : 60_000;
+  const showExpiryToast = opts.showExpiryToast !== false;
   clearPendingCamRequest(uid);
   state.pendingCamRequests[uid] = type;
   _pendingTimers[uid] = setTimeout(() => {
     if (state.pendingCamRequests[uid]) {
       delete state.pendingCamRequests[uid];
       delete _pendingTimers[uid];
-      showToast(`⌛ No reply from ${name} — camera request expired.`);
+      if (showExpiryToast) showToast(`⌛ No reply from ${name} — camera request expired.`);
     }
-  }, 60_000);
+  }, ttlMs);
 }
 
 export function clearPendingCamRequest(uid) {

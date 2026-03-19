@@ -370,17 +370,17 @@ export function switchRoom(roomId) {
   } else {
     /* LEAVING Events room (or switching between non-Events rooms) */
     if (wasEventsRoom && state.localStream && String(state.cameraRoom) === previousRoomId) {
-      /* Start 1-minute timer: if user doesn't return, close their camera */
+      /* Start 90s timer: if user doesn't return, close their camera */
       if (_eventsRoomCamOffTimer) clearTimeout(_eventsRoomCamOffTimer);
       _eventsRoomCamOffTimer = setTimeout(async () => {
         _eventsRoomCamOffTimer = null;
         /* Only close if still away from the Events room and camera is still for that room */
         if (state.activeRoom !== previousRoomId && state.cameraRoom === previousRoomId) {
-          console.log('[Events Room] User away > 1 min — closing camera');
+          console.log('[Events Room] User away > 90s — closing camera');
           const { closeCameraWindow } = await import('./camera.js?v=20260318b');
           closeCameraWindow(state.currentUser.id);
         }
-      }, 60000);
+      }, 90000);
     }
     /* Chiudi SOLO le PC e finestre della grid Eventi. Le cam in General (floating) restano aperte per quando torni in General. */
     if (wasEventsRoom) {
@@ -439,7 +439,7 @@ export function switchRoom(roomId) {
   _updateCamBtn();
   
   /* Events room: automatically request cameras from users who already have them open.
-     Immediate + 2s + 6s so cams appear quickly for everyone. */
+     Retry window stays within 5s so viewers see cam quickly after cam-opened. */
   if (isEventsRoom) {
     const room = state.rooms[roomIdStr];
     if (room) {
@@ -463,15 +463,21 @@ export function switchRoom(roomId) {
             setTimeout(() => {
               if (state.activeRoom !== roomIdStr) return;
               console.log(`[Events Room] (${label}) Requesting camera from`, user.name || user.id);
-              requestPublicCamera(user.id);
+              requestPublicCamera(user.id, {
+                skipCooldown: true,
+                forceRetry: true,
+                pendingTtlMs: 5000,
+                silentPendingExpiry: true,
+              });
             }, index * 200);
           }
         });
       };
 
       requestEventsRoomCams('0s');
-      setTimeout(() => requestEventsRoomCams('2s'), 2000);
-      setTimeout(() => requestEventsRoomCams('6s'), 6000);
+      setTimeout(() => requestEventsRoomCams('1.5s'), 1500);
+      setTimeout(() => requestEventsRoomCams('3.5s'), 3500);
+      setTimeout(() => requestEventsRoomCams('4.8s'), 4800);
     }
   }
 }

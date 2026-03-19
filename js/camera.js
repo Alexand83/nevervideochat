@@ -453,7 +453,7 @@ export function createCameraWindow(uid, stream, name, isOwn) {
               const u = findUser(uid);
               if (u?.online && !state.manuallyClosedCameras?.[uid]) {
                 delete state.pendingCamRequests[uid];
-                requestPublicCamera(uid);
+                requestPublicCamera(uid, { skipCooldown: true, forceRetry: true, pendingTtlMs: 5000, silentPendingExpiry: true });
               }
             }).catch(() => {});
           }
@@ -1635,9 +1635,13 @@ export function initCameraSystem() {
 }
 
 /* ── Public camera request ────────────────────────────────────── */
-export async function requestPublicCamera(targetUid) {
+export async function requestPublicCamera(targetUid, opts = {}) {
   const uid    = String(targetUid);
   const target = findUser(uid);
+  const skipCooldown = opts.skipCooldown === true;
+  const forceRetry = opts.forceRetry === true;
+  const pendingTtlMs = Number.isFinite(opts.pendingTtlMs) ? Math.max(1000, opts.pendingTtlMs) : 60_000;
+  const silentPendingExpiry = opts.silentPendingExpiry === true;
   console.log('[WebRTC-FLOW] CAM-REQ: request camera from', (uid || '').slice(0, 8) + '…', 'target=', (target?.id || '').slice(0, 8) + '…');
   /* Muted users cannot send camera requests (global or room-specific mute). */
   const myMute = state.currentUser?.id ? checkIsMuted(state.currentUser.id, state.activeRoom) : null;
@@ -1681,13 +1685,14 @@ export async function requestPublicCamera(targetUid) {
     console.log('[Camera Request] Incoming PC for', uid, 'already exists in state:', existingInPC.connectionState, '/ ICE:', existingInPC.iceConnectionState, '— skipping duplicate request');
     return;
   }
-  if (state.pendingCamRequests[uid]) { 
-    return; 
+  if (state.pendingCamRequests[uid]) {
+    if (!forceRetry) return;
+    clearPendingCamRequest(uid);
   }
   /* Rate-limit: max 1 richiesta ogni 30s per lo stesso destinatario */
   const CAM_REQ_COOLDOWN_MS = 30_000;
   const lastReqTs = state.camReqCooldowns[uid] || 0;
-  if (Date.now() - lastReqTs < CAM_REQ_COOLDOWN_MS) {
+  if (!skipCooldown && Date.now() - lastReqTs < CAM_REQ_COOLDOWN_MS) {
     const secsLeft = Math.ceil((CAM_REQ_COOLDOWN_MS - (Date.now() - lastReqTs)) / 1000);
     showToast(`⏳ Attendi ${secsLeft}s prima di inviare un'altra richiesta cam.`);
     return;
@@ -1699,7 +1704,10 @@ export async function requestPublicCamera(targetUid) {
     delete state.manuallyClosedCameras[uid];
     console.log('[Camera Request] Clearing manual-close flag for', uid, 'due to explicit new request');
   }
-  setPendingCamRequest(uid, 'public', target.name);
+  setPendingCamRequest(uid, 'public', target.name, {
+    ttlMs: pendingTtlMs,
+    showExpiryToast: !silentPendingExpiry,
+  });
   /* Non inviare requesterHasForceView nella payload: il ricevente verifica
      in modo indipendente da Firebase — il campo è spoofabile da client malevoli. */
   broadcast('cam-req', uid, { reqType: 'public', room_id: state.activeRoom });
@@ -2200,7 +2208,7 @@ export async function handleWebRTCSignal(payload) {
             const u = findUser(from);
             if (u?.online && !state.manuallyClosedCameras?.[from]) {
               delete state.pendingCamRequests[from];
-              requestPublicCamera(from);
+              requestPublicCamera(from, { skipCooldown: true, forceRetry: true, pendingTtlMs: 5000, silentPendingExpiry: true });
             }
           }).catch(() => {});
         }
@@ -2233,7 +2241,7 @@ export async function handleWebRTCSignal(payload) {
                   const u = findUser(from);
                   if (u?.online && !state.manuallyClosedCameras?.[from]) {
                     delete state.pendingCamRequests[from];
-                    requestPublicCamera(from);
+                    requestPublicCamera(from, { skipCooldown: true, forceRetry: true, pendingTtlMs: 5000, silentPendingExpiry: true });
                   }
                 }).catch(() => {});
               }
@@ -2290,7 +2298,7 @@ export async function handleWebRTCSignal(payload) {
                 removeRemoteCameraFromGrid(from, { keepHasCamera: true }).then(() => {
                   if (!state.cameraWindows[from] && !state.incomingPCs[from]) {
                 delete state.pendingCamRequests[from];
-                requestPublicCamera(from);
+                requestPublicCamera(from, { skipCooldown: true, forceRetry: true, pendingTtlMs: 5000, silentPendingExpiry: true });
                   }
                 }).catch(() => {});
               } else {
