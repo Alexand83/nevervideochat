@@ -71,11 +71,15 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Configurazione server (TURN, ecc.): solo lettura da utenti autenticati, mai scrivibile dal client.
-    // Le credenziali TURN vivono qui — mai nel bundle JS. Scrivi solo da Firebase Console / Admin SDK.
+    // Configurazione server (TURN, ecc.): lettura da utenti autenticati.
+    // Scrittura: solo config/moderation e solo da owner (impostazioni moderazione AI in Admin → Generale).
+    // Le altre config (es. TURN) si scrivono solo da Firebase Console / Admin SDK.
     match /config/{docId} {
       allow read: if request.auth != null;
-      allow write: if false;
+      allow create, update: if request.auth != null
+        && docId == 'moderation'
+        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'owner';
+      allow delete: if false;
     }
 
     // Admin logs, annunci, segnalazioni, parole filtrate

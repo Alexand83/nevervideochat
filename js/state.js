@@ -96,8 +96,4 @@ export const state = {
   /* Device settings */
   settings: {},
 
-  /* Admin global settings (AI moderation) */
-  aiModerationEnabled: false,
-  moderateText: true,
-  moderateImages: true,
 };

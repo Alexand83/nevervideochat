@@ -180,12 +180,6 @@ export const dom = {
   adminStatisticsContent: $('adminStatisticsContent'),
   adminLogsList:       $('adminLogsList'),
   adminRolesList:      $('adminRolesList'),
-  adminEnableAiModeration: $('adminEnableAiModeration'),
-  adminModerateText: $('adminModerateText'),
-  adminModerateImages: $('adminModerateImages'),
-  adminSaveGeneralBtn: $('adminSaveGeneralBtn'),
-  adminGeneralOwnerHint: $('adminGeneralOwnerHint'),
-  
   roleEditModal:       $('roleEditModal'),
   roleEditModalClose:  $('roleEditModalClose'),
   roleEditForm:        $('roleEditForm'),

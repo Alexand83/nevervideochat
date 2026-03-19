@@ -81,10 +81,6 @@ export function initAdminPanel() {
     openAnnouncementEditModal();
   });
 
-  /* General settings save */
-  dom.adminSaveGeneralBtn?.addEventListener('click', async () => {
-    await saveGeneralAdminSettings();
-  });
 
   /* Create word filter button */
   document.getElementById('adminCreateWordFilterBtn')?.addEventListener('click', async () => {
@@ -220,74 +216,7 @@ async function switchAdminTab(tabName) {
 }
 
 async function loadGeneralAdminSettings() {
-  if (!state.fb || !dom.adminEnableAiModeration) return;
-  try {
-    await checkAdminAccess();
-    const isOwner = currentUserRole === 'owner';
-    await loadAiModerationSetting();
-    dom.adminEnableAiModeration.checked = state.aiModerationEnabled;
-    dom.adminEnableAiModeration.disabled = !isOwner;
-    if (dom.adminModerateText) {
-      dom.adminModerateText.checked = state.moderateText;
-      dom.adminModerateText.disabled = !isOwner;
-    }
-    if (dom.adminModerateImages) {
-      dom.adminModerateImages.checked = state.moderateImages;
-      dom.adminModerateImages.disabled = !isOwner;
-    }
-    if (dom.adminSaveGeneralBtn) dom.adminSaveGeneralBtn.disabled = !isOwner;
-    if (dom.adminGeneralOwnerHint) dom.adminGeneralOwnerHint.hidden = isOwner;
-  } catch (err) {
-    console.error('[Admin] Load general settings error:', err);
-    showToast('⚠️ Failed to load general settings.');
-  }
-}
-
-export async function loadAiModerationSetting() {
-  if (!state.fb) return false;
-  try {
-    const snap = await state.fb.firestore.collection('config').doc('moderation').get();
-    const data = snap?.data() || {};
-    state.aiModerationEnabled = data.ai_moderation_enabled === true;
-    state.moderateText = data.moderate_text !== false;
-    state.moderateImages = data.moderate_images !== false;
-    return state.aiModerationEnabled;
-  } catch (err) {
-    console.warn('[Admin] Load AI moderation setting failed:', err);
-    state.aiModerationEnabled = false;
-    state.moderateText = true;
-    state.moderateImages = true;
-    return false;
-  }
-}
-
-async function saveGeneralAdminSettings() {
-  if (!state.fb || !dom.adminEnableAiModeration) return;
-  try {
-    await checkAdminAccess();
-    if (currentUserRole !== 'owner') {
-      showToast('🚫 Only owner can change general settings.');
-      return;
-    }
-    const enabled = dom.adminEnableAiModeration.checked === true;
-    const moderateText = dom.adminModerateText?.checked !== false;
-    const moderateImages = dom.adminModerateImages?.checked !== false;
-    await state.fb.firestore.collection('config').doc('moderation').set({
-      ai_moderation_enabled: enabled,
-      moderate_text: moderateText,
-      moderate_images: moderateImages,
-      updated_by: String(state.currentUser?.id || ''),
-      updated_at: new Date(),
-    }, { merge: true });
-    state.aiModerationEnabled = enabled;
-    state.moderateText = moderateText;
-    state.moderateImages = moderateImages;
-    await logAdminActionLocal('update_general_settings', 'config', 'moderation', 'AI Moderation', { ai_moderation_enabled: enabled, moderate_text: moderateText, moderate_images: moderateImages });
-    showToast('✅ General settings saved.');
-  } catch (err) {
-    console.error('[Admin] Save general settings error:', err);
-    showToast('⚠️ Failed to save general settings.');
-  }
+  /* General tab: no AI moderation settings (light text filter is client-side only, always on) */
 }
 
 async function openAdminPanel() {

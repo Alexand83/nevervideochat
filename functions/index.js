@@ -1,5 +1,5 @@
 /* ================================================================
-   Firebase Functions — Metered TURN credentials proxy + moderate
+   Firebase Functions — Metered TURN credentials proxy
    - Params/secrets via firebase-functions/params (no deprecated config())
 ================================================================ */
 
@@ -26,14 +26,6 @@ const corsMiddleware = cors({
   methods: ["GET", "OPTIONS"],
   credentials: false,
   maxAge: 86400
-});
-
-const corsPost = cors({
-  origin: true,
-  methods: ["POST", "OPTIONS"],
-  credentials: false,
-  maxAge: 86400,
-  allowedHeaders: ["Content-Type", "Authorization"]
 });
 
 // In-memory cache: keep response for 10 minutes
@@ -113,24 +105,6 @@ exports.getIceServers = onRequest(
       } catch (err) {
         logger.error("getIceServers error", err);
         return res.status(500).json({ error: "internal_error" });
-      }
-    });
-  }
-);
-
-// --- AI Moderation: endpoint attivo ma senza ML (build falliva con tfjs-node).
-//    Per riattivare ML: ripristina dipendenze e logica da backup / moderate-full.
-exports.moderate = onRequest(
-  { region: "europe-west1", timeoutSeconds: 30, memory: "256MiB" },
-  (req, res) => {
-    corsPost(req, res, async () => {
-      try {
-        if (req.method === "OPTIONS") return res.status(204).send("");
-        if (req.method !== "POST") return res.status(405).json({ error: "method_not_allowed" });
-        return res.status(200).json({ allowed: true });
-      } catch (err) {
-        logger.error("moderate error", err);
-        return res.status(200).json({ allowed: true });
       }
     });
   }

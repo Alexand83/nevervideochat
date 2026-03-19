@@ -17,7 +17,7 @@ import { initCameraSystem, initCallControls } from './camera.js?v=20260318b';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initDictation, initAvatarLightbox, initContextMenu, openContextMenu,
          initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js?v=20260458';
-import { initAdminPanel, updateAdminButton, loadAiModerationSetting } from './admin.js';
+import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
 import { initGames, handleGameCommand } from './games.js';
 import { initDebugOverlay } from './debug-overlay.js';
@@ -232,7 +232,6 @@ export async function finishInit() {
 
   /* Profilo, ruolo, restrizioni, ban (solo se Firebase disponibile; in parallelo) */
   if (state.fb && state.currentUser) {
-    await loadAiModerationSetting().catch(() => {});
     if (!isGuest) {
       /* Utente registrato: tutte le queries */
       await Promise.all([

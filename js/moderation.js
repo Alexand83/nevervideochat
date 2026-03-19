@@ -1,58 +1,44 @@
 /* ================================================================
-   moderation.js — Moderazione AI via Firebase Cloud Function (Blaze)
-   Controllo lato server: non bypassabile dal client.
+   moderation.js — Moderazione leggera solo testo, lato client (blocklist).
+   Nessuna Cloud Function, nessun ML.
 ================================================================ */
-import { state } from './state.js';
-import { firebaseConfig } from './firebase-config.js';
 
-const MODERATE_URL = firebaseConfig?.projectId
-  ? `https://europe-west1-${firebaseConfig.projectId}.cloudfunctions.net/moderate`
-  : '';
+/** Blocklist leggera: parole/frasi bloccate (regex). */
+const LIGHT_BLOCKLIST = [
+  /\bputtan[aoe]\b/i,
+  /\btroia\b/i,
+  /\bstronz[aoe]\b/i,
+  /\bvaffanculo\b/i,
+  /\bcazzo\b/i,
+  /\bminchia\b/i,
+  /\bfottiti\b/i,
+  /\bporco\s+dio\b/i,
+  /\bporca\s+madonna\b/i,
+];
 
-export async function moderateText(text) {
-  if (!state.aiModerationEnabled || !state.moderateText || !text || typeof text !== 'string') {
-    return { allowed: true };
-  }
-  if (!MODERATE_URL) return { allowed: true };
-  try {
-    const res = await fetch(MODERATE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'text', text: text.trim().slice(0, 20000) }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { allowed: true };
-    return {
-      allowed: data.allowed !== false,
-      reason: data.reason || (data.allowed === false ? 'Messaggio bloccato dalla moderazione.' : undefined),
-    };
-  } catch (err) {
-    console.warn('[Moderation] Text check failed:', err);
-    return { allowed: true };
-  }
+function normalize(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[@4]/g, "a")
+    .replace(/[1!|]/g, "i")
+    .replace(/[3]/g, "e")
+    .replace(/[0]/g, "o")
+    .replace(/[$5]/g, "s")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-export async function moderateImage(dataUrl) {
-  if (!state.aiModerationEnabled || !state.moderateImages || !dataUrl || typeof dataUrl !== 'string') {
-    return { allowed: true };
+/**
+ * Controllo leggero sul testo (solo blocklist, client-side).
+ * @param {string} text
+ * @returns {{ allowed: boolean, reason?: string }}
+ */
+export function moderateText(text) {
+  if (!text || typeof text !== "string") return { allowed: true };
+  const normalized = normalize(text.trim().slice(0, 20000));
+  const hit = LIGHT_BLOCKLIST.find((re) => re.test(normalized));
+  if (hit) {
+    return { allowed: false, reason: "🚫 Messaggio bloccato dalla moderazione." };
   }
-  if (!MODERATE_URL) return { allowed: true };
-  const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-  if (!base64) return { allowed: true };
-  try {
-    const res = await fetch(MODERATE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'image', image_base64: base64 }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { allowed: true };
-    return {
-      allowed: data.allowed !== false,
-      reason: data.reason || (data.allowed === false ? 'Immagine non consentita.' : undefined),
-    };
-  } catch (err) {
-    console.warn('[Moderation] Image check failed:', err);
-    return { allowed: true };
-  }
+  return { allowed: true };
 }

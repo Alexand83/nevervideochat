@@ -739,26 +739,14 @@ export async function sendMessage() {
       html = sanitiseHtml(filtered.text);
     }
 
-    /* AI moderation: text */
-    if (state.aiModerationEnabled && state.moderateText) {
+    /* Moderazione leggera testo (solo blocklist, client-side) */
+    if (plainText.trim()) {
       const { moderateText } = await import('./moderation.js');
-      const mod = await moderateText(plainText.trim());
+      const mod = moderateText(plainText.trim());
       if (!mod.allowed) {
-        showToast(mod.reason || '🚫 Message blocked by moderation.');
+        showToast(mod.reason || '🚫 Messaggio bloccato.');
         return;
       }
-    }
-  }
-
-  /* AI moderation: images (before upload so we don't store inappropriate content) */
-  if (hasImage && state.aiModerationEnabled && state.moderateImages && state.pendingImage?.dataUrl) {
-    const { moderateImage } = await import('./moderation.js');
-    const mod = await moderateImage(state.pendingImage.dataUrl);
-    if (!mod.allowed) {
-      state.pendingImage = null;
-      dom.imgPreviewStrip.hidden = true;
-      showToast(mod.reason || '🖼️ Image not allowed.');
-      return;
     }
   }
 
@@ -828,6 +816,24 @@ export async function sendMessage() {
       if (err?.code === 'permission-denied' || err?.message?.includes('403')) {
         const { checkSessionInvalid } = await import('./firebase-client.js');
         await checkSessionInvalid();
+        return;
+      }
+      /* already-exists: e.g. retry or double submit – treat as success, sync local id */
+      const isAlreadyExists = err?.code === 'already-exists' || (err?.message && /Document already exists/i.test(err.message));
+      if (isAlreadyExists) {
+        const path = err?.message?.match(/documents\/messages\/([^\s]+)/);
+        const dbId = path ? path[1].replace(/\)$/, '') : null;
+        if (dbId) {
+          const room = state.rooms[state.activeRoom];
+          if (room) {
+            const localMsg = room.messages.find(m => m.id === tempId);
+            if (localMsg) {
+              localMsg.id = dbId;
+              const group = dom.msgsContainer?.querySelector(`[data-msg-id="${tempId}"]`);
+              if (group) group.dataset.msgId = dbId;
+            }
+          }
+        }
         return;
       }
       console.warn('[NVC] msg insert:', err);

@@ -37,17 +37,6 @@ firebase deploy --only hosting
 ## Endpoint
 
 - `GET /api/ice` (via Hosting rewrite) → `getIceServers`
-- `POST .../moderate` → **AI Moderation** (testo + immagini). Vedi sotto.
-
-### Moderazione AI (moderate) — richiede Blaze
-
-Con **Blaze** attivo, la moderazione gira nella Cloud Function (Toxicity + NSFWJS): non è bypassabile dal client.
-
-Dopo aver attivato Blaze:
-```bash
-firebase deploy --only functions
-```
-L’app chiama già `moderate`; non serve configurare API key.
 
 Risposta:
 
