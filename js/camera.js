@@ -9,7 +9,7 @@ import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
 import { broadcast, broadcastAll } from './broadcast.js';
-import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences } from './users.js?v=20260453';
+import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences, checkIsKicked, checkIsBanned, checkIsMuted } from './users.js?v=20260453';
 import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints, getVideoConstraintsForLevel, saveDeviceSettings } from './storage.js';
 import { loadPermissionsForUser } from './permissions.js';
 import { getAvailableRooms } from './rooms.js';
@@ -1626,6 +1626,13 @@ export async function requestPublicCamera(targetUid) {
   const uid    = String(targetUid);
   const target = findUser(uid);
   console.log('[WebRTC-FLOW] CAM-REQ: request camera from', (uid || '').slice(0, 8) + '…', 'target=', (target?.id || '').slice(0, 8) + '…');
+  /* Muted users cannot send camera requests (global or room-specific mute). */
+  const myMute = state.currentUser?.id ? checkIsMuted(state.currentUser.id, state.activeRoom) : null;
+  if (myMute) {
+    const scope = myMute.global ? 'globally' : 'in this room';
+    showToast(`🔇 You are muted ${scope} and cannot request cameras.`);
+    return;
+  }
   if (!target?.online) { 
     console.warn('[Camera Request] Target is offline:', target);
     showToast(`${target?.name || 'User'} is offline.`); 
@@ -1696,6 +1703,12 @@ export async function handleCamRequest(payload) {
 
   /* room_id e confronti in stringa per evitare problemi PC (number vs string dopo 15s / tab switch) */
   const requestRoom = payload.room_id != null ? String(payload.room_id) : null;
+  /* Reject cam requests from muted users to enforce rule even if sender bypasses UI. */
+  const requesterMuted = checkIsMuted(fromId, requestRoom || state.activeRoom);
+  if (requesterMuted) {
+    broadcast('cam-rejected', fromId, { reqType: payload.reqType || 'public', reason: 'muted-user' });
+    return;
+  }
   const availableRooms = getAvailableRooms();
   const roomData = requestRoom ? availableRooms.find(r => String(r.id) === requestRoom) : null;
   const isEventsRoom = !!(roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8);
@@ -1964,6 +1977,14 @@ const WEBRTC_CONNECT_SKEW_MS = 5000;
 export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload || {};
   const isPublic = payload?.ctx === 'public', isPrivate = payload?.ctx === 'private';
+  /* Hard guard: ignore public signaling from users currently banned or kicked in this room.
+     Prevents stale/replayed offers from re-creating ghost camera/user state. */
+  if (isPublic && from) {
+    if (checkIsBanned(String(from)) || checkIsKicked(String(from), String(state.activeRoom))) {
+      delete state.pendingIncomingICE[from];
+      return;
+    }
+  }
   const toMeStrict = payload != null && state.currentUser?.id != null && String(payload.to).trim() === String(state.currentUser.id).trim();
   /* Accept room ICE: ctx !== 'private' OR we already have incomingPC for this peer (viewer: accept their ICE so cam connects). */
   const hasIncomingPC = !!(from && state.incomingPCs?.[from]);
@@ -1998,6 +2019,7 @@ export async function handleWebRTCSignal(payload) {
         const hasPending  = !!state.pendingCamRequests[from];
         const hasWindow   = !!state.cameraWindows[from];
         const hasPC       = !!state.incomingPCs[from];
+        const hasViewerIntent = hasPending || hasWindow || hasPC;
         if (!hasPending && !hasWindow && !hasPC) {
           console.log('[WebRTC] Rejecting unsolicited offer from', (from || '').slice(0, 8) + '… — no pending request / window / PC for this peer');
           return;
@@ -2009,7 +2031,10 @@ export async function handleWebRTCSignal(payload) {
         const offererHasCamInMyRoom = !!state.rooms[state.activeRoom]?.users[from]?.hasCamera;
         const offerRoomId = payload.room_id != null ? String(payload.room_id) : null;
         const offerRoomMatches = offerRoomId === String(state.activeRoom);
-        if (!offererHasCamInMyRoom && !offerRoomMatches) {
+        /* IMPORTANT:
+           room_id match alone is not enough (replayed/stale offers can still carry current room_id).
+           Accept room_id fallback only when there is an active viewer intent for this peer. */
+        if (!offererHasCamInMyRoom && !(offerRoomMatches && hasViewerIntent)) {
           console.log('[WebRTC] Rejecting offer from', (from || '').slice(0, 8) + '… — no camera in current room', state.activeRoom, 'offer room_id=', offerRoomId);
           return;
         }
@@ -2410,8 +2435,13 @@ export async function handleWebRTCSignal(payload) {
          Bufferizza solo se abbiamo una richiesta pendente o una finestra/PC per questo peer:
          evita di accumulare ICE per broadcaster che non abbiamo mai richiesto (stesso UID su più tab). */
       if (dir === 'out' && !pc) {
-        /* Bufferizza SEMPRE (cap) per evitare race: su mobile/5G ICE può arrivare prima della PC.
-           L'offer non solicitata è già filtrata sopra, e il buffer è capped a 100 per peer. */
+        /* Buffer only when there is active viewer intent/relationship for this peer.
+           This prevents stale ICE floods (replay/ghost peers) from filling the buffer forever. */
+        const hasRelation = !!state.pendingCamRequests[from] || !!state.cameraWindows[from] || !!state.incomingPCs[from] || !!state.outgoingPCs[from];
+        if (!hasRelation) {
+          console.log('[WebRTC-FLOW] ICE from', (from || '').slice(0, 8) + '…', 'dir=out → DROP (no relation/intent)');
+          return;
+        }
         state.pendingIncomingICE[from] = state.pendingIncomingICE[from] || [];
         /* Cap a 100: evita crescita illimitata in caso di flood di candidati ICE */
         if (state.pendingIncomingICE[from].length < 100) {

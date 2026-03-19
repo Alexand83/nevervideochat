@@ -4,7 +4,7 @@
 import { state }       from './state.js';
 import { dom }         from './dom.js';
 import { escHtml, avatarColor, initials, fmtTime, showToast, playNotificationSound, makeDraggable } from './utils.js';
-import { findUser, ensureUser } from './users.js?v=20260453';
+import { findUser, ensureUser, checkIsMuted } from './users.js?v=20260453';
 import { broadcast }   from './broadcast.js';
 import { setPendingCamRequest } from './storage.js';
 import { isRoomCameraActive } from './camera.js';
@@ -69,6 +69,12 @@ export function openPrivateChat(uid) {
     if (!_supabaseReady?.()) { showToast('⚠️ Server connection required for video calls.'); return; }
     if (!dom.vcallWin.hidden) { showToast('📹 A video call is already active.'); return; }
     if (isRoomCameraActive()) { showToast('Disattiva prima la cam nella stanza.'); return; }
+    const myMute = state.currentUser?.id ? checkIsMuted(state.currentUser.id, state.activeRoom) : null;
+    if (myMute) {
+      const scope = myMute.global ? 'globally' : 'in this room';
+      showToast(`🔇 You are muted ${scope} and cannot request video calls.`);
+      return;
+    }
     if (state.rejectedCamUsers?.[String(uid)]) {
       showToast(`🚫 ${user.name} rejected your request. Unblock in Settings.`); return;
     }

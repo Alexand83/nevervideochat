@@ -590,12 +590,14 @@ export function openContextMenu(uid, anchor) {
   const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
   const isEventsRoom = roomData?.max_cams && roomData.max_cams >= 1 && roomData.max_cams <= 8;
   
-  const camBlocked  = alreadyView || pendingReq || isOffline || isIgnored || !hasCameraActive || isEventsRoom;
+  const amIMuted = checkIsMuted(state.currentUser?.id, state.activeRoom);
+  const camBlocked  = alreadyView || pendingReq || isOffline || isIgnored || !hasCameraActive || isEventsRoom || amIMuted;
 
   dom.ctxCamBtn.disabled      = camBlocked;
   dom.ctxCamBtn.style.opacity = camBlocked ? '0.35' : '1';
   dom.ctxCamBtn.style.display = isEventsRoom ? 'none' : ''; /* Hide in Events room */
   dom.ctxCamBtn.title = isEventsRoom ? 'Cameras are public in Events room'
+                      : amIMuted ? 'You are muted — cannot request cameras'
                       : alreadyView ? 'Already viewing their camera'
                       : pendingReq  ? 'Request already sent — waiting for reply'
                       : isIgnored   ? 'User is ignored — unignore to interact'
