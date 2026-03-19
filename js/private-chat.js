@@ -97,6 +97,13 @@ export function openPrivateChat(uid) {
   const sBtn  = popup.querySelector(`#pchat-send-${uid}`);
   async function doSend() {
     const txt = input.value.trim(); if (!txt) return;
+
+    /* PM: se il destinatario non risulta online, blocca l'invio */
+    const target = findUser(uid);
+    if (!target || target.online !== true) {
+      showToast('Mi dispiace, ma al momento la persona a cui stai scrivendo non è online.');
+      return;
+    }
     
     /* Security: Validate message length */
     const { MAX_MESSAGE_LENGTH } = await import('./config.js');
