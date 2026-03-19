@@ -8,6 +8,7 @@ import { showToast, escHtml } from './utils.js';
 import { addSystemMessage } from './chat.js?v=20260453';
 import { syncPresence, updateOwnPresence, renderUsers, findUser } from './users.js?v=20260453';
 import { createPresenceChannel } from './firebase-client.js';
+import { setPollRoomId } from './polls.js';
 
 /* Forward refs set by main.js */
 let _loadRoomMessages = null;  // (roomId) => Promise<void>
@@ -225,6 +226,8 @@ export function switchRoom(roomId) {
   const wasEventsRoom = !!(previousRoomData?.max_cams && previousRoomData.max_cams >= 1 && previousRoomData.max_cams <= 8);
 
   state.activeRoom = roomIdStr;
+  // Keep polls widget in sync with the current room scope.
+  setPollRoomId(roomIdStr);
   /* Reset unread count when switching to this room */
   if (state.rooms[roomId]) state.rooms[roomId].unreadCount = 0;
   

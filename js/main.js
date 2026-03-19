@@ -21,6 +21,7 @@ import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
 import { initGames, handleGameCommand } from './games.js';
 import { initDebugOverlay } from './debug-overlay.js';
+import { initPollsPanel, bindPollWidgetActions } from './polls.js';
 
 /* ── Wire cross-module forward references ── */
 setOpenContextMenu(openContextMenu);   /* users.js → context menu */
@@ -273,6 +274,10 @@ export async function finishInit() {
     showToast('⚠️ Error connecting to server. Some features may not work.');
   }
   
+  // Polls widget (requires Firebase presence; safe even if fb is null)
+  initPollsPanel();
+  bindPollWidgetActions();
+
   /* Ora che Supabase è connesso, renderizza utenti e inizializza UI */
   /* CRITICO: Renderizza subito l'utente corrente, poi aggiorna quando la presenza si sincronizza */
   renderUsers(); /* Renderizza subito (almeno l'utente corrente dovrebbe apparire) */

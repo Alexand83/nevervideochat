@@ -151,6 +151,18 @@
 ================================================================ -->
 <main class="app-main" role="main">
 
+  <!-- LEFT — POLLS COLUMN -->
+  <aside class="polls-panel hidden" id="pollsPanel" aria-label="Polls">
+    <div class="polls-hdr">
+      <h2 class="polls-title">📊 Sondaggio</h2>
+      <div class="polls-scope-tabs" role="tablist" aria-label="Poll scope">
+        <button type="button" id="pollsScopeRoomBtn" class="polls-scope-tab active" aria-selected="true">Stanza</button>
+        <button type="button" id="pollsScopeGlobalBtn" class="polls-scope-tab" aria-selected="false">Globale</button>
+      </div>
+    </div>
+    <div class="polls-widget" id="pollsWidget"></div>
+  </aside>
+
   <!-- LEFT — CHAT SECTION -->
   <section class="chat-section" aria-label="Public chat">
 
@@ -842,6 +854,10 @@
             <span class="admin-sidebar-icon">📢</span>
             <span class="admin-sidebar-label">Announcements</span>
           </button>
+          <button class="admin-sidebar-item" data-tab="polls" role="tab">
+            <span class="admin-sidebar-icon">📊</span>
+            <span class="admin-sidebar-label">Polls</span>
+          </button>
           <button class="admin-sidebar-item" data-tab="themes" role="tab">
             <span class="admin-sidebar-icon">🎨</span>
             <span class="admin-sidebar-label">Themes</span>
@@ -1025,6 +1041,41 @@
         </div>
         <div id="adminWordFilterList" class="admin-list">
           <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Polls Tab -->
+    <div class="admin-tab-content" id="adminTabPolls" role="tabpanel">
+      <div class="admin-section">
+        <h3 class="admin-section-title">Sondaggi</h3>
+        <div class="polls-admin-form" style="margin-top: 12px;">
+          <label class="settings-label" for="pollScopeType">Scope</label>
+          <select id="pollScopeType" class="settings-input">
+            <option value="room">Stanza corrente</option>
+            <option value="global">Globale</option>
+          </select>
+
+          <label class="settings-label" for="pollQuestion" style="margin-top: 10px;">Domanda</label>
+          <input type="text" id="pollQuestion" class="settings-input" maxlength="300" placeholder="Es: Quale tema domani?" />
+
+          <label class="settings-label" for="pollOptions" style="margin-top: 10px;">Opzioni (una per riga)</label>
+          <textarea id="pollOptions" class="settings-input" rows="4">Opzione A&#10;Opzione B</textarea>
+
+          <label class="settings-label" for="pollDurationMin" style="margin-top: 10px;">Scadenza (minuti)</label>
+          <input type="number" id="pollDurationMin" class="settings-input" min="1" value="1" />
+
+          <input type="hidden" id="pollEditId" value="" />
+
+          <div class="settings-actions">
+            <button type="button" class="auth-btn-primary" id="pollSubmitBtn">Create Poll</button>
+            <button type="button" class="auth-btn-ghost" id="pollResetBtn">Reset</button>
+          </div>
+        </div>
+
+        <div class="admin-polls-list-wrap" style="margin-top: 18px;">
+          <h4 style="margin: 0 0 10px 0;">Poll attuali</h4>
+          <div id="pollsAdminList" class="admin-list"></div>
         </div>
       </div>
     </div>
@@ -1313,6 +1364,10 @@
         <label class="admin-permission-item">
           <input type="checkbox" id="permCanViewCamWithoutAccept">
           <span>View cams without accept</span>
+        </label>
+        <label class="admin-permission-item">
+          <input type="checkbox" id="permCanManagePolls">
+          <span>Manage Polls</span>
         </label>
       </div>
       

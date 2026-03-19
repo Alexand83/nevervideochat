@@ -5,6 +5,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function canManagePolls() {
+      return request.auth != null
+        && (
+          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'owner'
+          || get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin'
+          || (
+            get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.custom_role_id != null
+            && get(/databases/$(database)/documents/custom_roles/$(get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.custom_role_id)).data.permissions.can_manage_polls == true
+          )
+        );
+    }
+
+    function pollIsActiveAndNotExpired(pollId) {
+      return exists(/databases/$(database)/documents/polls/$(pollId))
+        && get(/databases/$(database)/documents/polls/$(pollId)).data.is_active == true
+        && get(/databases/$(database)/documents/polls/$(pollId)).data.cancelled_at == null
+        && get(/databases/$(database)/documents/polls/$(pollId)).data.expires_at > request.time;
+    }
+
     // Stanze: lettura pubblica. Create senza auth solo per 'general' (setup-firebase.html)
     match /rooms/{roomId} {
       allow read: if true;
@@ -97,6 +116,21 @@ service cloud.firestore {
     match /filtered_words/{id} {
       allow read: if true;
       allow write: if request.auth != null;
+    }
+
+    // Polls / Sondaggi
+    match /polls/{pollId} {
+      allow read: if true;
+      allow create, update, delete: if canManagePolls();
+    }
+
+    match /polls/{pollId}/votes/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && pollIsActiveAndNotExpired(pollId)
+        && !exists(/databases/$(database)/documents/polls/$(pollId)/votes/$(userId));
+      allow update, delete: if false;
     }
   }
 }

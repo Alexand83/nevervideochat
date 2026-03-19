@@ -78,6 +78,12 @@ export const dom = {
   closeGamesPanelBtn: $('closeGamesPanelBtn'),
   toggleUsersListBtn: $('toggleUsersListBtn'),
 
+  /* Polls panel */
+  pollsPanel:        $('pollsPanel'),
+  pollsScopeRoomBtn: $('pollsScopeRoomBtn'),
+  pollsScopeGlobalBtn: $('pollsScopeGlobalBtn'),
+  pollsWidget:       $('pollsWidget'),
+
   /* Private chat */
   privateChatCont: $('privateChatCont'),
   minimisedBar:    $('minimisedBar'),

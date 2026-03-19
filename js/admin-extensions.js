@@ -109,6 +109,8 @@ export function openRoleEditModal(role = null) {
     document.getElementById('permCanChangeNickname').checked = perms.can_change_nickname !== false;
     const permViewCam = document.getElementById('permCanViewCamWithoutAccept');
     if (permViewCam) permViewCam.checked = perms.can_view_cam_without_accept === true;
+    const permManagePolls = document.getElementById('permCanManagePolls');
+    if (permManagePolls) permManagePolls.checked = perms.can_manage_polls === true;
   } else {
     /* Reset form per nuovo ruolo */
     dom.roleEditForm.reset();
@@ -126,6 +128,7 @@ export function openRoleEditModal(role = null) {
     document.getElementById('permCanBan').checked = false;
     document.getElementById('permCanChangeAvatar').checked = true;
     document.getElementById('permCanChangeNickname').checked = true;
+    document.getElementById('permCanManagePolls').checked = false;
     console.log('[Admin] Form reset for new role. ID field value:', idField?.value);
   }
   
@@ -194,6 +197,7 @@ export async function saveRole() {
       can_change_avatar: document.getElementById('permCanChangeAvatar').checked,
       can_change_nickname: document.getElementById('permCanChangeNickname').checked,
       can_view_cam_without_accept: document.getElementById('permCanViewCamWithoutAccept')?.checked === true,
+      can_manage_polls: document.getElementById('permCanManagePolls')?.checked === true,
     };
     
     const { checkAdminAccess } = await import('./admin.js');

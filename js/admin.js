@@ -213,6 +213,10 @@ async function switchAdminTab(tabName) {
     const { loadWordFilter } = await import('./admin-extensions.js');
     await loadWordFilter();
   }
+  else if (tabName === 'polls') {
+    const { loadPollsAdmin } = await import('./polls.js');
+    await loadPollsAdmin();
+  }
 }
 
 async function loadGeneralAdminSettings() {
