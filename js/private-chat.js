@@ -99,8 +99,14 @@ export function openPrivateChat(uid) {
     const txt = input.value.trim(); if (!txt) return;
 
     /* PM: se il destinatario non risulta online, blocca l'invio */
-    const target = findUser(uid);
-    if (!target || target.online !== true) {
+    const targetUid = String(uid);
+    // In questa app `state.users[].online` può restare momentaneamente "stale".
+    // Per bloccare correttamente usiamo la presenza live: il destinatario deve esistere in `room.users`.
+    const isOnlineNow = Object.values(state.rooms || {}).some((r) => {
+      const users = r?.users || {};
+      return !!users[targetUid];
+    });
+    if (!isOnlineNow) {
       showToast('Mi dispiace, ma al momento la persona a cui stai scrivendo non è online.');
       return;
     }
