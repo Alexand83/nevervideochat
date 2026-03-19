@@ -557,13 +557,18 @@ export async function connectSupabase() {
         /* Forza re-render immediato */
         renderUsers();
         
-        /* Events room: update grid when cam-opened received */
-        /* NOTE: We do NOT call requestPublicCamera here because the camera owner
-           already auto-shares with everyone in startOwnCamera (push model).
-           Requesting here would create DUPLICATE WebRTC connections. */
+        /* Events room: update grid; if we still don't have this camera after delay, request (covers late joiners) */
         if (camRoom === state.activeRoom && inActiveRoom) {
           const { updateEventsCamGrid } = await import('./rooms.js');
           updateEventsCamGrid();
+          const isEventsRoom = camRoomData?.max_cams && camRoomData.max_cams >= 1 && camRoomData.max_cams <= 8;
+          if (isEventsRoom && !state.cameraWindows[fromId] && !state.incomingPCs?.[fromId] && !state.pendingCamRequests?.[fromId]) {
+            setTimeout(() => {
+              if (state.activeRoom !== camRoom) return;
+              if (state.cameraWindows[fromId] || state.incomingPCs?.[fromId] || state.pendingCamRequests?.[fromId]) return;
+              import('./camera.js?v=20260318b').then(({ requestPublicCamera }) => requestPublicCamera(fromId));
+            }, 1500);
+          }
         }
       })
       .on('broadcast', { event: 'cam-video-off' }, ({ payload }) => {

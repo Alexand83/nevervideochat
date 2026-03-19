@@ -901,6 +901,13 @@ export async function toggleOwnCamera() {
       await _teardownOwnStream();
     }
   } else {
+    /* Muted users cannot turn on camera (global or room mute). */
+    const myMute = state.currentUser?.id ? checkIsMuted(state.currentUser.id, state.activeRoom) : null;
+    if (myMute) {
+      const scope = myMute.global ? 'globally' : 'in this room';
+      showToast(`🔇 You are muted ${scope} and cannot turn on camera.`);
+      return;
+    }
     await startOwnCamera();
   }
 }
@@ -943,6 +950,12 @@ function clearCaptureRamp() {
 
 export async function startOwnCamera() {
   if (!navigator.mediaDevices?.getUserMedia) { showToast('⚠️ Camera not supported.'); return; }
+  const myMute = state.currentUser?.id ? checkIsMuted(state.currentUser.id, state.activeRoom) : null;
+  if (myMute) {
+    const scope = myMute.global ? 'globally' : 'in this room';
+    showToast(`🔇 You are muted ${scope} and cannot turn on camera.`);
+    return;
+  }
   try {
     const msSince = Date.now() - state.cameraClosedAt;
     if (msSince < 450) await new Promise(r => setTimeout(r, 450 - msSince));
@@ -2618,38 +2631,30 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
     }
   }
   
-  /* ── If slot still exists (matches state), check if we need to rebuild ── */
+  /* ── If slot still exists (matches state), reuse it when only stream changes to reduce mobile flicker ── */
   if (targetSlot) {
     const existingVideo = targetSlot.querySelector('video');
     if (existingVideo && stream) {
       const oldStream = existingVideo.srcObject;
       if (oldStream?.id === stream.id) {
-        /* Same stream ID — check if it's still alive */
         const hasLiveTracks = oldStream.getTracks().some(t => t.readyState === 'live');
         if (hasLiveTracks) {
-          /* Same live stream — just make sure it's playing */
           if (existingVideo.paused) existingVideo.play().catch(() => {});
           return;
-        } else {
-          /* Same stream ID but dead — remove and rebuild */
-          console.log('[Events Grid] Old stream is dead for', uid, '— rebuilding slot');
         }
-      } else if (oldStream && oldStream.id !== stream.id) {
-        /* Different stream — always rebuild when stream ID changes */
-        console.log('[Events Grid] Different stream ID for', uid, 'old:', oldStream.id, 'new:', stream.id);
       }
-    } else if (existingVideo && !existingVideo.srcObject) {
-      /* Video exists but no stream — dead slot, rebuild */
-      console.log('[Events Grid] Slot has video but no stream for', uid, '— rebuilding');
-    }
-    /* New/different stream OR stream is null/undefined OR video is missing OR old stream is dead
-       — MUST rebuild slot completely to avoid black screen */
-    console.log('[Events Grid] Rebuilding slot for', uid, 'stream:', stream ? 'new' : 'null', 'existingVideo:', !!existingVideo);
-    if (existingVideo) {
+      /* Same slot, new or dead stream: update in place instead of removing slot (reduces flicker on mobile) */
+      existingVideo.srcObject = stream;
+      existingVideo.play().catch(() => {});
+      const labelEl = targetSlot.querySelector('.events-cam-slot-label');
+      if (labelEl) labelEl.textContent = name || uid || 'User';
+      return;
+    } else if (existingVideo && !stream) {
+      existingVideo.srcObject = null;
       existingVideo.pause();
-      existingVideo.srcObject = null;   /* ← aborts pending play cleanly */
+      return;
     }
-    /* Remove old slot completely and create fresh one */
+    /* No video element or no stream and no existing video — remove and create fresh slot */
     targetSlot.remove();
     targetSlot = null;
   }
@@ -2788,10 +2793,11 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
         }
       }, 3000);
       
-      /* Continuous retry: force play() every 2 seconds until video starts playing
-         This handles cases where play() hangs indefinitely on Edge/Windows */
+      /* Limited retry every 5s (max 3) to avoid mobile flicker from aggressive play() loops */
+      let continuousRetryCount = 0;
+      const MAX_CONTINUOUS_RETRIES = 3;
       const continuousRetry = setInterval(() => {
-        if (playStarted) {
+        if (playStarted || continuousRetryCount >= MAX_CONTINUOUS_RETRIES) {
           clearInterval(continuousRetry);
           return;
         }
@@ -2799,29 +2805,20 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           clearInterval(continuousRetry);
           return;
         }
-        /* If video is paused, force play() */
         if (video.paused) {
-          console.log('[Events Grid] Continuous retry — forcing play() for', uid);
+          continuousRetryCount++;
           video.play().then(() => {
             if (!playStarted) {
               playStarted = true;
               clearInterval(continuousRetry);
-              console.log('[Events Grid] Playing for', uid, '(continuous retry)');
             }
-          }).catch(err => {
-            if (err.name !== 'AbortError') {
-              console.warn('[Events Grid] Continuous retry play() failed:', err.name);
-            }
-          });
+          }).catch(() => {});
         } else {
-          /* Video is playing — mark as started and stop retry */
           playStarted = true;
           clearInterval(continuousRetry);
-          console.log('[Events Grid] Playing for', uid, '(detected playing)');
         }
-      }, 2000);
+      }, 5000);
       
-      /* Stop continuous retry after 30 seconds */
       setTimeout(() => {
         clearInterval(continuousRetry);
         if (!playStarted) {

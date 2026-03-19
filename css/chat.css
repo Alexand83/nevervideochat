@@ -1093,6 +1093,8 @@
   flex-direction: column;
   min-width: 0;
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  contain: layout paint;
+  will-change: transform;
 }
 .events-cam-slot.cam-speaking {
   box-shadow: 0 0 0 3px var(--accent), 0 0 18px rgba(31, 111, 235, 0.45);
@@ -1106,6 +1108,8 @@
   display: block;
   flex: 1;
   min-height: 0;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .events-cam-slot-label {

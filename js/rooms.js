@@ -439,8 +439,7 @@ export function switchRoom(roomId) {
   _updateCamBtn();
   
   /* Events room: automatically request cameras from users who already have them open.
-     Delay di 8s per dare tempo alla connessione WebRTC di stabilizzarsi dopo il cambio stanza.
-     Secondo tentativo a 16s per cam che non si sono connesse al primo giro. */
+     Immediate + 2s + 6s so cams appear quickly for everyone. */
   if (isEventsRoom) {
     const room = state.rooms[roomIdStr];
     if (room) {
@@ -454,7 +453,6 @@ export function switchRoom(roomId) {
         console.log(`[Events Room] (${label}) Requesting cameras from`, usersWithCam.length, 'users:', usersWithCam.map(u => u.name || u.id));
 
         usersWithCam.forEach((user, index) => {
-          /* Pulisci manuallyClosedCameras: al rientro in Events la cam si deve ricaricare */
           if (state.manuallyClosedCameras[user.id] && user.hasCamera) {
             delete state.manuallyClosedCameras[user.id];
           }
@@ -466,15 +464,14 @@ export function switchRoom(roomId) {
               if (state.activeRoom !== roomIdStr) return;
               console.log(`[Events Room] (${label}) Requesting camera from`, user.name || user.id);
               requestPublicCamera(user.id);
-            }, index * 300);
+            }, index * 200);
           }
         });
       };
 
-      /* Primo tentativo: 8s (tempo per stabilizzare la connessione dopo cambio stanza) */
-      setTimeout(() => requestEventsRoomCams('8s'), 8000);
-      /* Secondo tentativo: 16s (retry per cam non connesse al primo giro) */
-      setTimeout(() => requestEventsRoomCams('16s'), 16000);
+      requestEventsRoomCams('0s');
+      setTimeout(() => requestEventsRoomCams('2s'), 2000);
+      setTimeout(() => requestEventsRoomCams('6s'), 6000);
     }
   }
 }

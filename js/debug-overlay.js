@@ -58,27 +58,7 @@ export function initDebugOverlay() {
   console.warn = (...args) => { addLine('WARN', args); original.warn(...args); };
   console.error = (...args) => { addLine('ERR ', args); original.error(...args); };
 
-  // UI
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.textContent = 'DBG';
-  btn.setAttribute('aria-label', 'Open debug log');
-  btn.style.cssText = [
-    'position:fixed',
-    'right:12px',
-    'bottom:12px',
-    'z-index:99999',
-    'padding:8px 10px',
-    'border-radius:999px',
-    'border:1px solid rgba(255,255,255,.18)',
-    'background:rgba(13,17,23,.85)',
-    'color:#e6edf3',
-    'font-weight:800',
-    'font-size:12px',
-    'backdrop-filter:blur(6px)',
-    '-webkit-backdrop-filter:blur(6px)',
-  ].join(';');
-
+  // UI (no floating DBG button when ?debug=1 — overlay only, for programmatic use if needed)
   const overlay = document.createElement('div');
   overlay.hidden = true;
   overlay.style.cssText = [
@@ -142,14 +122,8 @@ export function initDebugOverlay() {
 
   overlay.append(hdr, ta);
 
-  const open = () => {
-    overlay.hidden = false;
-    ta.value = lines.join('\n');
-    ta.scrollTop = ta.scrollHeight;
-  };
   const close = () => { overlay.hidden = true; };
 
-  btn.addEventListener('click', () => (overlay.hidden ? open() : close()));
   closeBtn.addEventListener('click', close);
   clearBtn.addEventListener('click', () => { lines.length = 0; ta.value = ''; });
   copyBtn.addEventListener('click', async () => {
@@ -168,7 +142,8 @@ export function initDebugOverlay() {
     }
   });
 
-  document.body.append(btn, overlay);
+  /* Only add overlay (no floating DBG button when ?debug=1) */
+  document.body.append(overlay);
   addLine('LOG ', ['[DebugOverlay] enabled']);
 }
 

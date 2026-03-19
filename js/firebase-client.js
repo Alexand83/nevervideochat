@@ -687,6 +687,15 @@ export async function connectFirebase() {
         if (camRoom === state.activeRoom && inActiveRoom) {
           const { updateEventsCamGrid } = await import('./rooms.js');
           updateEventsCamGrid();
+          /* Events room: if we don't have this camera yet (owner may not have us in room.users), request after short delay */
+          const isEventsRoom = camRoomData?.max_cams && camRoomData.max_cams >= 1 && camRoomData.max_cams <= 8;
+          if (isEventsRoom && !state.cameraWindows[fromId] && !state.incomingPCs?.[fromId] && !state.pendingCamRequests?.[fromId]) {
+            setTimeout(() => {
+              if (state.activeRoom !== camRoom) return;
+              if (state.cameraWindows[fromId] || state.incomingPCs?.[fromId] || state.pendingCamRequests?.[fromId]) return;
+              import('./camera.js?v=20260318b').then(({ requestPublicCamera }) => requestPublicCamera(fromId));
+            }, 1500);
+          }
         }
       })
       .on('broadcast', { event: 'cam-video-off' }, ({ payload }) => {
