@@ -12,6 +12,9 @@
       ]
     }
   ],
+  "firestore": {
+    "rules": "firebase/firestore.rules"
+  },
   "hosting": {
     "public": ".",
     "ignore": [

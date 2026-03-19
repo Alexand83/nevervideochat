@@ -182,77 +182,89 @@ async function _subscribePollWidget() {
     .orderBy('expires_at', 'desc')
     .limit(1);
 
-  _unsubPoll = query.onSnapshot((snap) => {
-    const doc = snap.docs?.[0] || null;
-    if (!doc) {
-      _renderEmpty();
-      return;
-    }
+  _unsubPoll = query.onSnapshot(
+    (snap) => {
+      const doc = snap.docs?.[0] || null;
+      if (!doc) {
+        _renderEmpty();
+        return;
+      }
 
-    const poll = { id: doc.id, ...doc.data() };
-    if (_pollShouldHideNow(poll)) {
-      _renderEmpty();
-      return;
-    }
-
-    _currentPollId = doc.id;
-    const options = _extractOptionsArray(poll);
-
-    // Subscribe to votes for this poll.
-    if (_unsubVotes) {
-      try { _unsubVotes(); } catch (_) {}
-      _unsubVotes = null;
-    }
-
-    const votesCol = state.fb.firestore.collection('polls').doc(_currentPollId).collection('votes');
-    _unsubVotes = votesCol.onSnapshot((vsnap) => {
-      const voteCounts = {};
-      let myVoteOptionId = null;
-      const myUid = state.currentUser?.id ? String(state.currentUser.id) : null;
-
+      const poll = { id: doc.id, ...doc.data() };
       if (_pollShouldHideNow(poll)) {
         _renderEmpty();
         return;
       }
 
-      vsnap.forEach((vdoc) => {
-        const data = vdoc.data() || {};
-        const optId = data.option_id != null ? String(data.option_id) : null;
-        if (!optId) return;
-        voteCounts[optId] = Number(voteCounts[optId] || 0) + 1;
-        if (myUid && vdoc.id === myUid) myVoteOptionId = optId;
-      });
+      _currentPollId = doc.id;
+      const options = _extractOptionsArray(poll);
 
-      // Ensure all options appear in counts.
-      for (const o of options) voteCounts[String(o.id)] = Number(voteCounts[String(o.id)] || 0);
-
-      const resultsVisible = _pollShouldShowResults(poll);
-      const now = Date.now();
-      const expiresMs = _toMillis(poll?.expires_at);
-      const ended = expiresMs != null ? expiresMs <= now : false;
-
-      if (poll.cancelled_at) {
-        _renderEmpty();
-        return;
+      // Subscribe to votes for this poll.
+      if (_unsubVotes) {
+        try { _unsubVotes(); } catch (_) {}
+        _unsubVotes = null;
       }
 
-      if (resultsVisible || ended) {
-        _renderResultsPoll({ poll, myVoteOptionId, voteCounts, options });
-        _scheduleHide(poll);
-        return;
-      }
+      const votesCol = state.fb.firestore.collection('polls').doc(_currentPollId).collection('votes');
+      _unsubVotes = votesCol.onSnapshot(
+        (vsnap) => {
+          const voteCounts = {};
+          let myVoteOptionId = null;
+          const myUid = state.currentUser?.id ? String(state.currentUser.id) : null;
 
-      if (poll.is_active !== true) {
-        // If admin disabled it while still not expired: keep it hidden.
-        _renderEmpty();
-        return;
-      }
+          if (_pollShouldHideNow(poll)) {
+            _renderEmpty();
+            return;
+          }
 
-      _renderActivePoll({ poll, myVoteOptionId, voteCounts, options });
-    });
+          vsnap.forEach((vdoc) => {
+            const data = vdoc.data() || {};
+            const optId = data.option_id != null ? String(data.option_id) : null;
+            if (!optId) return;
+            voteCounts[optId] = Number(voteCounts[optId] || 0) + 1;
+            if (myUid && vdoc.id === myUid) myVoteOptionId = optId;
+          });
 
-    // If votes are empty snapshot, render will be handled by onSnapshot above.
-  });
+          // Ensure all options appear in counts.
+          for (const o of options) voteCounts[String(o.id)] = Number(voteCounts[String(o.id)] || 0);
+
+          const resultsVisible = _pollShouldShowResults(poll);
+          const now = Date.now();
+          const expiresMs = _toMillis(poll?.expires_at);
+          const ended = expiresMs != null ? expiresMs <= now : false;
+
+          if (poll.cancelled_at) {
+            _renderEmpty();
+            return;
+          }
+
+          if (resultsVisible || ended) {
+            _renderResultsPoll({ poll, myVoteOptionId, voteCounts, options });
+            _scheduleHide(poll);
+            return;
+          }
+
+          if (poll.is_active !== true) {
+            // If admin disabled it while still not expired: keep it hidden.
+            _renderEmpty();
+            return;
+          }
+
+          _renderActivePoll({ poll, myVoteOptionId, voteCounts, options });
+        },
+        (err) => {
+          console.warn('[Polls] votes listener:', err);
+        }
+      );
+
+      // If votes are empty snapshot, render will be handled by onSnapshot above.
+    },
+    (err) => {
+      // Usually happens while the composite index is still building.
+      console.warn('[Polls] poll widget listener:', err);
+      _renderEmpty();
+    }
+  );
 }
 
 export function setPollScopeMode(mode) {
@@ -302,8 +314,59 @@ function _getAdminEl(id) {
 function _pollScopeFromAdmin() {
   const scopeType = _getAdminEl('pollScopeType')?.value || 'room';
   if (scopeType === 'global') return { scope: 'global', scope_type: 'global', scope_id: 'global' };
-  const roomId = state.activeRoom || 'general';
+  const selectedRoomId = _getAdminEl('pollRoomId')?.value;
+  const roomId = selectedRoomId || state.activeRoom || 'general';
   return { scope: `room::${String(roomId)}`, scope_type: 'room', scope_id: String(roomId) };
+}
+
+async function _ensurePollAdminRooms() {
+  const wrap = _getAdminEl('pollRoomSelectWrap');
+  const selectEl = _getAdminEl('pollRoomId');
+  const scopeTypeEl = _getAdminEl('pollScopeType');
+  if (!wrap || !selectEl || !scopeTypeEl || !state.fb) return;
+
+  // Toggle visibility based on scope type.
+  const isRoom = scopeTypeEl.value === 'room';
+  wrap.hidden = !isRoom;
+
+  if (!isRoom) return;
+
+  // Prevent re-fetching too often; but it is ok to refresh when admin opens.
+  // (The room cache is kept in `rooms.js`.)
+  try {
+    const roomsMod = await import('./rooms.js');
+    if (typeof roomsMod.loadRoomsFromDB === 'function') {
+      await roomsMod.loadRoomsFromDB();
+    }
+    const rooms = typeof roomsMod.getAvailableRooms === 'function' ? roomsMod.getAvailableRooms() : [];
+
+    const activeRoomId = state.activeRoom || 'general';
+    const existing = String(selectEl.value || '');
+
+    selectEl.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '(seleziona una stanza)';
+    selectEl.appendChild(placeholder);
+
+    for (const r of rooms || []) {
+      const opt = document.createElement('option');
+      opt.value = String(r.id);
+      const name = r.name ? String(r.name) : String(r.id);
+      opt.textContent = `${r.id} - ${name}`;
+      selectEl.appendChild(opt);
+    }
+
+    // Keep selection stable: prefer active room if nothing selected.
+    if (existing) {
+      selectEl.value = existing;
+    } else {
+      selectEl.value = String(activeRoomId);
+    }
+  } catch (err) {
+    console.warn('[Polls] room select population:', err);
+    // If it fails, still allow manual fallback to activeRoom/general.
+  }
 }
 
 async function _createOrUpdatePollFromForm(editPollId = null) {
@@ -314,6 +377,16 @@ async function _createOrUpdatePollFromForm(editPollId = null) {
     return;
   }
 
+  const submitBtn = _getAdminEl('pollSubmitBtn');
+  const prevBtnText = submitBtn?.textContent || null;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    if (prevBtnText) submitBtn.textContent = editPollId ? '⏳ Updating...' : '⏳ Creating...';
+  }
+
+  showToast(editPollId ? '⏳ Updating poll...' : '⏳ Creating poll...');
+
+  try {
   const question = (_getAdminEl('pollQuestion')?.value || '').trim().substring(0, 300);
   if (!question) {
     showToast('⚠️ Poll question is required.');
@@ -362,7 +435,18 @@ async function _createOrUpdatePollFromForm(editPollId = null) {
     _getAdminEl('pollSubmitBtn') && (_getAdminEl('pollSubmitBtn').textContent = 'Create Poll');
   }
 
-  await loadPollsAdminList();
+    await loadPollsAdminList();
+  } catch (err) {
+    console.error('[Polls] create/update error:', err);
+    const msg = err?.message || 'Unknown error';
+    // Failed-precondition here is usually index-building but for writes it should be rare.
+    showToast(`⚠️ Poll not saved: ${msg}`);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      if (prevBtnText) submitBtn.textContent = prevBtnText;
+    }
+  }
 }
 
 async function _setPollActive(editPollId, isActive) {
@@ -412,11 +496,24 @@ async function loadPollsAdminList() {
   }
 
   const { scope } = _pollScopeFromAdmin();
-  const snap = await state.fb.firestore.collection('polls')
-    .where('scope', '==', scope)
-    .orderBy('created_at', 'desc')
-    .limit(10)
-    .get();
+  let snap;
+  try {
+    snap = await state.fb.firestore.collection('polls')
+      .where('scope', '==', scope)
+      .orderBy('created_at', 'desc')
+      .limit(10)
+      .get();
+  } catch (err) {
+    console.warn('[Polls] loadPollsAdminList error:', err);
+    if (err?.code === 'failed-precondition') {
+      listEl.innerHTML = '<p class="admin-empty">⏳ Indici Firestore in costruzione per i polls. Riprova tra 1-2 minuti.</p>';
+      showToast('⏳ Attendi: indici Firestore per i polls in costruzione.');
+      return;
+    }
+    listEl.innerHTML = `<p class="admin-empty">⚠️ Failed to load polls.</p>`;
+    showToast('⚠️ Failed to load poll list.');
+    return;
+  }
 
   const polls = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   listEl.innerHTML = '';
@@ -486,7 +583,10 @@ export async function loadPollsAdmin() {
       const editPollId = _getAdminEl('pollEditId')?.value || '';
       await _createOrUpdatePollFromForm(editPollId || null);
     });
-    _getAdminEl('pollScopeType')?.addEventListener('change', () => loadPollsAdminList());
+    _getAdminEl('pollScopeType')?.addEventListener('change', async () => {
+      await _ensurePollAdminRooms();
+      await loadPollsAdminList();
+    });
     const createBtn = _getAdminEl('pollResetBtn');
     createBtn?.addEventListener('click', () => {
       _getAdminEl('pollEditId').value = '';
@@ -497,6 +597,7 @@ export async function loadPollsAdmin() {
     });
   }
 
+  await _ensurePollAdminRooms();
   await loadPollsAdminList();
 }
 
