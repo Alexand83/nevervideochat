@@ -55,6 +55,18 @@ function _renderEmpty() {
   _setPanelVisible(false);
 }
 
+function _renderScopeEmpty(msg = null) {
+  if (!dom.pollsWidget) return;
+  const text = msg || (_scopeMode === 'global'
+    ? 'Nessun sondaggio globale attivo al momento.'
+    : 'Nessun sondaggio attivo in questa stanza.');
+  dom.pollsWidget.innerHTML = `
+    <div class="polls-q">📊 Sondaggio</div>
+    <div class="polls-hint">${escHtml(text)}</div>
+  `;
+  _setPanelVisible(true);
+}
+
 function _renderActivePoll({ poll, myVoteOptionId, voteCounts, options }) {
   if (!dom.pollsWidget) return;
   const now = Date.now();
@@ -188,7 +200,7 @@ async function _subscribePollWidget() {
     (snap) => {
       const docs = snap.docs || [];
       if (!docs.length) {
-        _renderEmpty();
+        _renderScopeEmpty();
         return;
       }
 
@@ -209,7 +221,7 @@ async function _subscribePollWidget() {
       }
 
       if (!selected) {
-        _renderEmpty();
+        _renderScopeEmpty();
         return;
       }
 
@@ -280,7 +292,7 @@ async function _subscribePollWidget() {
     (err) => {
       // Usually happens while the composite index is still building.
       console.warn('[Polls] poll widget listener:', err);
-      _renderEmpty();
+      _renderScopeEmpty('Impossibile caricare il sondaggio in questo momento.');
     }
   );
 }
@@ -686,17 +698,48 @@ async function _submitVote(optionId) {
 
   const uid = String(state.currentUser.id);
   const pollId = _currentPollId;
+  const pollRef = state.fb.firestore.collection('polls').doc(pollId);
   const voteRef = state.fb.firestore.collection('polls').doc(pollId).collection('votes').doc(uid);
 
   try {
+    // Pre-check to provide precise UX messages instead of generic failure.
+    const [pollSnap, myVoteSnap] = await Promise.all([pollRef.get(), voteRef.get()]);
+    if (!pollSnap.exists) {
+      showToast('⚠️ Sondaggio non trovato.');
+      return;
+    }
+    const poll = { id: pollSnap.id, ...pollSnap.data() };
+    const expiresMs = _toMillis(poll.expires_at);
+    const now = Date.now();
+    if (poll.cancelled_at || poll.is_active !== true) {
+      showToast('⚠️ Questo sondaggio non è attivo.');
+      return;
+    }
+    if (expiresMs != null && expiresMs <= now) {
+      showToast('⚠️ Questo sondaggio è scaduto.');
+      return;
+    }
+    if (myVoteSnap.exists) {
+      showToast('⚠️ Hai già votato.');
+      return;
+    }
+
     await voteRef.create({
       option_id: String(optionId),
       voted_at: new Date(),
     });
     showToast('✅ Vote saved.');
   } catch (err) {
-    // Usually already voted or poll expired/disabled.
-    showToast('⚠️ Hai già votato o il sondaggio non e\' piu disponibile.');
+    console.warn('[Polls] vote error:', err);
+    if (err?.code === 'already-exists') {
+      showToast('⚠️ Hai già votato.');
+      return;
+    }
+    if (err?.code === 'permission-denied') {
+      showToast('⚠️ Voto non consentito (sondaggio scaduto o permessi insufficienti).');
+      return;
+    }
+    showToast('⚠️ Errore durante il voto. Riprova.');
   }
 }
 
