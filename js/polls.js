@@ -10,6 +10,8 @@ let _unsubPoll = null;
 let _unsubVotes = null;
 let _currentPollId = null;
 let _hideTimer = null;
+/** Timer: Firestore non notifica lo scadere del tempo — serve per passare a risultati e poi nascondere. */
+let _wallClockTimer = null;
 
 let _scopeMode = 'room'; // 'room' | 'global'
 let _scopeRoomId = null;
@@ -23,6 +25,13 @@ function _scopeKey() {
 function _clearHideTimer() {
   if (_hideTimer) clearTimeout(_hideTimer);
   _hideTimer = null;
+}
+
+function _clearWallClockTimer() {
+  if (_wallClockTimer) {
+    clearTimeout(_wallClockTimer);
+    _wallClockTimer = null;
+  }
 }
 
 function _formatMinutes(mins) {
@@ -176,6 +185,78 @@ function _extractOptionsArray(poll) {
     .map(o => ({ id: String(o.id), text: String(o.text) }));
 }
 
+/**
+ * Aggiorna UI da stato poll + voti (stesso criterio del listener voti).
+ * Usato dal timer a orologio: Firestore non emette eventi allo scadere di expires_at.
+ */
+function _applyPollVoteState(poll, options, voteCounts, myVoteOptionId) {
+  if (_pollShouldHideNow(poll)) {
+    _renderEmpty();
+    return;
+  }
+  if (poll.cancelled_at) {
+    _renderEmpty();
+    return;
+  }
+
+  const resultsVisible = _pollShouldShowResults(poll);
+  const expiresMs = _toMillis(poll?.expires_at);
+  const ended = expiresMs != null ? expiresMs <= Date.now() : false;
+
+  if (resultsVisible || ended) {
+    _renderResultsPoll({ poll, myVoteOptionId, voteCounts, options });
+    _scheduleHide(poll);
+    return;
+  }
+
+  if (poll.is_active !== true) {
+    _renderScopeEmpty(_scopeMode === 'global'
+      ? 'Nessun sondaggio globale attivo al momento.'
+      : 'Nessun sondaggio attivo in questa stanza.');
+    return;
+  }
+
+  _renderActivePoll({ poll, myVoteOptionId, voteCounts, options });
+}
+
+async function _refreshPollWidgetFromServer(pollId) {
+  if (!state.fb?.firestore || !pollId) return;
+  if (String(_currentPollId) !== String(pollId)) return;
+  const ref = state.fb.firestore.collection('polls').doc(String(pollId));
+  const [snap, votesSnap] = await Promise.all([ref.get(), ref.collection('votes').get()]);
+  if (!snap.exists) return;
+  const poll = { id: snap.id, ...snap.data() };
+  const options = _extractOptionsArray(poll);
+  const myUid = state.currentUser?.id ? String(state.currentUser.id) : null;
+  const voteCounts = {};
+  let myVoteOptionId = null;
+  votesSnap.forEach((vdoc) => {
+    const data = vdoc.data() || {};
+    const optId = data.option_id != null ? String(data.option_id) : null;
+    if (!optId) return;
+    voteCounts[optId] = Number(voteCounts[optId] || 0) + 1;
+    if (myUid && vdoc.id === myUid) myVoteOptionId = optId;
+  });
+  for (const o of options) voteCounts[String(o.id)] = Number(voteCounts[String(o.id)] || 0);
+
+  _applyPollVoteState(poll, options, voteCounts, myVoteOptionId);
+}
+
+function _scheduleWallClockPollRefresh(poll) {
+  _clearWallClockTimer();
+  const expiresMs = _toMillis(poll?.expires_at);
+  if (expiresMs == null) return;
+  const pollId = String(poll.id);
+  const delayToExpiry = Math.max(0, expiresMs - Date.now());
+
+  // Firestore non notifica lo scadere: a expires_at ricarichiamo poll+voti → risultati + _scheduleHide.
+  _wallClockTimer = setTimeout(() => {
+    _wallClockTimer = null;
+    if (String(_currentPollId) !== pollId) return;
+    _refreshPollWidgetFromServer(pollId).catch((e) => console.warn('[Polls] refresh at expiry:', e));
+  }, delayToExpiry + 50);
+}
+
 async function _subscribePollWidget() {
   if (!state.fb?.firestore) return;
   const scope = _scopeKey();
@@ -188,6 +269,8 @@ async function _subscribePollWidget() {
     try { _unsubVotes(); } catch (_) {}
     _unsubVotes = null;
   }
+  _clearWallClockTimer();
+  _clearHideTimer();
   _currentPollId = null;
 
   const col = state.fb.firestore.collection('polls');
@@ -223,9 +306,12 @@ async function _subscribePollWidget() {
       }
 
       if (!selected) {
-        // All recent polls are outside visibility window (expired+5m/cancelled/disabled):
-        // hide the column and restore normal layout.
-        _renderEmpty();
+        // Solo poll vecchi/scaduti oltre la finestra: non nascondere la colonna al cambio tab (es. Globale).
+        _renderScopeEmpty(
+          _scopeMode === 'global'
+            ? 'Nessun sondaggio globale visibile (scaduti da oltre 5 min o disattivati).'
+            : 'Nessun sondaggio visibile in questa stanza (scaduti da oltre 5 min o disattivati).'
+        );
         return;
       }
 
@@ -246,11 +332,6 @@ async function _subscribePollWidget() {
           let myVoteOptionId = null;
           const myUid = state.currentUser?.id ? String(state.currentUser.id) : null;
 
-          if (_pollShouldHideNow(poll)) {
-            _renderEmpty();
-            return;
-          }
-
           vsnap.forEach((vdoc) => {
             const data = vdoc.data() || {};
             const optId = data.option_id != null ? String(data.option_id) : null;
@@ -262,34 +343,15 @@ async function _subscribePollWidget() {
           // Ensure all options appear in counts.
           for (const o of options) voteCounts[String(o.id)] = Number(voteCounts[String(o.id)] || 0);
 
-          const resultsVisible = _pollShouldShowResults(poll);
-          const now = Date.now();
-          const expiresMs = _toMillis(poll?.expires_at);
-          const ended = expiresMs != null ? expiresMs <= now : false;
-
-          if (poll.cancelled_at) {
-            _renderEmpty();
-            return;
-          }
-
-          if (resultsVisible || ended) {
-            _renderResultsPoll({ poll, myVoteOptionId, voteCounts, options });
-            _scheduleHide(poll);
-            return;
-          }
-
-          if (poll.is_active !== true) {
-            // If admin disabled it while still not expired: keep it hidden.
-            _renderEmpty();
-            return;
-          }
-
-          _renderActivePoll({ poll, myVoteOptionId, voteCounts, options });
+          _applyPollVoteState(poll, options, voteCounts, myVoteOptionId);
         },
         (err) => {
           console.warn('[Polls] votes listener:', err);
         }
       );
+
+      // Timer: quando scade expires_at senza nuovi voti, Firestore non notifica → mostra risultati.
+      _scheduleWallClockPollRefresh(poll);
 
       // If votes are empty snapshot, render will be handled by onSnapshot above.
     },
