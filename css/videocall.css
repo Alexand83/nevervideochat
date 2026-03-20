@@ -4,6 +4,11 @@
   top: 76px;
   right: 20px;
   width: 400px;
+  height: 340px;
+  min-width: 260px;
+  min-height: 220px;
+  max-width: calc(100vw - 8px);
+  max-height: calc(100vh - 8px);
   background: var(--bg0);
   border: 1px solid var(--border);
   border-radius: var(--r4);
@@ -56,11 +61,30 @@
 }
 .vcall-hdr-close:hover { background: var(--clr-danger); color: #fff; }
 
-/* Videos area */
+/* Angolo ridimensionamento (mouse/touch) */
+.vcall-resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 5;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, var(--tx2) 50%, var(--tx2) 55%, transparent 55%),
+              linear-gradient(135deg, transparent 62%, var(--tx2) 62%, var(--tx2) 67%, transparent 67%),
+              linear-gradient(135deg, transparent 74%, var(--tx2) 74%, var(--tx2) 79%, transparent 79%);
+  opacity: 0.55;
+  border-radius: 0 0 var(--r4) 0;
+}
+.vcall-resize-handle:hover { opacity: 0.95; }
+
+/* Videos area — flex:1 così al resize verticale si espande */
 .vcall-videos {
   position: relative;
+  flex: 1 1 auto;
+  min-height: 120px;
   background: #000;
-  aspect-ratio: 16 / 9;
   overflow: hidden;
 }
 

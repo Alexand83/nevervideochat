@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260318 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260320 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL } from './config.js';
 import { state }         from './state.js';
@@ -1994,6 +1994,96 @@ function startEncodingRampUp(pc, peerId) {
 /* Filtro anti-replay Firebase: child_added consegna tutti i messaggi passati → scarta webrtc scritti prima della nostra connessione */
 const WEBRTC_CONNECT_SKEW_MS = 5000;
 
+/** Serializza ICE per Firebase/JSON (come cam pubblica) — RTCIceCandidate non sopravvive al round-trip. */
+function serializeIceForBroadcast(c) {
+  if (!c || !c.candidate) return null;
+  return {
+    candidate: c.candidate,
+    sdpMid: c.sdpMid ?? null,
+    sdpMLineIndex: c.sdpMLineIndex ?? 0,
+  };
+}
+
+function parseIceFromBroadcast(raw) {
+  if (raw == null) return null;
+  if (raw instanceof RTCIceCandidate) return raw;
+  const candStr = typeof raw === 'string' ? String(raw).trim() : raw.candidate;
+  if (!candStr) return null;
+  const init = {
+    candidate: candStr,
+    sdpMid: raw.sdpMid != null ? raw.sdpMid : null,
+    sdpMLineIndex: raw.sdpMLineIndex != null ? raw.sdpMLineIndex : 0,
+  };
+  try {
+    return new RTCIceCandidate(init);
+  } catch (_) {
+    return null;
+  }
+}
+
+async function addPrivatePeerIceCandidate(pc, raw) {
+  if (!pc) return;
+  const ice = parseIceFromBroadcast(raw);
+  if (!ice) return;
+  if (!pc.remoteDescription) {
+    pc._privatePendingIce = pc._privatePendingIce || [];
+    pc._privatePendingIce.push(ice);
+    return;
+  }
+  await pc.addIceCandidate(ice).catch((err) => console.warn('[WebRTC private] addIceCandidate:', err?.message || err));
+}
+
+async function flushPrivatePeerPendingIce(pc) {
+  if (!pc?._privatePendingIce?.length) return;
+  const pending = pc._privatePendingIce.splice(0);
+  for (const ice of pending) {
+    await pc.addIceCandidate(ice).catch((err) => console.warn('[WebRTC private] flush ICE:', err?.message || err));
+  }
+}
+
+function attachPrivatePeerMediaRecovery(pc) {
+  const tryPlayRemote = () => {
+    const v = dom.remoteVideoEl;
+    if (!v?.srcObject) return;
+    v.muted = false;
+    v.play().catch(() => {});
+  };
+  pc.addEventListener('iceconnectionstatechange', () => {
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      setTimeout(tryPlayRemote, 100);
+      setTimeout(tryPlayRemote, 800);
+    }
+  });
+  pc.addEventListener('connectionstatechange', () => {
+    if (pc.connectionState === 'connected') {
+      setTimeout(tryPlayRemote, 100);
+      setTimeout(tryPlayRemote, 1600);
+    }
+  });
+}
+
+function bindPrivatePeerOnTrack(pc) {
+  pc.ontrack = (ev) => {
+    const tr = ev.track;
+    const v = dom.remoteVideoEl;
+    if (ev.streams?.[0]) {
+      v.srcObject = ev.streams[0];
+    } else if (tr) {
+      let ms = v.srcObject instanceof MediaStream ? v.srcObject : null;
+      if (!ms) ms = new MediaStream();
+      if (!ms.getTracks().some((t) => t.id === tr.id)) ms.addTrack(tr);
+      v.srcObject = ms;
+    } else {
+      return;
+    }
+    v.muted = false;
+    v.playsInline = true;
+    dom.remotePlaceholder.style.display = 'none';
+    dom.vcallStatus.textContent = 'Connected';
+    v.play().catch(() => {});
+  };
+}
+
 /* ── All incoming WebRTC signals ──────────────────────────────── */
 export async function handleWebRTCSignal(payload) {
   const { sigType, from, sdp, candidate, dir } = payload || {};
@@ -2497,25 +2587,45 @@ export async function handleWebRTCSignal(payload) {
 
   if (isPrivate) {
     if (sigType === 'offer') {
+      if (state.privatePeer) {
+        try { state.privatePeer.close(); } catch (_) {}
+        state.privatePeer = null;
+      }
       const pc = new RTCPeerConnection(await getIceConfig());
-      state.privatePeer = pc; state.activeCallUID = from;
-      pc.onicecandidate = ({ candidate: c }) => { if (c) broadcast('webrtc', from, { sigType: 'ice', candidate: c, ctx: 'private' }); };
-      pc.ontrack = ({ streams }) => {
-        dom.remoteVideoEl.srcObject = streams[0]; dom.remoteVideoEl.play().catch(() => {});
-        dom.remotePlaceholder.style.display = 'none'; dom.vcallStatus.textContent = 'Connected';
+      state.privatePeer = pc;
+      state.activeCallUID = from;
+      bindPrivatePeerOnTrack(pc);
+      attachPrivatePeerMediaRecovery(pc);
+      pc.onicecandidate = ({ candidate: c }) => {
+        const p = serializeIceForBroadcast(c);
+        if (p) broadcast('webrtc', from, { sigType: 'ice', candidate: p, ctx: 'private' });
       };
       if (state.localStream) state.localStream.getTracks().filter(t => t.readyState === 'live').forEach(t => pc.addTrack(t, state.localStream));
       const caller = findUser(from);
-      dom.localVideoEl.srcObject = state.localStream; dom.vcallName.textContent = caller?.name || from;
-      dom.vcallStatus.textContent = 'Connecting…'; dom.vcallAvatar.textContent = initials(caller?.name || '?');
-      dom.vcallAvatar.style.background = avatarColor(caller?.name || '?'); dom.vcallWin.hidden = false;
+      dom.localVideoEl.srcObject = state.localStream;
+      dom.vcallName.textContent = caller?.name || from;
+      dom.vcallStatus.textContent = 'Connecting…';
+      dom.vcallAvatar.textContent = initials(caller?.name || '?');
+      dom.vcallAvatar.style.background = avatarColor(caller?.name || '?');
+      dom.vcallWin.hidden = false;
       await pc.setRemoteDescription({ type: 'offer', sdp });
-      const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+      await flushPrivatePeerPendingIce(pc);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await flushPrivatePeerPendingIce(pc);
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'private' });
     } else if (sigType === 'answer') {
-      if (state.privatePeer) { await state.privatePeer.setRemoteDescription({ type: 'answer', sdp }); dom.vcallStatus.textContent = 'Connected'; }
+      if (state.privatePeer) {
+        try {
+          await state.privatePeer.setRemoteDescription({ type: 'answer', sdp });
+          await flushPrivatePeerPendingIce(state.privatePeer);
+          dom.vcallStatus.textContent = 'Connected';
+        } catch (err) {
+          console.warn('[WebRTC private] answer failed:', err?.message || err);
+        }
+      }
     } else if (sigType === 'ice') {
-      if (state.privatePeer && candidate) await state.privatePeer.addIceCandidate(candidate).catch(console.warn);
+      if (state.privatePeer && candidate) await addPrivatePeerIceCandidate(state.privatePeer, candidate);
     }
   }
 }
@@ -2556,12 +2666,14 @@ async function startPrivateCall(targetUid) {
       state.streamOpenedForCall = true;
     } else { state.streamOpenedForCall = false; }
     const pc = new RTCPeerConnection(await getIceConfig());
-    state.privatePeer = pc; state.activeCallUID = targetUid;
+    state.privatePeer = pc;
+    state.activeCallUID = targetUid;
+    bindPrivatePeerOnTrack(pc);
+    attachPrivatePeerMediaRecovery(pc);
     state.localStream.getTracks().filter(t => t.readyState === 'live').forEach(t => pc.addTrack(t, state.localStream));
-    pc.onicecandidate = ({ candidate: c }) => { if (c) broadcast('webrtc', targetUid, { sigType: 'ice', candidate: c, ctx: 'private' }); };
-    pc.ontrack = ({ streams }) => {
-      dom.remoteVideoEl.srcObject = streams[0]; dom.remoteVideoEl.play().catch(() => {});
-      dom.remotePlaceholder.style.display = 'none'; dom.vcallStatus.textContent = 'Connected';
+    pc.onicecandidate = ({ candidate: c }) => {
+      const p = serializeIceForBroadcast(c);
+      if (p) broadcast('webrtc', targetUid, { sigType: 'ice', candidate: p, ctx: 'private' });
     };
     dom.localVideoEl.srcObject = state.localStream; dom.vcallName.textContent = target?.name || targetUid;
     dom.vcallStatus.textContent = 'Calling…'; dom.vcallAvatar.textContent = initials(target?.name || '?');
@@ -2588,12 +2700,29 @@ export function initCallControls() {
     state.localStream?.getVideoTracks().forEach(t => { t.enabled = !o; });
   });
   makeDraggable(dom.vcallWin, dom.vcallDragHandle);
+  if (dom.vcallResizeHandle) {
+    makeResizable(dom.vcallWin, dom.vcallResizeHandle, {
+      minWidth: 260,
+      minHeight: 220,
+      maxWidth: () => window.innerWidth - 8,
+      maxHeight: () => window.innerHeight - 8,
+      pinFirst: true,
+    });
+  }
 }
 
 export function endCall(notify = true) {
   if (notify && state.activeCallUID) broadcast('call-ended', state.activeCallUID, {});
   if (state.privatePeer) { clearEncodingRampTimer(state.privatePeer); state.privatePeer.close(); state.privatePeer = null; }
   dom.vcallWin.hidden = true;
+  try {
+    dom.vcallWin.style.width = '';
+    dom.vcallWin.style.height = '';
+    dom.vcallWin.style.left = '';
+    dom.vcallWin.style.top = '';
+    dom.vcallWin.style.right = '';
+    dom.vcallWin.style.bottom = '';
+  } catch (_) {}
   dom.remoteVideoEl.srcObject = null; dom.localVideoEl.srcObject = null;
   dom.remotePlaceholder.style.display = '';
   if (state.streamOpenedForCall && state.localStream) {

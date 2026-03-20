@@ -260,15 +260,29 @@ export function makeDraggable(el, handle) {
   handle.addEventListener('touchstart', onStart, { passive: false });
 }
 
-export function makeResizable(el, handle) {
+/**
+ * @param {HTMLElement} el
+ * @param {HTMLElement} handle
+ * @param {object} [opts]
+ * @param {number} [opts.minWidth=200]
+ * @param {number} [opts.minHeight=150]
+ * @param {number|(() => number)} [opts.maxWidth] default window-8
+ * @param {number|(() => number)} [opts.maxHeight] default window-8
+ * @param {boolean} [opts.pinFirst=true] convert right/bottom fixed layout to left+top before resize
+ */
+export function makeResizable(el, handle, opts = {}) {
   if (!handle) return;
+  const minW = opts.minWidth ?? 200;
+  const minH = opts.minHeight ?? 150;
   let sw = 0, sh = 0, mx = 0, my = 0;
 
   function onMove(e) {
     e.preventDefault();
     const { x, y } = _evXY(e);
-    el.style.width  = Math.max(200, sw + x - mx) + 'px';
-    el.style.height = Math.max(150, sh + y - my) + 'px';
+    const maxW = typeof opts.maxWidth === 'function' ? opts.maxWidth() : (opts.maxWidth ?? window.innerWidth - 8);
+    const maxH = typeof opts.maxHeight === 'function' ? opts.maxHeight() : (opts.maxHeight ?? window.innerHeight - 8);
+    el.style.width = clamp(sw + x - mx, minW, maxW) + 'px';
+    el.style.height = clamp(sh + y - my, minH, maxH) + 'px';
   }
   function onEnd() {
     document.removeEventListener('mousemove',   onMove);
@@ -280,6 +294,7 @@ export function makeResizable(el, handle) {
   function onStart(e) {
     if (e.touches && e.touches.length > 1) return;
     e.preventDefault(); e.stopPropagation();
+    if (opts.pinFirst !== false) _pinToLeftTop(el);
     sw = el.offsetWidth; sh = el.offsetHeight;
     const { x, y } = _evXY(e);
     mx = x; my = y;

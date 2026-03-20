@@ -113,6 +113,7 @@ export const dom = {
   vcallMicBtn:        $('vcallMicBtn'),
   vcallEndBtn:        $('vcallEndBtn'),
   vcallCamBtn:        $('vcallCamBtn'),
+  vcallResizeHandle:  $('vcallResizeHandle'),
 
   /* Context menu */
   ctxMenu:      $('ctxMenu'),
