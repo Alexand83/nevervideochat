@@ -1438,8 +1438,9 @@ function replaceRemoteVideoElement(uid) {
   const videoTracks = cw.stream.getVideoTracks();
   const hasVideo = videoTracks.some(t => t.readyState === 'live');
   if (!hasVideo) return false;
-  const wrap = cw.el?.querySelector('.cam-win-video-wrap');
-  const oldV = wrap?.querySelector('video');
+  /* Finestre floating: .cam-win-video-wrap; stanza Eventi: video diretto nello slot */
+  const wrap = cw.el?.querySelector('.cam-win-video-wrap') || cw.el;
+  const oldV = wrap?.querySelector?.('video');
   if (!wrap || !oldV) return false;
   if (oldV.videoWidth > 0) return true; /* già ok */
   const newV = document.createElement('video');
@@ -2267,7 +2268,8 @@ export async function handleWebRTCSignal(payload) {
             updateRemoteVideoVisibility(from);
             /* Sostituisci subito l'elemento video (spesso era nero con stream solo-audio); poi retry a intervalli */
             replaceRemoteVideoElement(from);
-            [200, 500, 1000, 2000, 3000].forEach(t => setTimeout(() => {
+            /* Solo 2 passaggi ritardati: evita sfarfallii da troppi replaceChild */
+            [650, 2200].forEach((t) => setTimeout(() => {
               if (state.cameraWindows[from]?.stream === cw.stream) replaceRemoteVideoElement(from);
             }, t));
           } else if (track?.kind === 'audio' && !cw.stream.getAudioTracks().length) {
@@ -2461,7 +2463,8 @@ export async function handleWebRTCSignal(payload) {
       pc.addEventListener('iceconnectionstatechange', () => {
         console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'iceConnectionState=', pc.iceConnectionState, 'connectionState=', pc.connectionState);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          setTimeout(() => retryPlay('ICE-connected', true), 200);
+          /* Solo play: reattach troppo presto qui spesso non porta frame → meglio dopo connectionState connected */
+          setTimeout(() => retryPlay('ICE-connected', false), 120);
           /* Fallback per browser che non espongono selected candidate pair:
              se abbiamo visto candidati ma non relay, assumiamo P2P quando ICE è connesso. */
           const cw = state.cameraWindows?.[from];
@@ -2472,9 +2475,29 @@ export async function handleWebRTCSignal(payload) {
       pc.addEventListener('connectionstatechange', () => {
         console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'connectionState=', pc.connectionState, 'iceConnectionState=', pc.iceConnectionState);
         if (pc.connectionState === 'connected') {
-          setTimeout(() => retryPlay('connection-connected', true), 400);
-          /* Un solo retry senza reattach dopo 2s per connessioni che si stabiliscono tardi */
+          setTimeout(() => retryPlay('connection-connected', true), 550);
           setTimeout(() => retryPlay('connection+2s', false), 2400);
+          /* Eventi: un solo recupero “nero” se dopo ICE il video non decodifica (senza loop) */
+          setTimeout(() => {
+            if (state.incomingPCs[from] !== pc) return;
+            const cw = state.cameraWindows[from];
+            if (!cw?.isEventsGrid || !cw.el || !cw.stream) return;
+            const vid = cw.el.querySelector('video');
+            if (!vid || !vid.srcObject) return;
+            const hasLiveVideo = cw.stream.getVideoTracks().some((t) => t.kind === 'video' && t.readyState === 'live');
+            if (!hasLiveVideo) return;
+            if (vid.videoWidth > 0 && !vid.paused) return;
+            vid.srcObject = null;
+            vid.srcObject = cw.stream;
+            vid.muted = true;
+            vid.play().catch(() => {});
+            /* Un solo replace se ancora nero (max 1 volta extra oltre retryPlay) */
+            setTimeout(() => {
+              if (state.incomingPCs[from] !== pc || !state.cameraWindows[from]?.isEventsGrid) return;
+              if (vid.videoWidth > 0) return;
+              replaceRemoteVideoElement(from);
+            }, 400);
+          }, 2100);
         }
       });
       console.log('[WebRTC-FLOW] INCOMING PC', from.slice(0, 8) + '…', 'listeners attached, initial state:', pc.connectionState, pc.iceConnectionState);
@@ -2905,13 +2928,20 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
       };
       video.addEventListener('canplay',     onFrames, { once: true });
       video.addEventListener('loadeddata',  onFrames, { once: true });
+      /* Primo frame spesso dopo "unmute" del track — un solo play, niente loop */
+      stream.getVideoTracks().forEach((t) => {
+        if (t.kind !== 'video') return;
+        t.addEventListener('unmute', () => {
+          if (video.parentNode && video.srcObject) video.play().catch(() => {});
+        }, { once: true });
+      });
 
       console.log('[Events Grid] Calling play() for', uid, 'video.paused:', video.paused, 'video.srcObject:', !!video.srcObject);
       const playPromise = video.play();
       if (playPromise && typeof playPromise.then === 'function') {
         /* Set a timeout to detect if play() is hanging (common on Edge/Windows when ICE not connected) */
         let playRetryCount = 0;
-        const MAX_PLAY_RETRIES = 5;
+        const MAX_PLAY_RETRIES = 2;
         const playTimeout = setTimeout(() => {
           /* Check if play() is still pending (video is paused and has srcObject) */
           if (!playStarted && video.parentNode && video.paused && video.srcObject) {
@@ -2929,10 +2959,8 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
                 /* If retry failed and we haven't reached max, schedule another retry */
                 if (playRetryCount < MAX_PLAY_RETRIES && video.parentNode && video.srcObject) {
                   setTimeout(() => {
-                    if (!playStarted && video.paused && video.srcObject) {
-                      video.play().catch(console.warn);
-                    }
-                  }, 1000);
+                    if (!playStarted && video.paused && video.srcObject) video.play().catch(console.warn);
+                  }, 1200);
                 }
               }
             });
@@ -2976,9 +3004,9 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
         }
       }, 3000);
       
-      /* Limited retry every 5s (max 3) to avoid mobile flicker from aggressive play() loops */
+      /* Al massimo 2 tentativi play distanziati (no loop stretto = meno sfarfallio) */
       let continuousRetryCount = 0;
-      const MAX_CONTINUOUS_RETRIES = 3;
+      const MAX_CONTINUOUS_RETRIES = 2;
       const continuousRetry = setInterval(() => {
         if (playStarted || continuousRetryCount >= MAX_CONTINUOUS_RETRIES) {
           clearInterval(continuousRetry);
@@ -3000,14 +3028,14 @@ export function insertCameraIntoEventsGrid(uid, stream, name, isOwn) {
           playStarted = true;
           clearInterval(continuousRetry);
         }
-      }, 5000);
-      
+      }, 6500);
+
       setTimeout(() => {
         clearInterval(continuousRetry);
         if (!playStarted) {
-          console.warn('[Events Grid] Continuous retry stopped for', uid, '— video still not playing after 30s');
+          console.warn('[Events Grid] Continuous retry stopped for', uid, '— video still not playing after ~20s');
         }
-      }, 30000);
+      }, 20000);
     };
 
     const activeTracks = stream.getTracks().filter(t => t.readyState === 'live');
