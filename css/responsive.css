@@ -8,6 +8,11 @@
   .floating-users-btn {
     display: flex !important;
   }
+
+  /* FAB sondaggio: solo quando JS rimuove [hidden] */
+  .floating-polls-btn:not([hidden]) {
+    display: flex !important;
+  }
   
   /* Make users panel semi-transparent on mobile */
   .users-panel {
@@ -152,9 +157,12 @@
   .logo-icon-svg { width: 30px; height: 30px; }
 }
 
-/* Desktop: Hide floating button */
+/* Desktop: Hide floating buttons */
 @media (min-width: 769px) {
   .floating-users-btn {
+    display: none !important;
+  }
+  .floating-polls-btn {
     display: none !important;
   }
 }

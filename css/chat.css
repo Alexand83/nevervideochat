@@ -33,10 +33,31 @@
   border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.08));
   flex-shrink: 0;
 }
+.polls-hdr-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
 .polls-title {
   margin: 0 0 6px 0;
   font-size: var(--fz-sm, 14px);
   color: var(--tx0, #e6edf3);
+  flex: 1;
+  min-width: 0;
+}
+.polls-mobile-close {
+  display: none;
+  flex-shrink: 0;
+}
+.polls-scope-notice {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--tx1, rgba(255,255,255,.88));
+  background: rgba(124, 58, 237, 0.12);
+  border: 1px solid rgba(124, 58, 237, 0.28);
+  border-radius: var(--r2, 10px);
+  padding: 8px 10px;
 }
 .polls-scope-tabs {
   display: flex;
@@ -135,16 +156,36 @@
 }
 
 @media (max-width: 768px) {
+  /* Sondaggio: non ruba spazio alla chat — drawer da sinistra + FAB (come utenti a destra) */
   .polls-panel {
-    flex: 0 0 auto;
-    width: 100%;
-    min-width: 0;
+    position: fixed;
+    left: 0;
+    top: var(--hdr-h, 60px);
+    height: calc(100dvh - var(--hdr-h, 60px));
+    width: min(92vw, 360px);
     max-width: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.08));
+    min-width: 0;
+    flex: none !important;
+    z-index: 205;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    border-right: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    border-bottom: none;
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    background: var(--bg1, rgba(255, 255, 255, 0.03));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
   .polls-panel.hidden {
-    display: none;
+    display: none !important;
+  }
+  .polls-panel:not(.hidden).mobile-open {
+    transform: translateX(0);
+  }
+  .polls-mobile-close {
+    display: inline-flex;
   }
   .polls-hdr {
     padding: 8px 10px;
@@ -154,7 +195,9 @@
     font-size: 13px;
   }
   .polls-widget {
-    max-height: 170px;
+    flex: 1;
+    min-height: 0;
+    max-height: none;
     padding: 10px;
     gap: 8px;
   }
@@ -162,6 +205,23 @@
     padding: 8px 10px;
     font-size: 13px;
   }
+}
+
+/* Overlay scuro dietro al drawer sondaggio (mobile) */
+.polls-panel-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.polls-panel-overlay.show {
+  display: block;
+  opacity: 1;
+  pointer-events: all;
 }
 
 /* Messages container — sfondo tipo "nastro" */

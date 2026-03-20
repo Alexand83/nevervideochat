@@ -80,6 +80,9 @@ export const dom = {
 
   /* Polls panel */
   pollsPanel:        $('pollsPanel'),
+  pollsPanelCloseBtn: $('pollsPanelCloseBtn'),
+  pollsPanelOverlay: $('pollsPanelOverlay'),
+  floatingPollsBtn:  $('floatingPollsBtn'),
   pollsScopeRoomBtn: $('pollsScopeRoomBtn'),
   pollsScopeGlobalBtn: $('pollsScopeGlobalBtn'),
   pollsWidget:       $('pollsWidget'),

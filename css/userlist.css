@@ -274,3 +274,40 @@
   border: 1.5px solid var(--bg0);
   line-height: 1;
 }
+
+/* Floating polls button (mobile) — speculare agli utenti, a sinistra */
+.floating-polls-btn {
+  display: none !important;
+  position: fixed;
+  top: calc(var(--hdr-h, 60px) + 8px);
+  left: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  z-index: 300;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  touch-action: manipulation;
+  padding: 0;
+  line-height: 1;
+}
+.floating-polls-btn:hover,
+.floating-polls-btn:active {
+  transform: scale(1.05);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+.floating-polls-btn[aria-expanded="true"] {
+  background: rgba(88, 28, 135, 0.95);
+}
+.floating-polls-icon {
+  font-size: 18px;
+  line-height: 1;
+}

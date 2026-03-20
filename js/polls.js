@@ -15,6 +15,12 @@ let _wallClockTimer = null;
 
 let _scopeMode = 'room'; // 'room' | 'global'
 let _scopeRoomId = null;
+/** Evita di chiudere il drawer mobile a ogni re-render dei voti. */
+let _lastPollPanelVisible = false;
+
+function _isMobilePollsLayout() {
+  return typeof window !== 'undefined' && window.innerWidth <= 768;
+}
 
 function _scopeKey() {
   if (_scopeMode === 'global') return 'global';
@@ -86,11 +92,71 @@ function _toMillis(ts) {
   return null;
 }
 
+function _closeMobilePollsDrawer() {
+  if (!dom.pollsPanel) return;
+  dom.pollsPanel.classList.remove('mobile-open');
+  if (dom.pollsPanelOverlay) {
+    dom.pollsPanelOverlay.classList.remove('show');
+    dom.pollsPanelOverlay.setAttribute('aria-hidden', 'true');
+  }
+  if (dom.floatingPollsBtn) dom.floatingPollsBtn.setAttribute('aria-expanded', 'false');
+}
+
+function _openMobilePollsDrawer() {
+  if (!dom.pollsPanel || dom.pollsPanel.classList.contains('hidden')) return;
+  dom.pollsPanel.classList.add('mobile-open');
+  if (dom.pollsPanelOverlay) {
+    dom.pollsPanelOverlay.classList.add('show');
+    dom.pollsPanelOverlay.setAttribute('aria-hidden', 'false');
+  }
+  if (dom.floatingPollsBtn) dom.floatingPollsBtn.setAttribute('aria-expanded', 'true');
+}
+
+function _toggleMobilePollsDrawer() {
+  if (!dom.pollsPanel || dom.pollsPanel.classList.contains('hidden')) return;
+  if (dom.pollsPanel.classList.contains('mobile-open')) _closeMobilePollsDrawer();
+  else _openMobilePollsDrawer();
+}
+
 function _setPanelVisible(visible) {
   if (!dom.pollsPanel) return;
+  const isMobile = _isMobilePollsLayout();
+  const wasVisible = _lastPollPanelVisible;
+  _lastPollPanelVisible = !!visible;
+
   dom.pollsPanel.hidden = !visible;
-  // Keep CSS class in sync; panel starts with class="hidden" in HTML.
   dom.pollsPanel.classList.toggle('hidden', !visible);
+  dom.pollsPanel.setAttribute('aria-hidden', visible ? 'false' : 'true');
+
+  if (!visible) {
+    if (dom.floatingPollsBtn) dom.floatingPollsBtn.hidden = true;
+    _closeMobilePollsDrawer();
+    return;
+  }
+
+  if (dom.floatingPollsBtn) {
+    if (isMobile) {
+      dom.floatingPollsBtn.hidden = false;
+      if (!wasVisible) _closeMobilePollsDrawer();
+    } else {
+      dom.floatingPollsBtn.hidden = true;
+      _closeMobilePollsDrawer();
+    }
+  }
+}
+
+/** Avviso quando il tab (Stanza/Globale) non coincide con lo scope del sondaggio mostrato (fallback). */
+function _pollScopeFallbackHtml(poll) {
+  const pref = _scopeKey();
+  const psc = poll?.scope;
+  if (!psc || pref === psc) return '';
+  if (pref === 'global' && psc !== 'global') {
+    return '<div class="polls-scope-notice" role="status">ℹ️ Nessun sondaggio globale attivo al momento. Stai vedendo il sondaggio della stanza.</div>';
+  }
+  if (pref !== 'global' && psc === 'global') {
+    return '<div class="polls-scope-notice" role="status">ℹ️ Nessun sondaggio per questa stanza. Stai vedendo il sondaggio globale.</div>';
+  }
+  return '';
 }
 
 function _renderEmpty() {
@@ -170,7 +236,9 @@ function _renderResultsPoll({ poll, myVoteOptionId, voteCounts, options }) {
     `;
   }).join('');
 
+  const notice = _pollScopeFallbackHtml(poll);
   dom.pollsWidget.innerHTML = `
+    ${notice}
     <div class="polls-q">${escHtml(poll.question || '')}</div>
     <div class="polls-results-title">Risultati</div>
     ${resultsHtml}
@@ -245,9 +313,7 @@ function _applyPollVoteState(poll, options, voteCounts, myVoteOptionId) {
   }
 
   if (poll.is_active !== true) {
-    _renderScopeEmpty(_scopeMode === 'global'
-      ? 'Nessun sondaggio globale attivo al momento.'
-      : 'Nessun sondaggio attivo in questa stanza.');
+    _renderEmpty();
     return;
   }
 
@@ -404,6 +470,35 @@ export function initPollsPanel() {
   if (dom.pollsScopeGlobalBtn) {
     dom.pollsScopeGlobalBtn.addEventListener('click', () => setPollScopeMode('global'));
   }
+
+  if (dom.floatingPollsBtn) {
+    dom.floatingPollsBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      _toggleMobilePollsDrawer();
+    });
+  }
+  if (dom.pollsPanelCloseBtn) {
+    dom.pollsPanelCloseBtn.addEventListener('click', () => _closeMobilePollsDrawer());
+  }
+  if (dom.pollsPanelOverlay) {
+    dom.pollsPanelOverlay.addEventListener('click', () => _closeMobilePollsDrawer());
+  }
+
+  let resizeT = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => {
+      const mobile = _isMobilePollsLayout();
+      if (!dom.pollsPanel || !dom.floatingPollsBtn) return;
+      const hasPoll = !dom.pollsPanel.classList.contains('hidden');
+      if (mobile) {
+        dom.floatingPollsBtn.hidden = !hasPoll;
+      } else {
+        dom.floatingPollsBtn.hidden = true;
+        _closeMobilePollsDrawer();
+      }
+    }, 150);
+  });
 
   // Start hidden; subscribe once Firebase is ready.
   _renderEmpty();

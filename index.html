@@ -14,8 +14,8 @@
   <link rel="stylesheet" href="css/reset.css?v=20260453">
   <link rel="stylesheet" href="css/header.css?v=20260453">
   <link rel="stylesheet" href="css/layout.css?v=20260453">
-  <link rel="stylesheet" href="css/chat.css?v=20260456">
-  <link rel="stylesheet" href="css/userlist.css?v=20260453">
+  <link rel="stylesheet" href="css/chat.css?v=20260457">
+  <link rel="stylesheet" href="css/userlist.css?v=20260457">
   <link rel="stylesheet" href="css/privatechat.css?v=20260453">
   <link rel="stylesheet" href="css/games.css?v=20260453">
   <link rel="stylesheet" href="css/minimisedbar.css?v=20260453">
@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="css/admin.css?v=20260453">
   <link rel="stylesheet" href="css/announcements.css?v=20260453">
   <link rel="stylesheet" href="css/kickbanoverlay.css?v=20260453">
-  <link rel="stylesheet" href="css/responsive.css?v=20260453">
+  <link rel="stylesheet" href="css/responsive.css?v=20260457">
 </head>
 <body>
 
@@ -151,10 +151,14 @@
 ================================================================ -->
 <main class="app-main" role="main">
 
-  <!-- LEFT — POLLS COLUMN -->
-  <aside class="polls-panel hidden" id="pollsPanel" aria-label="Polls">
+  <!-- LEFT — POLLS COLUMN (desktop: colonna; mobile: drawer + FAB) -->
+  <aside class="polls-panel hidden" id="pollsPanel" aria-label="Polls" aria-hidden="true">
     <div class="polls-hdr">
-      <h2 class="polls-title">📊 Sondaggio</h2>
+      <div class="polls-hdr-top">
+        <h2 class="polls-title">📊 Sondaggio</h2>
+        <button type="button" class="polls-mobile-close close-panel-btn" id="pollsPanelCloseBtn"
+                aria-label="Chiudi sondaggio">✕</button>
+      </div>
       <div class="polls-scope-tabs" role="tablist" aria-label="Poll scope">
         <button type="button" id="pollsScopeRoomBtn" class="polls-scope-tab active" aria-selected="true">Stanza</button>
         <button type="button" id="pollsScopeGlobalBtn" class="polls-scope-tab" aria-selected="false">Globale</button>
@@ -162,6 +166,7 @@
     </div>
     <div class="polls-widget" id="pollsWidget"></div>
   </aside>
+  <div class="polls-panel-overlay" id="pollsPanelOverlay" aria-hidden="true"></div>
 
   <!-- LEFT — CHAT SECTION -->
   <section class="chat-section" aria-label="Public chat">
@@ -1268,6 +1273,12 @@
     </div>
   </div>
 </div>
+
+<!-- Floating polls button (mobile only — apre drawer sondaggio) -->
+<button class="floating-polls-btn" id="floatingPollsBtn" hidden
+        title="Sondaggio" aria-label="Apri sondaggio" aria-expanded="false">
+  <span class="floating-polls-icon" aria-hidden="true">📊</span>
+</button>
 
 <!-- Floating users button (mobile only) -->
 <button class="floating-users-btn" id="floatingUsersBtn" 
