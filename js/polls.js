@@ -22,6 +22,8 @@ function _scopeKey() {
   return `room::${String(rid)}`;
 }
 
+/** La visibilità della colonna deriva solo da Firestore: mostriamo solo se c'è un sondaggio in votazione o in finestra risultati (≤5 min dopo scadenza). */
+
 function _clearHideTimer() {
   if (_hideTimer) clearTimeout(_hideTimer);
   _hideTimer = null;
@@ -283,9 +285,7 @@ async function _subscribePollWidget() {
     (snap) => {
       const docs = snap.docs || [];
       if (!docs.length) {
-        // Nessun poll per questo scope (Stanza vs Globale): mostra messaggio nella colonna,
-        // non nascondere tutto il pannello al cambio tab.
-        _renderScopeEmpty();
+        _renderEmpty();
         return;
       }
 
@@ -306,12 +306,7 @@ async function _subscribePollWidget() {
       }
 
       if (!selected) {
-        // Solo poll vecchi/scaduti oltre la finestra: non nascondere la colonna al cambio tab (es. Globale).
-        _renderScopeEmpty(
-          _scopeMode === 'global'
-            ? 'Nessun sondaggio globale visibile (scaduti da oltre 5 min o disattivati).'
-            : 'Nessun sondaggio visibile in questa stanza (scaduti da oltre 5 min o disattivati).'
-        );
+        _renderEmpty();
         return;
       }
 
@@ -413,6 +408,30 @@ function _pollScopeFromAdmin() {
   const selectedRoomId = _getAdminEl('pollRoomId')?.value;
   const roomId = selectedRoomId || state.activeRoom || 'general';
   return { scope: `room::${String(roomId)}`, scope_type: 'room', scope_id: String(roomId) };
+}
+
+/** Un solo sondaggio attivo per scope: disattiva gli altri prima di crearne/attivarne uno. */
+async function _deactivateOtherPollsInScope(scope, exceptId) {
+  if (!state.fb?.firestore || !scope) return 0;
+  const col = state.fb.firestore.collection('polls');
+  const qq = await col.where('scope', '==', scope).limit(50).get();
+  const batch = state.fb.firestore.batch();
+  const uid = String(state.currentUser?.id || '');
+  let n = 0;
+  for (const d of qq.docs) {
+    if (exceptId && d.id === exceptId) continue;
+    const data = d.data();
+    if (data.is_active === true) {
+      batch.set(d.ref, {
+        is_active: false,
+        updated_at: new Date(),
+        updated_by: uid,
+      }, { merge: true });
+      n++;
+    }
+  }
+  if (n > 0) await batch.commit();
+  return n;
 }
 
 async function _ensurePollAdminRooms() {
@@ -531,18 +550,24 @@ async function _createOrUpdatePollFromForm(editPollId = null) {
   Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
 
   const col = state.fb.firestore.collection('polls');
+  const deactivated = await _deactivateOtherPollsInScope(scope, editPollId || null);
+
   if (editPollId) {
     await col.doc(editPollId).set(payload, { merge: true });
-    showToast('✅ Poll updated.');
+    showToast(deactivated > 0
+      ? `✅ Sondaggio aggiornato. (${deactivated} precedente/i disattivato/i nello stesso scope.)`
+      : '✅ Poll updated.');
   } else {
-    const ref = await col.add(payload);
-    showToast('✅ Poll created.');
+    await col.add(payload);
+    showToast(deactivated > 0
+      ? `✅ Sondaggio creato. (${deactivated} precedente/i disattivato/i nello stesso scope.)`
+      : '✅ Poll created.');
     // Reset UI after create.
     _getAdminEl('pollEditId') && (_getAdminEl('pollEditId').value = '');
     _getAdminEl('pollSubmitBtn') && (_getAdminEl('pollSubmitBtn').textContent = 'Create Poll');
   }
 
-    await loadPollsAdminList();
+  await loadPollsAdminList();
   } catch (err) {
     console.error('[Polls] create/update error:', err);
     const msg = err?.message || 'Unknown error';
@@ -563,9 +588,26 @@ async function _setPollActive(editPollId, isActive) {
     showToast('🚫 You do not have permission to manage polls.');
     return;
   }
+  const uid = String(state.currentUser?.id || '');
+  if (isActive === true) {
+    const snap = await state.fb.firestore.collection('polls').doc(editPollId).get();
+    const sc = snap.data()?.scope;
+    if (sc) {
+      const n = await _deactivateOtherPollsInScope(sc, editPollId);
+      await state.fb.firestore.collection('polls').doc(editPollId).set({
+        is_active: true,
+        updated_by: uid,
+        updated_at: new Date(),
+      }, { merge: true });
+      showToast(n > 0
+        ? `✅ Sondaggio attivato. (${n} altro/i nello stesso scope disattivato/i.)`
+        : '✅ Poll enabled.');
+      return;
+    }
+  }
   await state.fb.firestore.collection('polls').doc(editPollId).set({
     is_active: isActive === true,
-    updated_by: String(state.currentUser?.id || ''),
+    updated_by: uid,
     updated_at: new Date(),
   }, { merge: true });
   showToast(isActive ? '✅ Poll enabled.' : '✅ Poll disabled.');
