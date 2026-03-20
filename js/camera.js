@@ -10,7 +10,7 @@ import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
 import { broadcast, broadcastAll } from './broadcast.js';
 import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences, checkIsKicked, checkIsBanned, checkIsMuted } from './users.js?v=20260453';
-import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints, getVideoConstraintsForLevel, saveDeviceSettings } from './storage.js';
+import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints, getVideoConstraintsForLevel, getVideoConstraintsForDevice, saveDeviceSettings } from './storage.js';
 import { loadPermissionsForUser } from './permissions.js';
 import { getAvailableRooms } from './rooms.js';
 
@@ -1541,35 +1541,155 @@ function positionDeviceDropdown(uid, dropdownEl) {
   dropdownEl.style.bottom = 'auto';
 }
 
-async function switchCameraDevice(ownUid, deviceId) {
-  if (!state.localStream || !state.cameraWindows[ownUid]) return;
+/** Sostituisce il track su tutte le connessioni che inviano il nostro stream (stanza + Eventi + videochiamata). */
+function replaceOutgoingMediaTrack(kind, track) {
+  if (!track) return;
+  Object.keys(state.outgoingPCs || {}).forEach((peerId) => {
+    const pc = state.outgoingPCs[peerId];
+    const sender = pc.getSenders().find((s) => s.track?.kind === kind);
+    if (sender) sender.replaceTrack(track).catch(() => {});
+  });
+  if (state.privatePeer) {
+    const sender = state.privatePeer.getSenders().find((s) => s.track?.kind === kind);
+    if (sender) sender.replaceTrack(track).catch(() => {});
+  }
+}
+
+/**
+ * Cambia sorgente video dello stream locale senza toccare l'audio (impostazioni / footer).
+ * `deviceId` vuoto = videocamera predefinita di sistema.
+ */
+async function switchLocalVideoDevice(ownUid, deviceId) {
+  if (!state.localStream) return;
+  const cw = state.cameraWindows[ownUid];
+  const level = state.videoCaptureLevel || 'minimal';
+  const videoConstr = getVideoConstraintsForDevice(deviceId || '', level);
+  const newStream = await navigator.mediaDevices.getUserMedia({
+    video: videoConstr,
+    audio: false,
+  });
+  const newVideoTrack = newStream.getVideoTracks()[0];
+  if (!newVideoTrack) {
+    newStream.getTracks().forEach((t) => t.stop());
+    throw new Error('No video track');
+  }
   const oldVideoTrack = state.localStream.getVideoTracks()[0];
-  if (!oldVideoTrack) return;
-  try {
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: { exact: deviceId } },
-      audio: state.settings?.micId ? { deviceId: { exact: state.settings.micId } } : true,
-    });
-    const newVideoTrack = newStream.getVideoTracks()[0];
-    if (!newVideoTrack) { newStream.getTracks().forEach(t => t.stop()); return; }
+  if (oldVideoTrack) {
     state.localStream.removeTrack(oldVideoTrack);
     oldVideoTrack.stop();
-    state.localStream.addTrack(newVideoTrack);
-    newStream.getAudioTracks().forEach(t => t.stop());
+  }
+  state.localStream.addTrack(newVideoTrack);
+  newStream.getTracks().forEach((t) => {
+    if (t !== newVideoTrack) t.stop();
+  });
+
+  const videoEl = cw ? $(`cam-vid-${safeId(ownUid)}`) : null;
+  if (videoEl && videoEl.srcObject === state.localStream) {
+    videoEl.srcObject = null;
+    videoEl.srcObject = state.localStream;
+  }
+  if (dom.localVideoEl && dom.localVideoEl.srcObject === state.localStream) {
+    dom.localVideoEl.srcObject = null;
+    dom.localVideoEl.srcObject = state.localStream;
+  }
+
+  if (cw?.videoOff) newVideoTrack.enabled = false;
+
+  replaceOutgoingMediaTrack('video', newVideoTrack);
+}
+
+/**
+ * Cambia microfono dello stream locale e ricostruisce la pipeline Web Audio (volume / VU).
+ */
+async function switchLocalMicrophoneDevice(micId) {
+  if (!state.localStream) return;
+  const ownUid = state.currentUser?.id;
+  if (!ownUid) return;
+
+  const audioConstraint = micId
+    ? { deviceId: { exact: micId }, echoCancellation: true, noiseSuppression: true }
+    : { echoCancellation: true, noiseSuppression: true };
+
+  const newStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioConstraint });
+  const newRaw = newStream.getAudioTracks()[0];
+  if (!newRaw) {
+    newStream.getTracks().forEach((t) => t.stop());
+    throw new Error('No audio track');
+  }
+
+  if (state.micPipeline) {
+    try {
+      await state.micPipeline.ctx.close();
+    } catch (_) {}
+    state.micPipeline = null;
+  }
+
+  state.localStream.getAudioTracks().forEach((t) => {
+    try {
+      state.localStream.removeTrack(t);
+      t.stop();
+    } catch (_) {}
+  });
+  state.localStream.addTrack(newRaw);
+  newStream.getTracks().forEach((t) => {
+    if (t !== newRaw) t.stop();
+  });
+
+  state.micPipeline = (await createMicVolumePipeline(state.localStream)) || null;
+  const outAudio = state.localStream.getAudioTracks()[0];
+  replaceOutgoingMediaTrack('audio', outAudio);
+
+  const cw = state.cameraWindows[ownUid];
+  if (cw && cw.micEnabled === false && outAudio) outAudio.enabled = false;
+
+  startMicMeter(state.localStream, ownUid);
+  if (state.cameraWindows[ownUid]) initMicVolumeSlider(ownUid);
+}
+
+/**
+ * Se la camera è attiva (qualsiasi stanza, incluso Eventi), applica subito camera/mic
+ * scelti in Impostazioni. `prev` = valori prima dell'aggiornamento di state.settings.
+ */
+export async function applyLiveDeviceSettingsIfStreaming(prev = {}) {
+  const ownUid = state.currentUser?.id;
+  if (!ownUid || !state.localStream) return;
+  const cw = state.cameraWindows[ownUid];
+  const hasRoomCam = state.cameraRoom != null && cw?.isOwn;
+  const hasPrivateCall = !!state.privatePeer;
+  const hasCallOnlyStream = !!(state.streamOpenedForCall && state.activeCallUID);
+  if (!hasRoomCam && !hasPrivateCall && !hasCallOnlyStream) return;
+
+  const pCam = prev.cameraId ?? '';
+  const pMic = prev.micId ?? '';
+  const curCam = state.settings?.cameraId || '';
+  const curMic = state.settings?.micId || '';
+
+  if (pCam === curCam && pMic === curMic) return;
+
+  try {
+    if (pCam !== curCam) await switchLocalVideoDevice(ownUid, curCam);
+    if (pMic !== curMic) await switchLocalMicrophoneDevice(curMic);
+  } catch (err) {
+    console.warn('[Camera] applyLiveDeviceSettingsIfStreaming:', err);
+    showToast('⚠️ Impossibile applicare il dispositivo. Riprova o riavvia la camera.');
+  }
+}
+
+async function switchCameraDevice(ownUid, deviceId) {
+  if (!state.localStream || !state.cameraWindows[ownUid]) return;
+  const hadVideo = !!state.localStream.getVideoTracks()[0];
+  if (!hadVideo) {
+    showToast('⚠️ Nessun video attivo da sostituire.');
+    return;
+  }
+  try {
     state.settings = state.settings || {};
     state.settings.cameraId = deviceId;
     saveDeviceSettings(state.settings);
-
-    const videoEl = $(`cam-vid-${safeId(ownUid)}`);
-    if (videoEl && videoEl.srcObject === state.localStream) {
-      videoEl.srcObject = null;
-      videoEl.srcObject = state.localStream;
-    }
-    Object.keys(state.outgoingPCs).forEach(peerId => {
-      const pc = state.outgoingPCs[peerId];
-      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) sender.replaceTrack(newVideoTrack).catch(console.warn);
-    });
+    await switchLocalVideoDevice(ownUid, deviceId);
+    void import('./auth.js')
+      .then((m) => { if (typeof m.syncProfileMediaDevicesFromState === 'function') m.syncProfileMediaDevicesFromState(); })
+      .catch(() => {});
     showToast('📹 Camera cambiata.');
   } catch (err) {
     console.warn('[Camera] switchCameraDevice failed:', err);

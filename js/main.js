@@ -8,7 +8,8 @@ import { APP_VERSION }        from './config.js';
 import { loadRejectedCams, loadIgnoredUsers, loadDeviceSettings } from './storage.js';
 import { initFirebaseClient, connectFirebase, connectRoom } from './firebase-client.js';
 import { applyAuthIdentity, getOrCreateGuestIdentity,
-         initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser, loadUserSettingsFromProfile } from './auth.js';
+         initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser, loadUserSettingsFromProfile,
+         subscribeOwnProfileSettingsListener } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
 import { renderUsers, setOpenContextMenu } from './users.js?v=20260453';
 import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js?v=20260453';
@@ -224,6 +225,7 @@ export async function finishInit() {
       loadUserSettingsFromProfile().catch(e => console.warn('[Settings]', e)),
       loadUserTheme(),
     ]);
+    subscribeOwnProfileSettingsListener();
     setLanguage(state.currentUser.language || 'it');
     initI18n();
   } else if (state.currentUser) {

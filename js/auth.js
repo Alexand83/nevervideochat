@@ -7,11 +7,115 @@ import { dom }     from './dom.js';
 import { avatarColor, initials, showToast, setAvatarDisplay } from './utils.js';
 import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnoredUser } from './storage.js';
 import { renderUsers, updateOwnPresence } from './users.js?v=20260453';
+import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260318b';
 import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
 export function setFinishInit(fn) { _finishInit = fn; }
+
+/** Unsubscribe Firestore listener profilo (camera/mic/suoni da DB). */
+let _profileSettingsUnsub = null;
+
+async function pushProfileSettingsPatchToFirestore(patch) {
+  if (!state.currentUser?.id || state.currentUser.isGuest || !state.fb?.firestore) return;
+  try {
+    await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).update(patch);
+  } catch (err) {
+    console.warn('[Auth] Profile settings sync failed:', err);
+  }
+}
+
+/** Sincronizza cameraId + micId correnti su Firestore (es. dopo cambio da footer cam). Import dinamico da camera.js per evitare cicli. */
+export function syncProfileMediaDevicesFromState() {
+  const cam = state.settings?.cameraId || '';
+  const mic = state.settings?.micId || '';
+  void pushProfileSettingsPatchToFirestore({
+    cameraId: cam || null,
+    micId: mic || null,
+  });
+}
+
+function setDeviceSelectValueIfKnown(selectEl, value) {
+  if (!selectEl) return;
+  const v = value || '';
+  if (v === '' || [...selectEl.options].some((o) => o.value === v)) selectEl.value = v;
+}
+
+/**
+ * Aggiorna state + localStorage + UI quando il documento profilo cambia (altro tab / altro device).
+ * Se camera/mic cambiano, applica allo stream attivo.
+ */
+function handleProfileSettingsRemoteUpdate(data) {
+  if (!data || !state.currentUser?.id) return;
+
+  const soundChatDb = data.soundChat !== undefined ? data.soundChat : data.sound_chat;
+  const soundPMDb = data.soundPM !== undefined ? data.soundPM : data.sound_pm;
+
+  const nextCam = data.cameraId != null ? String(data.cameraId) : '';
+  const nextMic = data.micId != null ? String(data.micId) : '';
+  const curCam = String(state.settings?.cameraId ?? '');
+  const curMic = String(state.settings?.micId ?? '');
+
+  const prevSoundChat = state.settings?.soundChat !== false;
+  const prevSoundPM = state.settings?.soundPM !== false;
+  let nextSoundChat = prevSoundChat;
+  let nextSoundPM = prevSoundPM;
+  if (soundChatDb !== undefined) nextSoundChat = soundChatDb !== false;
+  if (soundPMDb !== undefined) nextSoundPM = soundPMDb !== false;
+
+  const camChanged = nextCam !== curCam;
+  const micChanged = nextMic !== curMic;
+  const soundChatChanged = nextSoundChat !== prevSoundChat;
+  const soundPMChanged = nextSoundPM !== prevSoundPM;
+
+  if (!camChanged && !micChanged && !soundChatChanged && !soundPMChanged) return;
+
+  const merged = {
+    ...loadDeviceSettings(),
+    ...state.settings,
+    cameraId: nextCam,
+    micId: nextMic,
+    soundChat: nextSoundChat,
+    soundPM: nextSoundPM,
+  };
+  state.settings = merged;
+  saveDeviceSettings(merged);
+
+  setDeviceSelectValueIfKnown(dom.cameraDeviceSelect, nextCam);
+  setDeviceSelectValueIfKnown(dom.micDeviceSelect, nextMic);
+  const soundChatEl = document.getElementById('settingsSoundChat');
+  const soundPMEl = document.getElementById('settingsSoundPM');
+  if (soundChatChanged && soundChatEl) soundChatEl.checked = nextSoundChat;
+  if (soundPMChanged && soundPMEl) soundPMEl.checked = nextSoundPM;
+
+  if (camChanged || micChanged) {
+    void applyLiveDeviceSettingsIfStreaming({ cameraId: curCam, micId: curMic });
+  }
+}
+
+export function subscribeOwnProfileSettingsListener() {
+  if (typeof _profileSettingsUnsub === 'function') {
+    _profileSettingsUnsub();
+  }
+  _profileSettingsUnsub = null;
+  if (!state.currentUser?.id || state.currentUser.isGuest || !state.fb?.firestore) return;
+
+  const ref = state.fb.firestore.collection('profiles').doc(String(state.currentUser.id));
+  _profileSettingsUnsub = ref.onSnapshot(
+    (snap) => {
+      if (snap.exists) handleProfileSettingsRemoteUpdate(snap.data());
+    },
+    (err) => console.warn('[Auth] Profile settings listener:', err)
+  );
+}
+
+export function unsubscribeOwnProfileSettingsListener() {
+  if (typeof _profileSettingsUnsub === 'function') {
+    _profileSettingsUnsub();
+  }
+  _profileSettingsUnsub = null;
+}
 
 /* ── Auth helpers ──────────────────────────────────────────────── */
 function nickToEmail(nick) {
@@ -514,7 +618,7 @@ export function initSettingsModal() {
     btn.addEventListener('click', () => switchSettingsTab(btn.dataset.tab));
   });
 
-  /* Suoni: applica subito a state + localStorage (non serve premere Salva per sentire/non sentire) */
+  /* Suoni: state + localStorage + profilo Firestore (come le altre preferenze account) */
   const persistSoundPrefsLocally = () => {
     const base = { ...loadDeviceSettings(), ...(state.settings || {}) };
     const sc = document.getElementById('settingsSoundChat');
@@ -523,9 +627,37 @@ export function initSettingsModal() {
     if (sp) base.soundPM = sp.checked;
     state.settings = base;
     saveDeviceSettings(base);
+    void pushProfileSettingsPatchToFirestore({
+      soundChat: base.soundChat !== false,
+      soundPM: base.soundPM !== false,
+    });
   };
   document.getElementById('settingsSoundChat')?.addEventListener('change', persistSoundPrefsLocally);
   document.getElementById('settingsSoundPM')?.addEventListener('change', persistSoundPrefsLocally);
+
+  /* Camera / microfono: applica subito allo stream attivo (anche stanza Eventi), senza premere Salva */
+  let deviceApplyDebounce = null;
+  const scheduleApplyDeviceSettingsFromSelects = () => {
+    if (deviceApplyDebounce) clearTimeout(deviceApplyDebounce);
+    deviceApplyDebounce = setTimeout(async () => {
+      deviceApplyDebounce = null;
+      const prevCam = state.settings?.cameraId ?? '';
+      const prevMic = state.settings?.micId ?? '';
+      const cam = dom.cameraDeviceSelect?.value ?? '';
+      const mic = dom.micDeviceSelect?.value ?? '';
+      if (cam === prevCam && mic === prevMic) return;
+      const merged = { ...loadDeviceSettings(), cameraId: cam, micId: mic };
+      state.settings = merged;
+      saveDeviceSettings(merged);
+      await applyLiveDeviceSettingsIfStreaming({ cameraId: prevCam, micId: prevMic });
+      await pushProfileSettingsPatchToFirestore({
+        cameraId: cam || null,
+        micId: mic || null,
+      });
+    }, 300);
+  };
+  dom.cameraDeviceSelect?.addEventListener('change', scheduleApplyDeviceSettingsFromSelects);
+  dom.micDeviceSelect?.addEventListener('change', scheduleApplyDeviceSettingsFromSelects);
 
   dom.detectDevicesBtn?.addEventListener('click', async () => {
     dom.detectDevicesBtn.textContent = 'Detecting…'; dom.detectDevicesBtn.disabled = true;

@@ -80,11 +80,17 @@ const VIDEO_CONSTRAINTS_BY_LEVEL = {
   high:    { width: { ideal: 1280, max: 1280 }, height: { ideal: 720, max: 720 }, frameRate: { ideal: 24, max: 30 } },
 };
 
+/** Constraint video per livello + deviceId opzionale (stringa vuota = default sistema). */
+export function getVideoConstraintsForDevice(deviceId, level) {
+  const base = VIDEO_CONSTRAINTS_BY_LEVEL[level] || VIDEO_CONSTRAINTS_BY_LEVEL.minimal;
+  if (deviceId) return { deviceId: { exact: deviceId }, ...base };
+  return { ...base };
+}
+
 /** Restituisce i constraint video per un livello (solo video, per ramp silenzioso). */
 export function getVideoConstraintsForLevel(level) {
   const s = state.settings || {};
-  const base = VIDEO_CONSTRAINTS_BY_LEVEL[level] || VIDEO_CONSTRAINTS_BY_LEVEL.minimal;
-  return s.cameraId ? { deviceId: { exact: s.cameraId }, ...base } : base;
+  return getVideoConstraintsForDevice(s.cameraId || '', level);
 }
 
 export function getMediaConstraints() {
