@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260320 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260321 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL } from './config.js';
 import { state }         from './state.js';
@@ -2046,19 +2046,30 @@ function attachPrivatePeerMediaRecovery(pc) {
     const v = dom.remoteVideoEl;
     if (!v?.srcObject) return;
     v.muted = false;
+    v.setAttribute('playsinline', '');
+    v.setAttribute('webkit-playsinline', '');
     v.play().catch(() => {});
   };
   pc.addEventListener('iceconnectionstatechange', () => {
-    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-      setTimeout(tryPlayRemote, 100);
-      setTimeout(tryPlayRemote, 800);
+    const s = pc.iceConnectionState;
+    if (s === 'connected' || s === 'completed') {
+      dom.vcallStatus.textContent = 'Connected';
+      setTimeout(tryPlayRemote, 50);
+      setTimeout(tryPlayRemote, 400);
+      setTimeout(tryPlayRemote, 1200);
+    } else if (s === 'failed') {
+      dom.vcallStatus.textContent = 'Connessione fallita';
+    } else if (s === 'disconnected') {
+      dom.vcallStatus.textContent = 'Connessione instabile…';
     }
   });
   pc.addEventListener('connectionstatechange', () => {
     if (pc.connectionState === 'connected') {
+      dom.vcallStatus.textContent = 'Connected';
       setTimeout(tryPlayRemote, 100);
       setTimeout(tryPlayRemote, 1600);
     }
+    if (pc.connectionState === 'failed') dom.vcallStatus.textContent = 'Connessione fallita';
   });
 }
 
@@ -2078,9 +2089,17 @@ function bindPrivatePeerOnTrack(pc) {
     }
     v.muted = false;
     v.playsInline = true;
+    v.setAttribute('playsinline', '');
+    v.setAttribute('webkit-playsinline', '');
     dom.remotePlaceholder.style.display = 'none';
-    dom.vcallStatus.textContent = 'Connected';
-    v.play().catch(() => {});
+    /* "Connected" solo quando ICE è ok — evita falso positivo mentre il video è ancora nero */
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      dom.vcallStatus.textContent = 'Connected';
+    }
+    const play = () => { v.muted = false; v.play().catch(() => {}); };
+    play();
+    tr.addEventListener('unmute', play);
+    tr.addEventListener('ended', () => console.warn('[WebRTC private] remote track ended', tr.kind));
   };
 }
 
@@ -2097,19 +2116,20 @@ export async function handleWebRTCSignal(payload) {
     }
   }
   const toMeStrict = payload != null && state.currentUser?.id != null && String(payload.to).trim() === String(state.currentUser.id).trim();
-  /* Accept room ICE: ctx !== 'private' OR we already have incomingPC for this peer (viewer: accept their ICE so cam connects). */
-  const hasIncomingPC = !!(from && state.incomingPCs?.[from]);
-  const toMeIceFallback = sigType === 'ice' && from && candidate && (payload?.ctx !== 'private' || hasIncomingPC);
+  /* ICE pubblica: a volte `to` è corretto via Firebase; mai usare fallback per ctx private (deve matchare `to`). */
+  const toMeIceFallback = sigType === 'ice' && from && candidate && payload?.ctx !== 'private';
   const toMe = toMeStrict || toMeIceFallback;
   if (!toMe) {
     if (payload?.sigType === 'ice') {
-      console.log('[WebRTC-FLOW] SKIP ICE (to!=me)', payload?.to != null ? 'to=' + String(payload.to).slice(0, 12) : 'payload.to missing', 'me=' + (String(state.currentUser?.id || '')).slice(0, 12));
+      console.log('[WebRTC-FLOW] SKIP ICE (to!=me)', payload?.to != null ? 'to=' + String(payload.to).slice(0, 12) : 'payload.to missing', 'me=' + (String(state.currentUser?.id || '')).slice(0, 12), 'ctx=', payload?.ctx || '');
     } else if (payload?.sigType === 'offer' && payload?.to != null) {
       console.log('[WebRTC-FLOW] SKIP offer to!=me', 'to=', String(payload.to).slice(0, 12), 'me=', (String(state.currentUser?.id || '')).slice(0, 12));
     }
-          return;
-        }
-  if (sigType === 'ice' && candidate) console.log('[WebRTC-FLOW] RX ICE for me from', (from || '').slice(0, 8) + '…', toMeIceFallback && !toMeStrict ? (hasIncomingPC ? '(fallback: incomingPC)' : '(fallback: public ICE)') : '');
+    return;
+  }
+  if (sigType === 'ice' && candidate) {
+    console.log('[WebRTC-FLOW] RX ICE for me from', (from || '').slice(0, 8) + '…', toMeIceFallback && !toMeStrict ? '(public ICE fallback)' : '', 'ctx=', payload?.ctx || '');
+  }
 
   /* Firebase/Supabase replay: ignora offer troppo vecchie (evita cam / videochiamata privata che riappaiono al refresh).
      ICE/answer senza PC attivo sono già no-op; offer crea PC + UI → va filtrata. */
@@ -2118,8 +2138,10 @@ export async function handleWebRTCSignal(payload) {
     if (isPublic || isPrivate) return;
   }
 
-  /* Public block: ctx===public OR ICE with ctx !== 'private' OR ICE from peer we're viewing (hasIncomingPC). */
-  const handleAsPublic = isPublic || (sigType === 'ice' && from && candidate && (payload?.ctx !== 'private' || hasIncomingPC));
+  /* Public block: SOLO cam stanza / ICE senza ctx private.
+     CRITICO: ICE con ctx==='private' non deve MAI passare qui — altrimenti i candidati finiscono su incomingPC pubblico
+     (stesso uid del peer) e la videochiamata privata resta senza ICE → video nero. */
+  const handleAsPublic = isPublic || (sigType === 'ice' && from && candidate && payload?.ctx !== 'private');
   if (handleAsPublic) {
       if (sigType === 'offer') {
         if (!isPublic) return; /* only process public offers */
@@ -2619,7 +2641,7 @@ export async function handleWebRTCSignal(payload) {
         try {
           await state.privatePeer.setRemoteDescription({ type: 'answer', sdp });
           await flushPrivatePeerPendingIce(state.privatePeer);
-          dom.vcallStatus.textContent = 'Connected';
+          dom.vcallStatus.textContent = 'In connessione…';
         } catch (err) {
           console.warn('[WebRTC private] answer failed:', err?.message || err);
         }
@@ -2705,7 +2727,10 @@ export function initCallControls() {
       minWidth: 260,
       minHeight: 220,
       maxWidth: () => window.innerWidth - 8,
-      maxHeight: () => window.innerHeight - 8,
+      maxHeight: () => {
+        const vv = window.visualViewport;
+        return Math.max(200, (vv ? vv.height : window.innerHeight) - 8);
+      },
       pinFirst: true,
     });
   }

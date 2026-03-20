@@ -78,6 +78,17 @@
   border-radius: 0 0 var(--r4) 0;
 }
 .vcall-resize-handle:hover { opacity: 0.95; }
+.vcall-resize-handle:active { opacity: 1; }
+/* Smartphone / touch: area più grande per il pollice */
+@media (pointer: coarse) {
+  .vcall-resize-handle {
+    width: 44px;
+    height: 44px;
+    right: 0;
+    bottom: 0;
+    opacity: 0.9;
+  }
+}
 
 /* Videos area — flex:1 così al resize verticale si espande */
 .vcall-videos {
