@@ -22,6 +22,39 @@ function _scopeKey() {
   return `room::${String(rid)}`;
 }
 
+/** Scope stanza corrente (sempre la stanza in chat), usato nella query unificata room+global. */
+function _roomScopeKeyForWidget() {
+  const rid = _scopeRoomId ?? state.activeRoom ?? 'general';
+  return `room::${String(rid)}`;
+}
+
+function _isPollDisplayableCandidate(p) {
+  if (_pollShouldHideNow(p)) return false;
+  if (p.cancelled_at) return false;
+  const expMs = _toMillis(p.expires_at);
+  const ended = expMs != null ? expMs <= Date.now() : false;
+  const resultsVisible = _pollShouldShowResults(p);
+  return resultsVisible || ended || p.is_active === true;
+}
+
+/**
+ * Preferisci lo scope del tab (Stanza / Globale); se lì non c'è nulla di mostrabile,
+ * usa l'altro scope così la colonna non sparisce al cambio tab (solo al timer post-risultati).
+ */
+function _pickPollDocForWidget(docs, preferredScope) {
+  for (const d of docs) {
+    const p = { id: d.id, ...d.data() };
+    if (!_isPollDisplayableCandidate(p)) continue;
+    if (p.scope === preferredScope) return { doc: d, poll: p };
+  }
+  for (const d of docs) {
+    const p = { id: d.id, ...d.data() };
+    if (!_isPollDisplayableCandidate(p)) continue;
+    return { doc: d, poll: p };
+  }
+  return null;
+}
+
 /** La visibilità della colonna deriva solo da Firestore: mostriamo solo se c'è un sondaggio in votazione o in finestra risultati (≤5 min dopo scadenza). */
 
 function _clearHideTimer() {
@@ -261,7 +294,9 @@ function _scheduleWallClockPollRefresh(poll) {
 
 async function _subscribePollWidget() {
   if (!state.fb?.firestore) return;
-  const scope = _scopeKey();
+  const preferredScope = _scopeKey();
+  const roomScope = _roomScopeKeyForWidget();
+  const scopeIn = [roomScope, 'global'];
 
   if (_unsubPoll) {
     try { _unsubPoll(); } catch (_) {}
@@ -277,7 +312,7 @@ async function _subscribePollWidget() {
 
   const col = state.fb.firestore.collection('polls');
   const query = col
-    .where('scope', '==', scope)
+    .where('scope', 'in', scopeIn)
     .orderBy('expires_at', 'desc')
     .limit(20);
 
@@ -289,21 +324,7 @@ async function _subscribePollWidget() {
         return;
       }
 
-      // Pick the first poll that is actually displayable in the widget.
-      // This avoids "empty widget" when the latest poll is disabled/cancelled.
-      let selected = null;
-      for (const d of docs) {
-        const p = { id: d.id, ...d.data() };
-        if (_pollShouldHideNow(p)) continue;
-        if (p.cancelled_at) continue;
-        const expMs = _toMillis(p.expires_at);
-        const ended = expMs != null ? expMs <= Date.now() : false;
-        const resultsVisible = _pollShouldShowResults(p);
-        if (resultsVisible || ended || p.is_active === true) {
-          selected = { doc: d, poll: p };
-          break;
-        }
-      }
+      const selected = _pickPollDocForWidget(docs, preferredScope);
 
       if (!selected) {
         _renderEmpty();
