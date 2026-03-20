@@ -44,14 +44,24 @@ function _isPollDisplayableCandidate(p) {
 }
 
 /**
- * Preferisci lo scope del tab (Stanza / Globale); se lì non c'è nulla di mostrabile,
- * usa l'altro scope così la colonna non sparisce al cambio tab (solo al timer post-risultati).
+ * Tab Stanza: preferisci lo scope stanza; se vuoto, fallback sul globale.
+ * Tab Globale: solo sondaggi con scope `global` (nessun fallback sulla stanza).
  */
-function _pickPollDocForWidget(docs, preferredScope) {
+function _findDisplayableInScope(docs, scopeStr) {
+  for (const d of docs) {
+    const p = { id: d.id, ...d.data() };
+    if (p.scope !== scopeStr) continue;
+    if (!_isPollDisplayableCandidate(p)) continue;
+    return { doc: d, poll: p };
+  }
+  return null;
+}
+
+function _pickPollDocForWidget(docs, preferredRoomScope) {
   for (const d of docs) {
     const p = { id: d.id, ...d.data() };
     if (!_isPollDisplayableCandidate(p)) continue;
-    if (p.scope === preferredScope) return { doc: d, poll: p };
+    if (p.scope === preferredRoomScope) return { doc: d, poll: p };
   }
   for (const d of docs) {
     const p = { id: d.id, ...d.data() };
@@ -145,15 +155,11 @@ function _setPanelVisible(visible) {
   }
 }
 
-/** Avviso quando il tab (Stanza/Globale) non coincide con lo scope del sondaggio mostrato (fallback). */
+/** Avviso solo in tab Stanza quando il fallback mostra il sondaggio globale. */
 function _pollScopeFallbackHtml(poll) {
-  const pref = _scopeKey();
+  if (_scopeMode === 'global') return '';
   const psc = poll?.scope;
-  if (!psc || pref === psc) return '';
-  if (pref === 'global' && psc !== 'global') {
-    return '<div class="polls-scope-notice" role="status">ℹ️ Nessun sondaggio globale attivo al momento. Stai vedendo il sondaggio della stanza.</div>';
-  }
-  if (pref !== 'global' && psc === 'global') {
+  if (psc === 'global') {
     return '<div class="polls-scope-notice" role="status">ℹ️ Nessun sondaggio per questa stanza. Stai vedendo il sondaggio globale.</div>';
   }
   return '';
@@ -205,11 +211,12 @@ function _renderActivePoll({ poll, myVoteOptionId, voteCounts, options }) {
     `;
   }).join('');
 
+  const notice = _pollScopeFallbackHtml(poll);
   dom.pollsWidget.innerHTML = `
+    ${notice}
     <div class="polls-q">${escHtml(poll.question || '')}</div>
     ${votedBanner}
     <div class="polls-options">${optsHtml}</div>
-    <div class="polls-hint">Scelta singola.</div>
   `;
   _setPanelVisible(true);
 }
@@ -360,9 +367,9 @@ function _scheduleWallClockPollRefresh(poll) {
 
 async function _subscribePollWidget() {
   if (!state.fb?.firestore) return;
-  const preferredScope = _scopeKey();
   const roomScope = _roomScopeKeyForWidget();
   const scopeIn = [roomScope, 'global'];
+  const isGlobalTab = _scopeMode === 'global';
 
   if (_unsubPoll) {
     try { _unsubPoll(); } catch (_) {}
@@ -386,15 +393,27 @@ async function _subscribePollWidget() {
     (snap) => {
       const docs = snap.docs || [];
       if (!docs.length) {
-        _renderEmpty();
+        if (isGlobalTab) {
+          _renderScopeEmpty('Nessun sondaggio globale attivo al momento.');
+        } else {
+          _renderEmpty();
+        }
         return;
       }
 
-      const selected = _pickPollDocForWidget(docs, preferredScope);
-
-      if (!selected) {
-        _renderEmpty();
-        return;
+      let selected = null;
+      if (isGlobalTab) {
+        selected = _findDisplayableInScope(docs, 'global');
+        if (!selected) {
+          _renderScopeEmpty('Nessun sondaggio globale attivo al momento.');
+          return;
+        }
+      } else {
+        selected = _pickPollDocForWidget(docs, roomScope);
+        if (!selected) {
+          _renderEmpty();
+          return;
+        }
       }
 
       const { doc, poll } = selected;
