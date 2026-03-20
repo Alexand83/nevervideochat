@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260321 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260322 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL } from './config.js';
 import { state }         from './state.js';
@@ -1806,9 +1806,9 @@ export async function handleCamRequest(payload) {
 }
 
 export function handleCamAccepted(payload) {
-  if (payload.to !== state.currentUser?.id) return;
+  if (String(payload.to) !== String(state.currentUser?.id)) return;
   clearPendingCamRequest(String(payload.from));
-  if (payload.reqType === 'private') startPrivateCall(payload.from);
+  if (payload.reqType === 'private') startPrivateCall(payload.from, payload.fromName);
 }
 
 /* ── Share own camera to a viewer via WebRTC ───────────────────── */
@@ -2101,6 +2101,20 @@ function bindPrivatePeerOnTrack(pc) {
     tr.addEventListener('unmute', play);
     tr.addEventListener('ended', () => console.warn('[WebRTC private] remote track ended', tr.kind));
   };
+}
+
+/** Nome da mostrare per il peer in videochiamata (nick da broadcast / lista / lastKnownNames, mai solo uid lungo). */
+function peerDisplayName(peerUid, signalPayload = null) {
+  const uid = String(peerUid);
+  const fn = signalPayload?.fromName && String(signalPayload.fromName).trim();
+  if (fn) ensureUser(uid, fn, { online: true });
+  const u = state.users.find(x => String(x.id) === uid);
+  const listName = u?.name && String(u.name).trim();
+  if (listName) return listName;
+  if (fn) return fn;
+  const lk = state.lastKnownNames?.[uid];
+  if (lk && String(lk).trim()) return String(lk).trim();
+  return uid;
 }
 
 /* ── All incoming WebRTC signals ──────────────────────────────── */
@@ -2623,12 +2637,12 @@ export async function handleWebRTCSignal(payload) {
         if (p) broadcast('webrtc', from, { sigType: 'ice', candidate: p, ctx: 'private' });
       };
       if (state.localStream) state.localStream.getTracks().filter(t => t.readyState === 'live').forEach(t => pc.addTrack(t, state.localStream));
-      const caller = findUser(from);
+      const remoteLabel = peerDisplayName(from, payload);
       dom.localVideoEl.srcObject = state.localStream;
-      dom.vcallName.textContent = caller?.name || from;
+      dom.vcallName.textContent = remoteLabel;
       dom.vcallStatus.textContent = 'Connecting…';
-      dom.vcallAvatar.textContent = initials(caller?.name || '?');
-      dom.vcallAvatar.style.background = avatarColor(caller?.name || '?');
+      dom.vcallAvatar.textContent = initials(remoteLabel);
+      dom.vcallAvatar.style.background = avatarColor(remoteLabel);
       dom.vcallWin.hidden = false;
       await pc.setRemoteDescription({ type: 'offer', sdp });
       await flushPrivatePeerPendingIce(pc);
@@ -2670,18 +2684,19 @@ async function acceptPrivateCall(fromUid, fromName) {
       state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
       state.streamOpenedForCall = true;
     } else { state.streamOpenedForCall = false; }
-    const user = findUser(fromUid) || { name: fromName, isGuest: true };
-    dom.localVideoEl.srcObject = state.localStream; dom.vcallName.textContent = user.name;
-    dom.vcallStatus.textContent = 'Connecting…'; dom.vcallAvatar.textContent = initials(user.name);
-    dom.vcallAvatar.style.background = avatarColor(user.name);
+    const remoteLabel = peerDisplayName(fromUid, fromName ? { fromName } : null);
+    dom.localVideoEl.srcObject = state.localStream;
+    dom.vcallName.textContent = remoteLabel;
+    dom.vcallStatus.textContent = 'Connecting…';
+    dom.vcallAvatar.textContent = initials(remoteLabel);
+    dom.vcallAvatar.style.background = avatarColor(remoteLabel);
     dom.remotePlaceholder.style.display = ''; dom.vcallWin.hidden = false;
     state.activeCallUID = fromUid;
     broadcast('cam-accepted', fromUid, { reqType: 'private' });
   } catch (err) { showToast('⚠️ Could not access camera/mic: ' + err.message); }
 }
 
-async function startPrivateCall(targetUid) {
-  const target = findUser(targetUid);
+async function startPrivateCall(targetUid, remoteFromName = null) {
   try {
     if (!state.localStream) {
       state.localStream = await navigator.mediaDevices.getUserMedia(getMediaConstraints());
@@ -2697,9 +2712,12 @@ async function startPrivateCall(targetUid) {
       const p = serializeIceForBroadcast(c);
       if (p) broadcast('webrtc', targetUid, { sigType: 'ice', candidate: p, ctx: 'private' });
     };
-    dom.localVideoEl.srcObject = state.localStream; dom.vcallName.textContent = target?.name || targetUid;
-    dom.vcallStatus.textContent = 'Calling…'; dom.vcallAvatar.textContent = initials(target?.name || '?');
-    dom.vcallAvatar.style.background = avatarColor(target?.name || '?');
+    const remoteLabel = peerDisplayName(targetUid, remoteFromName ? { fromName: remoteFromName } : null);
+    dom.localVideoEl.srcObject = state.localStream;
+    dom.vcallName.textContent = remoteLabel;
+    dom.vcallStatus.textContent = 'Calling…';
+    dom.vcallAvatar.textContent = initials(remoteLabel);
+    dom.vcallAvatar.style.background = avatarColor(remoteLabel);
     dom.remotePlaceholder.style.display = ''; dom.vcallWin.hidden = false;
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
     applyVideoEncoding(pc, 'low');
