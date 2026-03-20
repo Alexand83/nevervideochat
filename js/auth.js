@@ -514,6 +514,19 @@ export function initSettingsModal() {
     btn.addEventListener('click', () => switchSettingsTab(btn.dataset.tab));
   });
 
+  /* Suoni: applica subito a state + localStorage (non serve premere Salva per sentire/non sentire) */
+  const persistSoundPrefsLocally = () => {
+    const base = { ...loadDeviceSettings(), ...(state.settings || {}) };
+    const sc = document.getElementById('settingsSoundChat');
+    const sp = document.getElementById('settingsSoundPM');
+    if (sc) base.soundChat = sc.checked;
+    if (sp) base.soundPM = sp.checked;
+    state.settings = base;
+    saveDeviceSettings(base);
+  };
+  document.getElementById('settingsSoundChat')?.addEventListener('change', persistSoundPrefsLocally);
+  document.getElementById('settingsSoundPM')?.addEventListener('change', persistSoundPrefsLocally);
+
   dom.detectDevicesBtn?.addEventListener('click', async () => {
     dom.detectDevicesBtn.textContent = 'Detecting…'; dom.detectDevicesBtn.disabled = true;
     try {
@@ -565,7 +578,7 @@ export function initSettingsModal() {
     saveDeviceSettings(s);
     state.settings = s;
     /* Utenti registrati: salva anche nel DB (profilo); guest: solo in locale */
-    if (state.currentUser && !state.currentUser.is_guest && state.fb) {
+    if (state.currentUser && !state.currentUser.isGuest && state.fb) {
       try {
         await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).update({
           cameraId: s.cameraId || null,
@@ -616,7 +629,7 @@ function openSettingsModal() {
  * Chiamata dopo il login / al caricamento pagina se c'è sessione attiva.
  */
 export async function loadUserSettingsFromProfile() {
-  if (!state.currentUser?.id || state.currentUser.is_guest || !state.fb?.firestore) return;
+  if (!state.currentUser?.id || state.currentUser.isGuest || !state.fb?.firestore) return;
   try {
     const snap = await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).get();
     const data = snap.data();

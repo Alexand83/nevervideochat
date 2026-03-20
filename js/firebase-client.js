@@ -6,7 +6,7 @@ import { firebaseConfig, FIREBASE_RTDB_URL } from './firebase-config.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { showToast, playNotificationSound, processHtml } from './utils.js';
+import { showToast, playChatNotificationSoundIfEnabled, processHtml } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js?v=20260453';
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js?v=20260453';
 import { handleIncomingPM } from './private-chat.js';
@@ -582,7 +582,7 @@ export async function connectRoom(roomId) {
       ensureUser(m.user_id, m.username);
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
       addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);
-      if (roomId === state.activeRoom && state.settings?.soundChat !== false) playNotificationSound();
+      if (roomId === state.activeRoom) playChatNotificationSoundIfEnabled();
     } catch (err) {
       console.error('[Firebase] Error processing message:', err);
     }

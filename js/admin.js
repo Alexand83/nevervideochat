@@ -61,6 +61,11 @@ export function initAdminPanel() {
     });
   });
 
+  /* Anti-spam (General tab) */
+  document.getElementById('antispamSaveBtn')?.addEventListener('click', () => {
+    saveChatAntispamFromAdminForm();
+  });
+
   /* Create room button */
   dom.adminCreateRoomBtn?.addEventListener('click', () => {
     openRoomEditModal();
@@ -220,7 +225,64 @@ async function switchAdminTab(tabName) {
 }
 
 async function loadGeneralAdminSettings() {
-  /* General tab: no AI moderation settings (light text filter is client-side only, always on) */
+  if (!state.fb) return;
+  await checkAdminAccess();
+  const isOwner = currentUserRole === 'owner';
+  const saveBtn = document.getElementById('antispamSaveBtn');
+  const hint = document.getElementById('antispamOwnerOnlyHint');
+  if (saveBtn) {
+    saveBtn.hidden = !isOwner;
+    saveBtn.disabled = !isOwner;
+  }
+  if (hint) hint.hidden = isOwner;
+
+  try {
+    const snap = await state.fb.firestore.collection('config').doc('chat_antispam').get();
+    const data = snap.data();
+    const { DEFAULT_CHAT_ANTISPAM, applyChatAntispamFromDoc } = await import('./chat-antispam.js');
+    const cfg = { ...DEFAULT_CHAT_ANTISPAM, ...(data || {}) };
+    applyChatAntispamFromDoc(cfg);
+
+    const setVal = (id, v) => {
+      const el = document.getElementById(id);
+      if (el) el.value = String(v);
+    };
+    setVal('antispamPublicMinMs', cfg.publicMinMs);
+    setVal('antispamPublicMaxPerMin', cfg.publicMaxPerMinute);
+    setVal('antispamPublicDupMs', cfg.publicDuplicateWindowMs);
+    setVal('antispamPmMinMs', cfg.pmMinMs);
+    setVal('antispamPmMaxPerMin', cfg.pmMaxPerMinute);
+    setVal('antispamPmDupMs', cfg.pmDuplicateWindowMs);
+  } catch (err) {
+    console.warn('[Admin] load chat_antispam:', err);
+    showToast('⚠️ Impossibile caricare anti-spam da database.');
+  }
+}
+
+async function saveChatAntispamFromAdminForm() {
+  if (!state.fb) return;
+  await checkAdminAccess();
+  if (currentUserRole !== 'owner') {
+    showToast('🚫 Solo il proprietario può salvare le impostazioni anti-spam.');
+    return;
+  }
+  try {
+    const { buildChatAntispamPayloadFromForm } = await import('./chat-antispam.js');
+    const g = (id) => parseFloat(document.getElementById(id)?.value);
+    const payload = buildChatAntispamPayloadFromForm({
+      publicMinMs: g('antispamPublicMinMs'),
+      publicMaxPerMinute: g('antispamPublicMaxPerMin'),
+      publicDuplicateWindowMs: g('antispamPublicDupMs'),
+      pmMinMs: g('antispamPmMinMs'),
+      pmMaxPerMinute: g('antispamPmMaxPerMin'),
+      pmDuplicateWindowMs: g('antispamPmDupMs'),
+    });
+    await state.fb.firestore.collection('config').doc('chat_antispam').set(payload, { merge: true });
+    showToast('✅ Anti-spam salvato nel database.');
+  } catch (err) {
+    console.error('[Admin] save chat_antispam:', err);
+    showToast('⚠️ Salvataggio anti-spam fallito.');
+  }
 }
 
 async function openAdminPanel() {

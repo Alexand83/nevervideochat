@@ -3,7 +3,7 @@
 ================================================================ */
 import { state }       from './state.js';
 import { dom }         from './dom.js';
-import { escHtml, avatarColor, initials, fmtTime, showToast, playNotificationSound, makeDraggable } from './utils.js';
+import { escHtml, avatarColor, initials, fmtTime, showToast, playPMNotificationSoundIfEnabled, makeDraggable } from './utils.js';
 import { findUser, ensureUser, checkIsMuted } from './users.js?v=20260453';
 import { broadcast }   from './broadcast.js';
 import { setPendingCamRequest } from './storage.js';
@@ -117,7 +117,15 @@ export function openPrivateChat(uid) {
       showToast(`⚠️ Message too long (max ${MAX_MESSAGE_LENGTH} characters).`);
       return;
     }
-    
+
+    const { checkPrivateChatSpam, registerPrivateChatSent } = await import('./chat-antispam.js');
+    const spam = checkPrivateChatSpam(uid, txt);
+    if (!spam.ok) {
+      showToast(spam.toast);
+      return;
+    }
+    registerPrivateChatSent(uid, txt);
+
     const msg = { from: 'me', text: txt, ts: Date.now() };
     chat.msgs.push(msg); renderPMsg(uid, msg); input.value = '';
     broadcast('pm', uid, { text: txt, ts: msg.ts });
@@ -188,7 +196,7 @@ export function handleIncomingPM(payload) {
   const chat = initOrGetPChat(fromId);
   const msg  = { from: fromId, text: payload.text, ts: payload.ts || Date.now() };
   chat.msgs.push(msg);
-  if (state.settings?.soundPM !== false) playNotificationSound();
+  playPMNotificationSoundIfEnabled();
 
   if (!chat.popup) {
     openPrivateChat(fromId);

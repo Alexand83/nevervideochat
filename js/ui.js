@@ -452,9 +452,19 @@ function startRecording() {
         showToast('⏳ Uploading voice message…');
         const url = await uploadToStorage(blob, 'voices', ext);
         if (!url) { showToast('⚠️ Voice upload failed.'); dom.voiceRecStrip.hidden = true; clearInterval(state.recordingTimer); dom.recTimer.textContent = '0:00'; return; }
+        const html = `<div class="voice-msg-wrap">🎙️ Voice message<audio controls src="${url}" preload="metadata"></audio></div>`;
+        const { checkPublicChatSpam, registerPublicChatSent } = await import('./chat-antispam.js');
+        const spam = checkPublicChatSpam(html);
+        if (!spam.ok) {
+          showToast(spam.toast);
+          dom.voiceRecStrip.hidden = true;
+          clearInterval(state.recordingTimer);
+          dom.recTimer.textContent = '0:00';
+          return;
+        }
+        registerPublicChatSent(html);
         /* Import addMessage lazily to avoid circular dep */
         const { addMessage } = await import('./chat.js');
-        const html = `<div class="voice-msg-wrap">🎙️ Voice message<audio controls src="${url}" preload="metadata"></audio></div>`;
         addMessage({ userId: 'me', html, ts: Date.now() });
         state.fb.firestore.collection('messages').add({
           user_id: state.currentUser.id, username: state.currentUser.name, content: html, room_id: state.activeRoom, reactions: {}, created_at: new Date(),

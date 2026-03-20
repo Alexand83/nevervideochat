@@ -4,7 +4,7 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
-import { showToast, playNotificationSound } from './utils.js';
+import { showToast, playChatNotificationSoundIfEnabled } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js?v=20260453';
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js?v=20260453';
 import { handleIncomingPM } from './private-chat.js';
@@ -288,7 +288,7 @@ export async function connectRoom(roomId) {
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
       console.log('[Supabase] Adding message to room:', { roomId, userId: m.user_id, hasHtml: !!html });
       addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);
-      if (roomId === state.activeRoom && state.settings?.soundChat !== false) playNotificationSound();
+      if (roomId === state.activeRoom) playChatNotificationSoundIfEnabled();
       } catch (err) {
         console.error('[Supabase] Error processing new message:', err);
       }

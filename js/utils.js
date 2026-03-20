@@ -126,11 +126,56 @@ export function showToast(msg, duration = 3500) {
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, duration);
 }
 
-/* ── Audio notification ── */
-export function playNotificationSound() {
+/* ── Audio notification (Impostazioni → Notifiche: suoni chat / PM) ── */
+
+/** true se l'utente ha lasciato attivo il suono per la chat pubblica (default: on) */
+export function shouldPlayChatNotificationSound() {
+  return state.settings?.soundChat !== false;
+}
+
+/** true se l'utente ha lasciato attivo il suono per i messaggi privati (default: on) */
+export function shouldPlayPMNotificationSound() {
+  return state.settings?.soundPM !== false;
+}
+
+/** Suono nuovo messaggio in stanza (solo se abilitato in impostazioni) */
+export function playChatNotificationSoundIfEnabled() {
+  if (!shouldPlayChatNotificationSound()) return;
+  void playNotificationSound();
+}
+
+/** Suono messaggio privato in arrivo (solo se abilitato in impostazioni) */
+export function playPMNotificationSoundIfEnabled() {
+  if (!shouldPlayPMNotificationSound()) return;
+  void playNotificationSound();
+}
+
+let _audioUnlockListenersAttached = false;
+
+/**
+ * Dopo il login, sblocca l'AudioContext al primo click/tasto (policy browser).
+ * Senza questo, il primo suono in arrivo spesso non si sente finché non c'è un gesto utente.
+ */
+export function attachNotificationAudioUnlockOnGesture() {
+  if (_audioUnlockListenersAttached) return;
+  _audioUnlockListenersAttached = true;
+  const unlock = () => {
+    try {
+      if (!state.audioCtx) {
+        state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      state.audioCtx.resume?.().catch(() => {});
+    } catch (_) {}
+  };
+  document.addEventListener('click', unlock, { once: true, capture: true });
+  document.addEventListener('keydown', unlock, { once: true, capture: true });
+}
+
+export async function playNotificationSound() {
   try {
     if (!state.audioCtx) state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = state.audioCtx;
+    if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
@@ -139,7 +184,7 @@ export function playNotificationSound() {
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
     osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15);
-  } catch {}
+  } catch (_) {}
 }
 
 /* ── Auto-scroll ── */

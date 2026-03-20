@@ -888,8 +888,34 @@
     <!-- General Admin Settings Tab -->
     <div class="admin-tab-content" id="adminTabGeneral" role="tabpanel">
       <div class="admin-section">
-        <h3 class="admin-section-title">General Settings</h3>
-        <p class="settings-hint">📝 Light text moderation (blocklist) is always active on the client for all messages. No cloud or AI.</p>
+        <h3 class="admin-section-title">Impostazioni generali</h3>
+        <p class="settings-hint">📝 Il filtro parole (blocklist) resta attivo lato client per tutti i messaggi.</p>
+      </div>
+      <div class="admin-section" id="adminAntispamSection">
+        <h3 class="admin-section-title">Anti-spam chat</h3>
+        <p class="settings-hint">Limiti lato client per chat pubblica e messaggi privati. Valori salvati in Firestore <code>config/chat_antispam</code>. Solo il <strong>proprietario</strong> può salvare.</p>
+        <div class="admin-form-grid" style="display:grid;gap:12px;max-width:520px;margin-top:12px;">
+          <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin:0;">
+            <legend style="padding:0 6px;">Chat pubblica (stanza)</legend>
+            <label class="settings-label" for="antispamPublicMinMs">Pausa minima tra messaggi (ms)</label>
+            <input type="number" id="antispamPublicMinMs" class="settings-input" min="300" max="30000" step="100">
+            <label class="settings-label" for="antispamPublicMaxPerMin">Max messaggi / minuto</label>
+            <input type="number" id="antispamPublicMaxPerMin" class="settings-input" min="5" max="120" step="1">
+            <label class="settings-label" for="antispamPublicDupMs">Finestra anti-duplicato (ms)</label>
+            <input type="number" id="antispamPublicDupMs" class="settings-input" min="1000" max="60000" step="100">
+          </fieldset>
+          <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin:0;">
+            <legend style="padding:0 6px;">Messaggi privati (per destinatario)</legend>
+            <label class="settings-label" for="antispamPmMinMs">Pausa minima tra messaggi (ms)</label>
+            <input type="number" id="antispamPmMinMs" class="settings-input" min="300" max="30000" step="100">
+            <label class="settings-label" for="antispamPmMaxPerMin">Max messaggi / minuto</label>
+            <input type="number" id="antispamPmMaxPerMin" class="settings-input" min="5" max="120" step="1">
+            <label class="settings-label" for="antispamPmDupMs">Finestra anti-duplicato (ms)</label>
+            <input type="number" id="antispamPmDupMs" class="settings-input" min="1000" max="60000" step="100">
+          </fieldset>
+        </div>
+        <p id="antispamOwnerOnlyHint" class="admin-empty" hidden style="margin-top:10px;">🔒 Solo il proprietario (owner) può modificare questi valori.</p>
+        <button type="button" class="auth-btn-primary" id="antispamSaveBtn" style="margin-top:14px;">💾 Salva anti-spam</button>
       </div>
     </div>
 

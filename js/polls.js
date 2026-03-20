@@ -602,8 +602,8 @@ async function _ensurePollAdminRooms() {
     for (const r of rooms || []) {
       const opt = document.createElement('option');
       opt.value = String(r.id);
-      const name = r.name ? String(r.name) : String(r.id);
-      opt.textContent = `${r.id} - ${name}`;
+      const name = r.name ? String(r.name).trim() : '';
+      opt.textContent = name || String(r.id);
       selectEl.appendChild(opt);
     }
 

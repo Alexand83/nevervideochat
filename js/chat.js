@@ -771,6 +771,19 @@ export async function sendMessage() {
     quoteName = escHtml(quoteName);
   }
   
+  /* Persist to Supabase with room_id */
+  const fullContent = quoteHtml
+    ? `<div data-quote-name="${quoteName || ''}" data-quote-html="${encodeURIComponent(quoteHtml)}" class="msg-quote-meta"></div>${html}`
+    : html;
+
+  const { checkPublicChatSpam, registerPublicChatSent } = await import('./chat-antispam.js');
+  const spam = checkPublicChatSpam(fullContent);
+  if (!spam.ok) {
+    showToast(spam.toast);
+    return;
+  }
+  registerPublicChatSent(fullContent);
+
   /* Nascondi "sta scrivendo" quando si invia */
   stopTyping();
 
@@ -778,11 +791,6 @@ export async function sendMessage() {
   const tempId = `m${Date.now()}${Math.random()}`;
   addMessage({ userId: 'me', html, ts: Date.now(), quoteHtml, quoteName, msgId: tempId });
   dom.msgInput.innerHTML = '';
-  
-  /* Persist to Supabase with room_id */
-  const fullContent = quoteHtml
-    ? `<div data-quote-name="${quoteName || ''}" data-quote-html="${encodeURIComponent(quoteHtml)}" class="msg-quote-meta"></div>${html}`
-    : html;
 
   if (_supabaseReady?.() && state.fb) {
     state.fb.firestore.collection('messages').add({

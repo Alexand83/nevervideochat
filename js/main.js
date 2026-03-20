@@ -3,7 +3,7 @@
 ================================================================ */
 import { state }              from './state.js';
 import { dom }                from './dom.js';
-import { showToast }          from './utils.js';
+import { showToast, attachNotificationAudioUnlockOnGesture } from './utils.js';
 import { APP_VERSION }        from './config.js';
 import { loadRejectedCams, loadIgnoredUsers, loadDeviceSettings } from './storage.js';
 import { initFirebaseClient, connectFirebase, connectRoom } from './firebase-client.js';
@@ -185,6 +185,11 @@ export async function finishInit() {
     loadUserPermissions(),
     loadAndDisplayAnnouncements(),
     initWordFilterListener(),
+    import('./chat-antispam.js')
+      .then((m) => {
+        if (state.fb?.firestore) m.initChatAntispamListener(state.fb.firestore);
+      })
+      .catch((e) => console.warn('[Main] chat-antispam init:', e)),
   ]);
   initAnnouncementsListener();
 
@@ -193,6 +198,7 @@ export async function finishInit() {
   state.ignoredUsers       = loadIgnoredUsers();
   state.settings           = loadDeviceSettings();
   if (!state.privateChats) state.privateChats = {};
+  attachNotificationAudioUnlockOnGesture();
 
   /* Impostazioni profilo + tema/lingua in parallelo (solo registrati) */
   if (!isGuest && state.fb) {
