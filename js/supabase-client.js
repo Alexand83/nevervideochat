@@ -14,10 +14,15 @@ import { clearPendingCamRequest } from './storage.js';
 
 /** Messaggi broadcast più vecchi di questo non mostrano toast/UI (evita replay al login/reconnect) */
 const BROADCAST_UI_MAX_AGE_MS = 25000;
+const BROADCAST_SESSION_SKEW_MS = 5000;
 
 function isBroadcastTooOld(payload) {
   const ts = payload?.ts;
-  return typeof ts === 'number' && (Date.now() - ts > BROADCAST_UI_MAX_AGE_MS);
+  if (typeof ts !== 'number') return false;
+  if (Date.now() - ts > BROADCAST_UI_MAX_AGE_MS) return true;
+  /* Stesso criterio Firebase: niente UI da broadcast inviati prima di questa connessione al canale */
+  if (state.broadcastConnectedAt > 0 && ts < state.broadcastConnectedAt - BROADCAST_SESSION_SKEW_MS) return true;
+  return false;
 }
 
 /* Flag per indicare se la sessione è appena stata creata (non controllare subito) */
@@ -434,6 +439,7 @@ export async function connectSupabase() {
       state.signalCh = null;
     }
     /* ── Global signal channel (WebRTC, PM, cam requests — user-to-user) ── */
+    state.broadcastConnectedAt = Date.now();
     state.signalCh = state.supa.channel('broadcast:signals-main');
     
     /* CRITICO: Se c'è un pending session invalidation broadcast, invialo ora che il canale è pronto */
@@ -454,14 +460,23 @@ export async function connectSupabase() {
     }
     
     state.signalCh
-      .on('broadcast', { event: 'typing'       }, ({ payload }) => handleTyping(payload))
+      .on('broadcast', { event: 'typing'       }, ({ payload }) => {
+        if (isBroadcastTooOld(payload)) return;
+        handleTyping(payload);
+      })
       .on('broadcast', { event: 'pm'           }, ({ payload }) => {
         if (isBroadcastTooOld(payload)) return; /* replay al reconnect: non riaprire chat privata */
         handleIncomingPM(payload);
       })
       .on('broadcast', { event: 'webrtc'       }, ({ payload }) => handleWebRTCSignal(payload))
-      .on('broadcast', { event: 'cam-req'      }, ({ payload }) => handleCamRequest(payload))
-      .on('broadcast', { event: 'cam-accepted' }, ({ payload }) => handleCamAccepted(payload))
+      .on('broadcast', { event: 'cam-req'      }, ({ payload }) => {
+        if (isBroadcastTooOld(payload)) return;
+        handleCamRequest(payload);
+      })
+      .on('broadcast', { event: 'cam-accepted' }, ({ payload }) => {
+        if (isBroadcastTooOld(payload)) return;
+        handleCamAccepted(payload);
+      })
       .on('broadcast', { event: 'cam-rejected' }, ({ payload }) => {
         if (String(payload.to) !== String(state.currentUser?.id)) return;
         if (isBroadcastTooOld(payload)) return; /* replay al login: non mostrare toast vecchi */
@@ -480,6 +495,7 @@ export async function connectSupabase() {
         showToast('📵 Camera access revoked.');
       })
       .on('broadcast', { event: 'cam-opened'   }, async ({ payload }) => {
+        if (isBroadcastTooOld(payload)) return;
         if (String(payload.from) === String(state.currentUser?.id)) return;
         const fromId   = String(payload.from);
         const camRoom  = payload.room_id || null;   /* room where cam was activated */

@@ -179,6 +179,12 @@ export function closePChat(uid) {
   chat.minimised = false; chat.unread = 0;
 }
 
+/** Chiude tutte le finestre PM (es. ripristino da bfcache / reset UI). */
+export function closeAllPrivateChats() {
+  if (!state.privateChats) return;
+  Object.keys(state.privateChats).forEach((uid) => closePChat(uid));
+}
+
 function updateMinBadge(uid) {
   const chat  = state.privateChats?.[uid];
   const badge = document.getElementById(`min-badge-${uid}`); if (!badge) return;

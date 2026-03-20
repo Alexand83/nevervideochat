@@ -2021,9 +2021,11 @@ export async function handleWebRTCSignal(payload) {
         }
   if (sigType === 'ice' && candidate) console.log('[WebRTC-FLOW] RX ICE for me from', (from || '').slice(0, 8) + '…', toMeIceFallback && !toMeStrict ? (hasIncomingPC ? '(fallback: incomingPC)' : '(fallback: public ICE)') : '');
 
-  /* Firebase replay: ignora SOLO le offer troppo vecchie (evita cam che riappaiono al refresh). ICE e answer non vanno mai filtrati per _ts altrimenti la connessione non si stabilisce. */
-  if (isPublic && sigType === 'offer' && payload._ts != null && state.broadcastConnectedAt > 0 && payload._ts < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) {
-    return;
+  /* Firebase/Supabase replay: ignora offer troppo vecchie (evita cam / videochiamata privata che riappaiono al refresh).
+     ICE/answer senza PC attivo sono già no-op; offer crea PC + UI → va filtrata. */
+  const offerSignalTs = payload._ts ?? payload.ts;
+  if (sigType === 'offer' && offerSignalTs != null && state.broadcastConnectedAt > 0 && offerSignalTs < state.broadcastConnectedAt - WEBRTC_CONNECT_SKEW_MS) {
+    if (isPublic || isPrivate) return;
   }
 
   /* Public block: ctx===public OR ICE with ctx !== 'private' OR ICE from peer we're viewing (hasIncomingPC). */
@@ -2605,7 +2607,8 @@ export function endCall(notify = true) {
     }
     state.streamOpenedForCall = false;
   }
-  state.activeCallUID = null; showToast('📵 Call ended.');
+  state.activeCallUID = null;
+  if (notify) showToast('📵 Call ended.');
 }
 
 /* Insert camera into Events room grid — SOLO quando siamo nella stanza Eventi */

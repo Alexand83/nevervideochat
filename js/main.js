@@ -12,7 +12,7 @@ import { applyAuthIdentity, getOrCreateGuestIdentity,
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
 import { renderUsers, setOpenContextMenu } from './users.js?v=20260453';
 import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js?v=20260453';
-import { setPChatDeps } from './private-chat.js';
+import { setPChatDeps, closeAllPrivateChats } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js?v=20260318b';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initDictation, initAvatarLightbox, initContextMenu, openContextMenu,
@@ -148,10 +148,24 @@ export async function finishInit() {
   state.camViewers = {};
   if (state.currentUser) state.currentUser.hasCamera = false;
   try {
-    const { dom } = await import('./dom.js');
-    if (dom.cameraBtnLabel) dom.cameraBtnLabel.textContent = 'Camera Off';
-    if (dom.cameraBtnHeader) dom.cameraBtnHeader.classList.remove('camera-on');
+    const { dom: d } = await import('./dom.js');
+    if (d.cameraBtnLabel) d.cameraBtnLabel.textContent = 'Camera Off';
+    if (d.cameraBtnHeader) d.cameraBtnHeader.classList.remove('camera-on');
   } catch (_) {}
+  /* Videochiamata privata / overlay richiesta / finestre PM: mai ripristinare dopo refresh o nuovo login */
+  state.privatePeer = null;
+  state.activeCallUID = null;
+  state.streamOpenedForCall = false;
+  try {
+    if (dom.vcallWin) {
+      dom.vcallWin.hidden = true;
+      if (dom.remoteVideoEl) dom.remoteVideoEl.srcObject = null;
+      if (dom.localVideoEl) dom.localVideoEl.srcObject = null;
+      if (dom.remotePlaceholder) dom.remotePlaceholder.style.display = '';
+    }
+    if (dom.camReqOverlay) dom.camReqOverlay.hidden = true;
+  } catch (_) {}
+  closeAllPrivateChats();
   /* CONTROLLO IMMEDIATO: Verifica la sessione all'entrata iniziale (solo per utenti registrati) */
   if (state.currentUser && !state.currentUser.isGuest && state.fb) {
     try {
