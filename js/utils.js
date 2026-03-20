@@ -128,14 +128,22 @@ export function showToast(msg, duration = 3500) {
 
 /* ── Audio notification (Impostazioni → Notifiche: suoni chat / PM) ── */
 
+/** Preferenze salvate come bool / stringa / numero da Firestore o localStorage */
+function notificationSoundEnabled(val, defaultOn = true) {
+  if (val === undefined || val === null) return defaultOn;
+  if (val === false || val === 0 || val === '0') return false;
+  if (typeof val === 'string' && /^false$/i.test(val.trim())) return false;
+  return true;
+}
+
 /** true se l'utente ha lasciato attivo il suono per la chat pubblica (default: on) */
 export function shouldPlayChatNotificationSound() {
-  return state.settings?.soundChat !== false;
+  return notificationSoundEnabled(state.settings?.soundChat, true);
 }
 
 /** true se l'utente ha lasciato attivo il suono per i messaggi privati (default: on) */
 export function shouldPlayPMNotificationSound() {
-  return state.settings?.soundPM !== false;
+  return notificationSoundEnabled(state.settings?.soundPM, true);
 }
 
 /** Suono nuovo messaggio in stanza (solo se abilitato in impostazioni) */

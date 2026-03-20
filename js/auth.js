@@ -634,13 +634,15 @@ export async function loadUserSettingsFromProfile() {
     const snap = await state.fb.firestore.collection('profiles').doc(String(state.currentUser.id)).get();
     const data = snap.data();
     if (!data) return;
+    const soundChatDb = data.soundChat !== undefined ? data.soundChat : data.sound_chat;
+    const soundPMDb = data.soundPM !== undefined ? data.soundPM : data.sound_pm;
     const merged = {
       ...loadDeviceSettings(),
       ...(data.cameraId != null && { cameraId: data.cameraId }),
       ...(data.micId != null && { micId: data.micId }),
       ...(data.autoLoadImages !== undefined && { autoLoadImages: data.autoLoadImages }),
-      ...(data.soundChat !== undefined && { soundChat: data.soundChat }),
-      ...(data.soundPM !== undefined && { soundPM: data.soundPM }),
+      ...(soundChatDb !== undefined && { soundChat: soundChatDb }),
+      ...(soundPMDb !== undefined && { soundPM: soundPMDb }),
       ...(data.isBold !== undefined && { isBold: data.isBold }),
       ...(data.currentColor != null && { currentColor: data.currentColor }),
       ...(data.fontSize != null && { fontSize: data.fontSize }),

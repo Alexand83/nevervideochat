@@ -369,7 +369,7 @@ export function subscribeMessages(roomId, onInsert) {
         if (change.type === 'removed') {
           const idx = room?.messages?.findIndex(m => m.id === id) ?? -1;
           if (idx !== -1) room.messages.splice(idx, 1);
-          if (roomId === state.activeRoom && dom.msgsContainer) {
+          if (String(roomId) === String(state.activeRoom) && dom.msgsContainer) {
             const group = dom.msgsContainer.querySelector(`[data-msg-id="${id}"]`);
             if (group) group.remove();
           }
@@ -384,7 +384,7 @@ export function subscribeMessages(roomId, onInsert) {
               const { html } = extractQuote(d.content);
               msg.html = html;
               msg.edited_at = d.edited_at?.toDate?.()?.getTime?.() ?? (typeof d.edited_at === 'string' ? new Date(d.edited_at).getTime() : null);
-              if (roomId === state.activeRoom && dom.msgsContainer) {
+              if (String(roomId) === String(state.activeRoom) && dom.msgsContainer) {
                 const group = dom.msgsContainer.querySelector(`[data-msg-id="${id}"]`);
                 const textDiv = group?.querySelector('.msg-text');
                 if (group && textDiv) {
@@ -398,7 +398,7 @@ export function subscribeMessages(roomId, onInsert) {
                 }
               }
             }
-            if (roomId === state.activeRoom && dom.msgsContainer) {
+            if (String(roomId) === String(state.activeRoom) && dom.msgsContainer) {
               const group = dom.msgsContainer.querySelector(`[data-msg-id="${id}"]`);
               if (group) updateMessageReactions(group, msg.reactions);
             }
@@ -543,13 +543,13 @@ export async function connectRoom(roomId) {
   if (!state.fb || !state.rooms[roomId]) return;
   const room = state.rooms[roomId];
   room.messages = [];
-  if (roomId === state.activeRoom && dom.msgsContainer) {
+  if (String(roomId) === String(state.activeRoom) && dom.msgsContainer) {
     dom.msgsContainer.innerHTML = '';
     if (dom.welcomeBanner && !dom.welcomeBanner.parentNode) dom.msgsContainer.appendChild(dom.welcomeBanner);
   }
   const onInsert = async (m) => {
     try {
-      if (m.user_id === state.currentUser.id) {
+      if (String(m.user_id) === String(state.currentUser.id)) {
         /* Correlazione per ordine: il primo INSERT ricevuto va al più vecchio messaggio temp (evita reazioni sul messaggio sbagliato) */
         const ourTempMessages = room.messages
           .filter(msg => (msg.userId === 'me' || msg.userId === state.currentUser.id) && msg.id && String(msg.id).startsWith('m') && String(msg.id).length < 30)
@@ -582,7 +582,7 @@ export async function connectRoom(roomId) {
       ensureUser(m.user_id, m.username);
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
       addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);
-      if (roomId === state.activeRoom) playChatNotificationSoundIfEnabled();
+      if (String(roomId) === String(state.activeRoom)) playChatNotificationSoundIfEnabled();
     } catch (err) {
       console.error('[Firebase] Error processing message:', err);
     }

@@ -169,11 +169,12 @@ export async function joinRoom(roomId) {
 
   state.rooms[roomIdStr].presenceCh = presenceCh;
 
+  /* Imposta la stanza attiva PRIMA di connectRoom: altrimenti state.activeRoom resta
+     il default 'general' mentre room_id reale è es. "1" → niente suono notifica chat. */
+  switchRoom(roomIdStr);
+
   /* Load messages & subscribe to DB changes */
   if (_loadRoomMessages) await _loadRoomMessages(roomIdStr);
-
-  renderRoomTabs();
-  switchRoom(roomIdStr);
 }
 
 /* ── Leave a room (opts.silent = true per kick; opts.force = true permette di uscire anche da general quando kickato) ── */
