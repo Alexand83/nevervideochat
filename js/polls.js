@@ -200,7 +200,9 @@ async function _subscribePollWidget() {
     (snap) => {
       const docs = snap.docs || [];
       if (!docs.length) {
-        _renderEmpty();
+        // Nessun poll per questo scope (Stanza vs Globale): mostra messaggio nella colonna,
+        // non nascondere tutto il pannello al cambio tab.
+        _renderScopeEmpty();
         return;
       }
 
