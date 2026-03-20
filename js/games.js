@@ -47,6 +47,14 @@ let gameData = {
   },
 };
 
+/** Solo l'host del quiz deve far avanzare domande/timer: altrimenti ogni client che ripristina il timer chiama checkQuizAnswers() e salta domande. */
+function isActiveQuizHost() {
+  if (!activeGame || activeGame.game_type !== 'quiz') return false;
+  const uid = state.currentUser?.id;
+  if (!uid) return false;
+  return String(uid) === String(activeGame.host_id);
+}
+
 /* ── Helper: restituisce il container corretto per il contenuto del gioco ── */
 function getGameContainer() {
   const isMobile = window.innerWidth <= 768;
@@ -300,45 +308,35 @@ export async function checkActiveGame() {
           questions: gameState.questions || defaultQuestions,
           questionStartTime: gameState.questionStartTime || null,
         };
-        /* NON ripristinare il timer quando si ricarica il gioco - potrebbe causare conflitti */
-        /* Il timer originale gestirà il flusso, e se non c'è timer attivo, significa che */
-        /* la domanda è già stata processata o il gioco è finito */
-        if (gameData.quiz.currentQuestion && gameData.quiz.questionStartTime) {
-          /* Calcola tempo rimanente basato sul timestamp salvato */
+        /* I non-host non devono MAI tenere un timer quiz: ogni timeout chiamava checkQuizAnswers e moltiplicava gli avanzamenti. */
+        if (!isActiveQuizHost()) {
+          if (gameTimer) {
+            clearTimeout(gameTimer);
+            gameTimer = null;
+          }
+        } else if (gameData.quiz.currentQuestion && gameData.quiz.questionStartTime) {
           const timeElapsed = Date.now() - gameData.quiz.questionStartTime;
           const timeRemaining = gameData.quiz.timeLimit - timeElapsed;
-          
-          /* Se c'è già un timer attivo, NON crearne un altro */
           if (gameTimer) {
-            console.log('[Games] Timer already active, not restoring');
-            return;
-          }
-          
-          /* Se il tempo è già scaduto, NON processare qui - potrebbe essere già stato processato */
-          if (timeRemaining <= 0) {
-            console.log('[Games] Time already expired, not processing on reload');
-            return;
-          }
-          
-          /* Solo se non c'è timer e il tempo non è scaduto, ripristina */
-          if (timeRemaining > 0 && timeRemaining <= gameData.quiz.timeLimit) {
-            console.log(`[Games] Restoring timer with ${timeRemaining}ms remaining`);
+            console.log('[Games] Quiz timer already active, not restoring');
+          } else if (timeRemaining <= 0) {
+            console.log('[Games] Quiz time already expired on reload; waiting for Firestore state');
+          } else if (timeRemaining > 0 && timeRemaining <= gameData.quiz.timeLimit) {
+            console.log(`[Games] Restoring quiz timer (${timeRemaining}ms left, host only)`);
             gameTimer = setTimeout(() => {
-              if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
-                if (gameData.quiz.questionIndex < gameData.quiz.questions.length) {
-                  checkQuizAnswers();
-                  setTimeout(() => {
-                    if (activeGame && activeGame.game_type === 'quiz' && !showingFinalLeaderboard) {
-                      if (gameData.quiz.questionIndex < gameData.quiz.questions.length) {
-                        askNextQuestion();
-                      } else {
-                        endQuizGame();
-                      }
-                    }
-                  }, 2000);
-                } else {
-                  endQuizGame();
-                }
+              if (!isActiveQuizHost() || !activeGame || activeGame.game_type !== 'quiz' || showingFinalLeaderboard) return;
+              if (gameData.quiz.questionIndex < gameData.quiz.questions.length) {
+                checkQuizAnswers();
+                setTimeout(() => {
+                  if (!isActiveQuizHost() || !activeGame || activeGame.game_type !== 'quiz' || showingFinalLeaderboard) return;
+                  if (gameData.quiz.questionIndex < gameData.quiz.questions.length) {
+                    askNextQuestion();
+                  } else {
+                    endQuizGame();
+                  }
+                }, 2000);
+              } else {
+                endQuizGame();
               }
             }, timeRemaining);
           }
@@ -1024,7 +1022,11 @@ let checkingAnswers = false; /* Flag per evitare chiamate multiple simultanee */
 function checkQuizAnswers() {
   if (!activeGame || activeGame.game_type !== 'quiz') return;
   if (!gameData.quiz.currentQuestion) return;
-  
+  if (!isActiveQuizHost()) {
+    console.log('[Games] checkQuizAnswers ignored (non-host; solo l\'host avanza il quiz)');
+    return;
+  }
+
   /* Evita chiamate multiple simultanee */
   if (checkingAnswers) {
     console.log('[Games] checkQuizAnswers already in progress, skipping...');
