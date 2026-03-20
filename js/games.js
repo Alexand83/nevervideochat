@@ -351,7 +351,18 @@ export async function checkActiveGame() {
         updateGamesPanel();
       }, 100);
     } else {
-      /* Nessun gioco attivo - reset */
+      /* Nessun gioco attivo - reset
+         I non-host non eseguono endQuizGame(): quando l'host chiude il quiz, qui vedono solo is_active:false.
+         Senza questo blocco passano subito a "Nessun gioco attivo" mentre l'host vede la classifica 60s. */
+      const hadLocalQuiz = activeGame?.game_type === 'quiz';
+      const quizEndedInDb =
+        data &&
+        data.is_active === false &&
+        data.game_type === 'quiz' &&
+        data.ended_at != null;
+      const docRoom = String(data?.room_id ?? data?.id ?? '');
+      const inThisRoom = docRoom && String(state.activeRoom) === docRoom;
+
       activeGame = null;
       gameData.song.answers.clear();
       gameData.truthLie.votes.clear();
@@ -360,7 +371,15 @@ export async function checkActiveGame() {
         clearTimeout(gameTimer);
         gameTimer = null;
       }
-      updateGamesPanel();
+
+      if (quizEndedInDb && hadLocalQuiz && inThisRoom && !showingFinalLeaderboard) {
+        showingFinalLeaderboard = true;
+        await renderFinalLeaderboard('quiz');
+        showToast('🎉 Quiz completato! Classifica finale mostrata.', 5000);
+        scheduleFinalLeaderboardDismiss();
+      } else {
+        updateGamesPanel();
+      }
     }
   } catch (err) {
     console.error('[Games] Error checking active game:', err);
@@ -1142,27 +1161,51 @@ function checkQuizAnswers() {
   checkingAnswers = false; /* Reset flag dopo aver processato */
 }
 
+/** Dopo la classifica quiz: stesso timeout per tutti i client (host e non-host). */
+function scheduleFinalLeaderboardDismiss() {
+  if (finalLeaderboardTimer) {
+    clearTimeout(finalLeaderboardTimer);
+  }
+  finalLeaderboardTimer = setTimeout(() => {
+    finalLeaderboardTimer = null;
+    if (!showingFinalLeaderboard) return;
+    showingFinalLeaderboard = false;
+    activeGame = null;
+    gameData.quiz.answers.clear();
+
+    const isMobile = window.innerWidth <= 768;
+    const availableRooms = getAvailableRooms();
+    const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
+    const isGamesRoom = roomData?.is_games_room === true;
+
+    if (isMobile && isGamesRoom && dom.usersList && dom.usersPanelGameContent) {
+      dom.usersList.hidden = false;
+      dom.usersPanelGameContent.hidden = true;
+      dom.usersPanelGameContent.innerHTML = '';
+    }
+
+    updateGamesPanel();
+  }, 60000);
+}
+
 /* ── Termina gioco quiz ───────────────────────────────────────── */
 async function endQuizGame() {
   if (!activeGame || activeGame.game_type !== 'quiz') return;
-  
-  /* FERMA il timer del quiz per evitare che continui */
+
   if (gameTimer) {
     clearTimeout(gameTimer);
     gameTimer = null;
   }
-  
+
   const isInActiveRoom = String(state.activeRoom) === String(activeGame.room_id);
-  
-  /* Mostra classifica finale nel pannello */
+
   showingFinalLeaderboard = true;
   await renderFinalLeaderboard('quiz');
-  
+
   if (isInActiveRoom) {
     showToast(`🎉 Quiz completato! Classifica finale mostrata.`);
   }
-  
-  /* Salva nel DB che il gioco è finito */
+
   if (state.fb && activeGame) {
     try {
       await state.fb.firestore.collection('active_games').doc(String(activeGame.room_id || activeGame.id)).update({ is_active: false, ended_at: new Date() });
@@ -1170,33 +1213,8 @@ async function endQuizGame() {
       console.error('[Games] Error ending quiz game:', err);
     }
   }
-  
-  /* Timer per rimuovere la classifica dopo 1 minuto e fermare completamente il gioco */
-  if (finalLeaderboardTimer) {
-    clearTimeout(finalLeaderboardTimer);
-  }
-  finalLeaderboardTimer = setTimeout(() => {
-    if (showingFinalLeaderboard) {
-      showingFinalLeaderboard = false;
-      /* Ferma completamente il gioco */
-      activeGame = null;
-      gameData.quiz.answers.clear();
-      
-      /* Su mobile nella stanza giochi: quando il gioco termina, mostra users list normale */
-      const isMobile = window.innerWidth <= 768;
-      const availableRooms = getAvailableRooms();
-      const roomData = availableRooms.find(r => String(r.id) === String(state.activeRoom));
-      const isGamesRoom = roomData?.is_games_room === true;
-      
-      if (isMobile && isGamesRoom && dom.usersList && dom.usersPanelGameContent) {
-        dom.usersList.hidden = false;
-        dom.usersPanelGameContent.hidden = true;
-        dom.usersPanelGameContent.innerHTML = '';
-      }
-      
-      updateGamesPanel();
-    }
-  }, 60000); // 1 minuto
+
+  scheduleFinalLeaderboardDismiss();
 }
 
 /* ── Termina gioco corrente ──────────────────────────────────── */
