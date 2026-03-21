@@ -35,7 +35,7 @@ export const AVATAR_COLORS = [
  * Se true: il client usa solo STUN (scoperta NAT) e ignora tutti gli URL turn:/turns:.
  * Per test P2P puri: true. Per produzione (5G/CGNAT): false + relay TURN.
  */
-export const ICE_P2P_ONLY = true;
+export const ICE_P2P_ONLY = false;
 
 /**
  * Solo se ICE_P2P_ONLY è true: su rete cellulare mantieni comunque i server TURN (sicurezza reale).
