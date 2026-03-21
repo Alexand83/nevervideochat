@@ -256,7 +256,7 @@ export async function connectRoom(roomId) {
         if (room) {
           /* Correlazione per ordine: primo INSERT = messaggio temp più vecchio (evita reazioni sul messaggio sbagliato) */
           const ourTempMessages = room.messages
-            .filter(msg => (msg.userId === 'me' || msg.userId === state.currentUser.id) && msg.id && String(msg.id).startsWith('m') && String(msg.id).length < 64)
+            .filter(msg => (msg.userId === 'me' || msg.userId === state.currentUser.id) && msg.id && String(msg.id).startsWith('m') && String(msg.id).length < 30)
             .sort((a, b) => (a.ts || 0) - (b.ts || 0));
           const tempMsg = ourTempMessages[0] || null;
           if (tempMsg) {
