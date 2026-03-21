@@ -1085,16 +1085,104 @@
   color: var(--accent-h);
 }
 
-/* Message actions row (Reply, Add reaction) — sempre visibili */
+/* Base azioni (dettaglio visibilità: media query sotto) */
 .msg-actions {
-  /* Style 29: keep actions compact next to text */
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
   gap: 2px;
   flex-shrink: 0;
-  opacity: 1;
 }
+
+/* Pulsante ⋯: visibile solo su touch / schermi senza hover (vedi media sotto) */
+.msg-mobile-more {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 0 4px;
+  padding: 0 6px;
+  min-width: 28px;
+  min-height: 26px;
+  border: none;
+  border-radius: var(--r2);
+  background: transparent;
+  color: var(--tx2);
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  align-self: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.msg-mobile-more:hover,
+.msg-mobile-more:focus-visible {
+  background: var(--bg-hover);
+  color: var(--tx0);
+  outline: none;
+}
+
+/* Touch o viewport stretta: nascondi azioni finché non si apre il menu ⋯ */
+@media (max-width: 768px), (hover: none) {
+  .msg-mobile-more {
+    display: inline-flex;
+  }
+  .msg-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
+    flex-shrink: 0;
+    flex-basis: 100%;
+    width: 100%;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, visibility 0.15s ease, max-height 0.2s ease, margin 0.2s ease, padding 0.2s ease;
+  }
+  .msg-group.msg-show-actions .msg-actions {
+    max-height: 120px;
+    opacity: 1;
+    visibility: visible;
+    margin-top: 4px;
+    padding-top: 2px;
+    pointer-events: auto;
+  }
+}
+
+/* PC con mouse: ⋯ nascosto, azioni visibili al passaggio sul messaggio (o focus tastiera) */
+@media (hover: hover) and (min-width: 769px) {
+  .msg-mobile-more {
+    display: none !important;
+  }
+  .msg-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 2px;
+    flex-shrink: 0;
+    flex-basis: auto;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+    opacity: 0;
+    visibility: hidden;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease, visibility 0.12s ease;
+  }
+  .msg-group:hover .msg-actions,
+  .msg-group:focus-within .msg-actions {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
 .msg-action-btn {
   display: inline-flex;
   align-items: center;
