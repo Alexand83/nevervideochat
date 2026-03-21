@@ -2,9 +2,9 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260465 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260466 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
-import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL } from './config.js';
+import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL, ICE_P2P_ONLY } from './config.js';
 import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
@@ -27,6 +27,39 @@ function camCount() { return Object.keys(state.cameraWindows).length; }
 let _iceConfigCache = null;
 let _iceConfigFetchedAt = 0;
 const ICE_CONFIG_TTL_MS = 3_600_000; // 1 ora
+let _loggedIceP2pOnly = false;
+
+/** Rimuove turn:/turns: da ogni entry (solo STUN → massimo sforzo P2P). */
+function stripTurnUrlsFromIceServers(iceServers) {
+  if (!Array.isArray(iceServers)) {
+    return ICE_SERVERS_FALLBACK.iceServers.map((x) => ({ urls: x.urls }));
+  }
+  const out = [];
+  for (const s of iceServers) {
+    if (!s || s.urls == null) continue;
+    const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+    const kept = urls.filter((u) => {
+      const x = String(u).trim().toLowerCase();
+      return x.startsWith('stun:') || x.startsWith('stuns:');
+    });
+    if (!kept.length) continue;
+    out.push({ urls: kept.length === 1 ? kept[0] : kept });
+  }
+  return out.length ? out : ICE_SERVERS_FALLBACK.iceServers.map((x) => ({ urls: x.urls }));
+}
+
+function applyIceP2pOnly(cfg) {
+  if (!ICE_P2P_ONLY || !cfg) return cfg;
+  if (!_loggedIceP2pOnly) {
+    _loggedIceP2pOnly = true;
+    console.warn('[WebRTC] ICE_P2P_ONLY=true — solo STUN, nessun TURN. Dietro NAT difficile la cam può non partire.');
+  }
+  const iceServers = stripTurnUrlsFromIceServers(cfg.iceServers);
+  return {
+    ...cfg,
+    iceServers,
+  };
+}
 
 /* ── WebRTC transport indicator (P2P / RELAY) ─────────────────── */
 async function _deriveNetModeFromStats(pc) {
@@ -220,7 +253,9 @@ function startPublicCamRelayRecoveryIncoming(pc, broadcasterUid) {
 
 async function getIceConfig() {
   const now = Date.now();
-  if (_iceConfigCache && (now - _iceConfigFetchedAt) < ICE_CONFIG_TTL_MS) return _iceConfigCache;
+  if (_iceConfigCache && (now - _iceConfigFetchedAt) < ICE_CONFIG_TTL_MS) {
+    return applyIceP2pOnly(_iceConfigCache);
+  }
   try {
     /* 1) Prefer endpoint sicuro (/api/ice) che genera credenziali TURN via Metered API (server-side). */
     try {
@@ -237,7 +272,7 @@ async function getIceConfig() {
           rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
         };
         _iceConfigFetchedAt = now;
-        return _iceConfigCache;
+        return applyIceP2pOnly(_iceConfigCache);
       };
 
       /* A) Se hosti su Firebase Hosting (o reverse-proxy), funziona il rewrite /api/ice */
@@ -271,11 +306,11 @@ async function getIceConfig() {
           rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
         };
         _iceConfigFetchedAt = now;
-        return _iceConfigCache;
+        return applyIceP2pOnly(_iceConfigCache);
       }
     }
   } catch (_) {}
-  return ICE_SERVERS_FALLBACK;
+  return applyIceP2pOnly(ICE_SERVERS_FALLBACK);
 }
 /** Per evitare XSS/breakout in id HTML: solo caratteri sicuri */
 function safeId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '') || 'u'; }

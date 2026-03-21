@@ -31,6 +31,13 @@ export const AVATAR_COLORS = [
  * Le credenziali TURN (relay) vengono caricate a runtime dalla Edge Function — non sono
  * mai esposte nel bundle JS. Vedi supabase/functions/get-ice-config/README.md.
  */
+/**
+ * Se true: il client usa solo STUN (scoperta NAT) e ignora tutti gli URL turn:/turns:.
+ * Utile per provare solo P2P e non passare dal TURN. Dietro NAT/firewall stretti la cam può non connettersi.
+ * Rimetti false quando vuoi di nuovo il relay.
+ */
+export const ICE_P2P_ONLY = true;
+
 export const ICE_SERVERS_FALLBACK = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302'  },
