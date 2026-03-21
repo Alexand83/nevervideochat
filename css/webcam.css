@@ -3,6 +3,11 @@
    draggable + resizable floating window.
    Private video calls use .vcall-win (PiP).
 ─────────────────────────────────────────────────────────────────── */
+/* Animazione con transform:none a fine corsa: evita che i fixed (menu) restino “agganciati” al box e clippati */
+@keyframes slideUpInCamWin {
+  from { opacity: 0; transform: translateY(18px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
 .cam-window {
   position: fixed;
   width: 300px;
@@ -17,7 +22,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideUpIn .2s ease;
+  animation: slideUpInCamWin .2s ease forwards;
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
   container-type: inline-size;
   container-name: cam-window;
@@ -148,7 +153,7 @@
   width: 100%;
   box-sizing: border-box;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible; /* non tagliare menu assoluti nel footer (backup se il dropdown non è su body) */
   -webkit-overflow-scrolling: touch;
 }
 .cam-quality-wrap {

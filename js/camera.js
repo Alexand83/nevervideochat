@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260322 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260464 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL } from './config.js';
 import { state }         from './state.js';
@@ -118,7 +118,8 @@ async function getIceConfig() {
         if (!data || !Array.isArray(data.iceServers) || data.iceServers.length === 0) return null;
         _iceConfigCache = {
           iceServers:           data.iceServers,
-          iceCandidatePoolSize: data.iceCandidatePoolSize ?? 10,
+          /* Pool piccolo = meno traffico iniziale su STUN/TURN (risparmio sul relay) */
+          iceCandidatePoolSize: data.iceCandidatePoolSize ?? 4,
           bundlePolicy:         data.bundlePolicy         ?? 'max-bundle',
           rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
         };
@@ -152,7 +153,7 @@ async function getIceConfig() {
       if (Array.isArray(data?.iceServers) && data.iceServers.length > 0) {
         _iceConfigCache = {
           iceServers:           data.iceServers,
-          iceCandidatePoolSize: data.iceCandidatePoolSize ?? 10,
+          iceCandidatePoolSize: data.iceCandidatePoolSize ?? 4,
           bundlePolicy:         data.bundlePolicy         ?? 'max-bundle',
           rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
         };
@@ -534,11 +535,15 @@ export function createCameraWindow(uid, stream, name, isOwn) {
     if (devBtn && devDrop) {
       devBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        devDrop.hidden = !devDrop.hidden;
-        if (!devDrop.hidden) await openCameraDeviceDropdown(uid, devDrop);
+        if (devDrop.hidden) {
+          devDrop.hidden = false;
+          await openCameraDeviceDropdown(uid, devDrop);
+        } else {
+          hideCameraDeviceDropdown(uid);
+        }
       });
       devDrop.addEventListener('click', (e) => e.stopPropagation());
-      document.addEventListener('click', () => { if (devDrop) devDrop.hidden = true; });
+      document.addEventListener('click', () => { hideCameraDeviceDropdown(uid); });
     }
     const vBtn   = $(`cam-viewers-btn-${safeId(uid)}`);
     const vPanel = $(`cam-viewers-panel-${safeId(uid)}`);
@@ -700,6 +705,8 @@ export async function closeCameraWindow(uid) {
   
   /* Normal floating window close */
   const cw = state.cameraWindows[uid]; if (!cw) return;
+  /* Menu dispositivo può essere stato spostato su body: ripristina / chiudi prima di rimuovere la finestra */
+  hideCameraDeviceDropdown(uid);
   if (cw._remoteVideoPollInterval) { clearInterval(cw._remoteVideoPollInterval); cw._remoteVideoPollInterval = null; }
   stopMicMeter(uid);
   if (cw.stream) { cw.stream.getTracks().forEach(t => t.stop()); cw.stream = null; }
@@ -1503,6 +1510,7 @@ function toggleSoloVoce(uid) {
 
 /* ── Cambio camera on the fly (dropdown in footer) ── */
 async function openCameraDeviceDropdown(uid, dropdownEl) {
+  mountCameraDeviceDropdown(dropdownEl);
   const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
   const videoDevices = devices.filter(d => d.kind === 'videoinput');
   const currentId = state.settings?.cameraId || '';
@@ -1522,6 +1530,7 @@ async function openCameraDeviceDropdown(uid, dropdownEl) {
     item.addEventListener('click', async (e) => {
       e.stopPropagation();
       dropdownEl.hidden = true;
+      restoreCameraDeviceDropdown(dropdownEl);
       if (dev.deviceId !== currentId) await switchCameraDevice(uid, dev.deviceId);
     });
     dropdownEl.appendChild(item);
@@ -1529,16 +1538,101 @@ async function openCameraDeviceDropdown(uid, dropdownEl) {
   positionDeviceDropdown(uid, dropdownEl);
 }
 
-/** Posiziona il dropdown sopra il bottone con position:fixed così non viene clippato dal footer (overflow-y:hidden). */
+/** Sposta il menu su document.body: .cam-window ha transform (animazione) + overflow:hidden → altrimenti fixed è clippato. */
+function mountCameraDeviceDropdown(dropdownEl) {
+  if (!dropdownEl) return;
+  if (!dropdownEl._deviceDropOriginalParent) {
+    dropdownEl._deviceDropOriginalParent = dropdownEl.parentNode;
+  }
+  if (dropdownEl.parentNode !== document.body) {
+    document.body.appendChild(dropdownEl);
+  }
+}
+
+function restoreCameraDeviceDropdown(dropdownEl) {
+  if (!dropdownEl) return;
+  if (dropdownEl._resizeBound) {
+    window.removeEventListener('resize', dropdownEl._resizeBound);
+    dropdownEl._resizeBound = null;
+  }
+  const p = dropdownEl._deviceDropOriginalParent;
+  if (p && dropdownEl.parentNode === document.body) {
+    p.appendChild(dropdownEl);
+  }
+  dropdownEl.style.position = '';
+  dropdownEl.style.left = '';
+  dropdownEl.style.top = '';
+  dropdownEl.style.right = '';
+  dropdownEl.style.bottom = '';
+  dropdownEl.style.zIndex = '';
+  dropdownEl.style.maxHeight = '';
+  dropdownEl.style.minWidth = '';
+}
+
+function hideCameraDeviceDropdown(uid) {
+  const devDrop = $(`cam-device-dropdown-${safeId(uid)}`);
+  if (!devDrop || devDrop.hidden) return;
+  devDrop.hidden = true;
+  restoreCameraDeviceDropdown(devDrop);
+}
+
+/** Allinea al bottone cam, viewport, finestra piccola: sopra se c’è spazio, sotto altrimenti + max-height scroll. */
 function positionDeviceDropdown(uid, dropdownEl) {
   const btn = $(`cam-device-btn-${safeId(uid)}`);
-  if (!btn) return;
-  const rect = btn.getBoundingClientRect();
-  dropdownEl.style.position = 'fixed';
-  dropdownEl.style.left = rect.left + 'px';
-  dropdownEl.style.top = (rect.top - dropdownEl.offsetHeight - 6) + 'px';
-  dropdownEl.style.right = 'auto';
-  dropdownEl.style.bottom = 'auto';
+  if (!btn || !dropdownEl) return;
+
+  if (dropdownEl._resizeBound) {
+    window.removeEventListener('resize', dropdownEl._resizeBound);
+    dropdownEl._resizeBound = null;
+  }
+
+  const run = () => {
+    if (dropdownEl.hidden) return;
+    const rect = btn.getBoundingClientRect();
+    const margin = 8;
+    const gap = 6;
+    dropdownEl.style.position = 'fixed';
+    dropdownEl.style.zIndex = '10050';
+    dropdownEl.style.right = 'auto';
+    dropdownEl.style.bottom = 'auto';
+    dropdownEl.style.minWidth = Math.min(280, Math.max(180, rect.width + 32)) + 'px';
+
+    dropdownEl.style.maxHeight = 'none';
+    const naturalH = Math.max(dropdownEl.offsetHeight, dropdownEl.scrollHeight, 80);
+
+    const spaceAbove = rect.top - margin - gap;
+    const spaceBelow = window.innerHeight - rect.bottom - margin - gap;
+    const preferAbove = spaceAbove >= 100 && spaceAbove >= spaceBelow - 24;
+
+    let top;
+    let maxH;
+    if (preferAbove) {
+      maxH = Math.min(340, Math.max(80, spaceAbove));
+      const showH = Math.min(naturalH, maxH);
+      top = rect.top - showH - gap;
+      if (top < margin) {
+        top = margin;
+        maxH = Math.min(maxH, Math.max(80, rect.top - margin - gap));
+      }
+    } else {
+      top = rect.bottom + gap;
+      maxH = Math.min(340, Math.max(80, spaceBelow));
+    }
+    dropdownEl.style.maxHeight = maxH + 'px';
+
+    const dw = dropdownEl.getBoundingClientRect().width || 220;
+    const left = Math.max(margin, Math.min(rect.left, window.innerWidth - dw - margin));
+    dropdownEl.style.left = `${left}px`;
+    dropdownEl.style.top = `${top}px`;
+  };
+
+  requestAnimationFrame(() => requestAnimationFrame(run));
+
+  const onResize = () => {
+    if (!dropdownEl.hidden) run();
+  };
+  dropdownEl._resizeBound = onResize;
+  window.addEventListener('resize', onResize);
 }
 
 /** Sostituisce il track su tutte le connessioni che inviano il nostro stream (stanza + Eventi + videochiamata). */
@@ -2051,10 +2145,11 @@ async function tryRampUpCaptureQuality() {
 }
 
 /* ── Qualità video adattiva (encoding WebRTC): partenza bassa, ramp-up se la connessione regge ── */
+/* Bitrate più bassi = meno GB su TURN quando serve relay; il ramp-up sale comunque se la rete regge */
 const ENCODING_PROFILES = {
-  low:    { maxBitrate: 250000, scaleResolutionDownBy: 2   },
-  medium: { maxBitrate: 450000, scaleResolutionDownBy: 1.5 },
-  high:   { maxBitrate: 700000, scaleResolutionDownBy: 1   },
+  low:    { maxBitrate: 200000, scaleResolutionDownBy: 2   },
+  medium: { maxBitrate: 360000, scaleResolutionDownBy: 1.5 },
+  high:   { maxBitrate: 550000, scaleResolutionDownBy: 1   },
 };
 const RAMP_UP_INTERVAL_MS = 15000;
 

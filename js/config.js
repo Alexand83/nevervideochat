@@ -38,7 +38,7 @@ export const ICE_SERVERS_FALLBACK = {
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.relay.metered.ca:80' },
   ],
-  iceCandidatePoolSize: 10,
+  iceCandidatePoolSize: 4,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
 };
