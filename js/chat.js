@@ -57,8 +57,15 @@ export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, qu
   /* Filter ignored users */
   if (userId && userId !== 'me' && state.ignoredUsers[String(userId)]) return;
 
+  const id = msgId || `m${Date.now()}${Math.random()}`;
+  /* Dedupe: stesso id da Firestore (replay / doppio snapshot) non deve duplicare bubble */
+  if (msgId && room.messages.some(m => m.id === msgId)) {
+    console.warn('[Chat] addMessage: skip duplicate msg id', msgId);
+    return;
+  }
+
   const msg = { 
-    id: msgId || `m${Date.now()}${Math.random()}`, 
+    id, 
     userId, html, ts, quoteHtml, quoteName, username,
     reactions: reactions || {}
   };

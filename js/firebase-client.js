@@ -8,7 +8,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { showToast, playChatNotificationSoundIfEnabled, processHtml } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers, noteChatMessageFromUser } from './users.js?v=20260462';
-import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions, CHAT_MESSAGES_WINDOW } from './chat.js?v=20260461';
+import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions, CHAT_MESSAGES_WINDOW } from './chat.js?v=20260463';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
          closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318b';
@@ -359,23 +359,33 @@ export function createPresenceChannel(roomIdStr, key) {
   };
 }
 
-/* ── Messages subscription (Firestore): only new messages after subscribe ── */
+/* ── Messages subscription (Firestore): niente cronologia al join, ma tutti i client devono vedere
+   gli stessi messaggi nuovi. Il vecchio filtro `created <= Date.now() - 2000` perdeva messaggi se:
+   la sottoscrizione era lenta, l’orologio del telefono/PC era avanti rispetto al server, o i messaggi
+   cadevano nello stesso snapshot iniziale. Qui: primo snapshot = ignora tutti gli "added" (cronologia);
+   dagli snapshot successivi accetta ogni "added" con dedupe su id. ── */
 export function subscribeMessages(roomId, onInsert) {
   if (messageUnsubscribes[roomId]) {
     messageUnsubscribes[roomId]();
     messageUnsubscribes[roomId] = null;
   }
-  const connectTime = Date.now();
+  let isFirstSnapshot = true;
   const unsub = firestore.collection('messages')
     .where('room_id', '==', roomId)
     .orderBy('created_at', 'asc')
     .onSnapshot((snap) => {
+      if (!state.rooms[roomId]) return;
+
+      const skipHistoricalAdds = isFirstSnapshot;
+      if (isFirstSnapshot) isFirstSnapshot = false;
+
       snap.docChanges().forEach(change => {
         const id = change.doc.id;
-        const room = state.rooms[roomId];
+        const r = state.rooms[roomId];
+        if (!r) return;
         if (change.type === 'removed') {
-          const idx = room?.messages?.findIndex(m => m.id === id) ?? -1;
-          if (idx !== -1) room.messages.splice(idx, 1);
+          const idx = r.messages?.findIndex(m => m.id === id) ?? -1;
+          if (idx !== -1) r.messages.splice(idx, 1);
           if (String(roomId) === String(state.activeRoom) && dom.msgsContainer) {
             const group = dom.msgsContainer.querySelector(`[data-msg-id="${id}"]`);
             if (group) group.remove();
@@ -384,7 +394,7 @@ export function subscribeMessages(roomId, onInsert) {
         }
         if (change.type === 'modified') {
           const d = change.doc.data();
-          const msg = room?.messages?.find(m => m.id === id);
+          const msg = r.messages?.find(m => m.id === id);
           if (msg) {
             msg.reactions = d.reactions || {};
             if (d.content !== undefined) {
@@ -413,9 +423,9 @@ export function subscribeMessages(roomId, onInsert) {
           return;
         }
         if (change.type !== 'added') return;
+        if (skipHistoricalAdds) return;
+        if (r.messages.some(m => m.id === id)) return;
         const d = change.doc.data();
-        const created = d.created_at?.toDate?.()?.getTime?.() || (typeof d.created_at === 'string' ? new Date(d.created_at).getTime() : 0);
-        if (created <= connectTime - 2000) return;
         const m = { id, ...mapTimestamp(d), created_at: d.created_at?.toDate?.()?.toISOString?.() || d.created_at };
         onInsert(m);
       });
