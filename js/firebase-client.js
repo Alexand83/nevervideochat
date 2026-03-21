@@ -8,7 +8,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { showToast, playChatNotificationSoundIfEnabled, processHtml } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js?v=20260453';
-import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions, CHAT_MESSAGES_WINDOW } from './chat.js?v=20260453';
+import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions, CHAT_MESSAGES_WINDOW } from './chat.js?v=20260461';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
          closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318b';

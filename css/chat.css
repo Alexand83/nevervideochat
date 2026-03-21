@@ -352,7 +352,7 @@
   align-items: baseline;
   gap: var(--s2);
   flex-wrap: wrap;
-  /* manipulation: tap reattivo; none poteva interferire con il click su ⋯ su alcuni WebView */
+  /* manipulation: tap reattivo su bolla/meta per mostrare azioni */
   touch-action: manipulation;
   flex-shrink: 0;
 }
