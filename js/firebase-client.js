@@ -8,7 +8,7 @@ import { state } from './state.js';
 import { dom } from './dom.js';
 import { showToast, playChatNotificationSoundIfEnabled, processHtml } from './utils.js';
 import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js?v=20260453';
-import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js?v=20260453';
+import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions, CHAT_MESSAGES_WINDOW } from './chat.js?v=20260453';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
          closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260318b';
@@ -554,7 +554,7 @@ export async function connectRoom(roomId) {
     dom.msgsContainer.innerHTML = '';
     if (dom.welcomeBanner && !dom.welcomeBanner.parentNode) dom.msgsContainer.appendChild(dom.welcomeBanner);
   }
-  const onInsert = async (m) => {
+  const onInsert = async (m, opts = {}) => {
     try {
       if (String(m.user_id) === String(state.currentUser.id)) {
         /* Correlazione per ordine: il primo INSERT ricevuto va al più vecchio messaggio temp (evita reazioni sul messaggio sbagliato) */
@@ -589,7 +589,7 @@ export async function connectRoom(roomId) {
       ensureUser(m.user_id, m.username);
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
       addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);
-      if (String(roomId) === String(state.activeRoom)) playChatNotificationSoundIfEnabled();
+      if (!opts.silent && String(roomId) === String(state.activeRoom)) playChatNotificationSoundIfEnabled();
     } catch (err) {
       console.error('[Firebase] Error processing message:', err);
     }

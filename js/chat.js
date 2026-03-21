@@ -17,6 +17,9 @@ let _handleGameCommand = null;
 
 /* ── Le funzioni createSessionId e getSavedSessionId sono ora in auth.js ── */
 /* ── Importale quando necessario ── */
+/** Allineato alla query Firestore: ultimi N messaggi per stanza */
+export const CHAT_MESSAGES_WINDOW = 60;
+
 export function setChatDeps(openCtx, uploadStorage, supaReady, renderTabs, broadcast, handleGameCmd) {
   _openContextMenu = openCtx;
   _uploadToStorage = uploadStorage;
@@ -61,10 +64,9 @@ export function addMessage({ userId, html, ts = Date.now(), quoteHtml = null, qu
   };
   room.messages.push(msg);
 
-  /* ── Enforce max 60 messages limit ── */
-  const MAX_MESSAGES = 60;
-  if (room.messages.length > MAX_MESSAGES) {
-    const removed = room.messages.splice(0, room.messages.length - MAX_MESSAGES);
+  /* ── Enforce max messages in memory/DOM (stesso N della query Firestore) ── */
+  if (room.messages.length > CHAT_MESSAGES_WINDOW) {
+    const removed = room.messages.splice(0, room.messages.length - CHAT_MESSAGES_WINDOW);
     /* Remove old messages from DOM if this is the active room */
     if (rId === state.activeRoom && dom.msgsContainer) {
       removed.forEach(oldMsg => {
