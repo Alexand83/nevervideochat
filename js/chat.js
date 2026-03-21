@@ -179,30 +179,6 @@ export function renderMessage(msg) {
     meta.append(senderEl, gt, timeEl);
   } else { meta.append(senderEl, timeEl); }
 
-  /* Touch / schermi senza hover: apri Modifica · Reply · reaction dal menu ⋯ */
-  const moreBtn = document.createElement('button');
-  moreBtn.type = 'button';
-  moreBtn.className = 'msg-mobile-more';
-  moreBtn.setAttribute('aria-label', 'Azioni messaggio');
-  moreBtn.setAttribute('aria-expanded', 'false');
-  moreBtn.setAttribute('aria-haspopup', 'true');
-  moreBtn.textContent = '⋯';
-  moreBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const g = moreBtn.closest('.msg-group');
-    if (!g || !dom.msgsContainer) return;
-    const isOpen = g.classList.contains('msg-show-actions');
-    dom.msgsContainer.querySelectorAll('.msg-group.msg-show-actions').forEach((og) => {
-      if (og !== g) {
-        og.classList.remove('msg-show-actions');
-        og.querySelector('.msg-mobile-more')?.setAttribute('aria-expanded', 'false');
-      }
-    });
-    g.classList.toggle('msg-show-actions', !isOpen);
-    moreBtn.setAttribute('aria-expanded', String(!isOpen));
-  });
-  meta.appendChild(moreBtn);
-
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
 
@@ -1052,16 +1028,44 @@ let searchResults = [];
 function closeAllMessageActionMenus() {
   dom.msgsContainer?.querySelectorAll('.msg-group.msg-show-actions').forEach((g) => {
     g.classList.remove('msg-show-actions');
-    g.querySelector('.msg-mobile-more')?.setAttribute('aria-expanded', 'false');
   });
 }
 
-/** Chiude menu azioni al tap fuori; il pulsante ⋯ usa stopPropagation. */
+function messageActionsDesktopMedia() {
+  return window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 769px)').matches;
+}
+
+/**
+ * Touch / tablet: tap su bolla o riga nome/ora → mostra/nasconde Reply · Modifica · reaction.
+ * Desktop con mouse: le azioni sono solo con hover sul messaggio (CSS), qui non interferiamo.
+ */
 export function initMessageActionMenus() {
   if (typeof document === 'undefined' || initMessageActionMenus._done) return;
   initMessageActionMenus._done = true;
+
+  const onTapMessage = (e) => {
+    if (messageActionsDesktopMedia()) return;
+    if (!dom.msgsContainer?.contains(e.target)) return;
+    if (e.target.closest('.msg-avatar')) return;
+    if (e.target.closest('a[href]')) return;
+    if (e.target.closest('button')) return;
+    if (e.target.closest('input, textarea, select')) return;
+    if (e.target.closest('.reaction-picker')) return;
+
+    const group = e.target.closest('.msg-group');
+    if (!group) return;
+    if (!e.target.closest('.msg-bubble') && !e.target.closest('.msg-meta')) return;
+
+    dom.msgsContainer.querySelectorAll('.msg-group.msg-show-actions').forEach((g) => {
+      if (g !== group) g.classList.remove('msg-show-actions');
+    });
+    group.classList.toggle('msg-show-actions');
+  };
+
+  dom.msgsContainer?.addEventListener('click', onTapMessage);
+
   document.addEventListener('click', (e) => {
-    if (e.target.closest('.msg-mobile-more')) return;
+    if (messageActionsDesktopMedia()) return;
     if (e.target.closest('.reaction-picker')) return;
     if (e.target.closest('.msg-group.msg-show-actions')) return;
     closeAllMessageActionMenus();

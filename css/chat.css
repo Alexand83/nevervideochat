@@ -1094,40 +1094,12 @@
   flex-shrink: 0;
 }
 
-/* Pulsante ⋯: visibile solo su touch / schermi senza hover (vedi media sotto) */
-.msg-mobile-more {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  margin: 0 0 0 4px;
-  padding: 0 6px;
-  min-width: 28px;
-  min-height: 26px;
-  border: none;
-  border-radius: var(--r2);
-  background: transparent;
-  color: var(--tx2);
-  font-size: 16px;
-  line-height: 1;
-  letter-spacing: 0;
-  cursor: pointer;
-  flex-shrink: 0;
-  align-self: center;
-  position: relative;
-  z-index: 2;
-  -webkit-tap-highlight-color: transparent;
-}
-.msg-mobile-more:hover,
-.msg-mobile-more:focus-visible {
-  background: var(--bg-hover);
-  color: var(--tx0);
-  outline: none;
-}
-
-/* Touch / dito: menu ⋯ (Chrome mobile spesso dichiara hover:hover + larghezza ≥769 in landscape) */
+/* Touch / dito: tap su bolla o meta (nome/ora) per mostrare azioni; secondo tap o fuori chiude */
 @media (max-width: 768px), (pointer: coarse), (hover: none) {
-  .msg-mobile-more {
-    display: inline-flex;
+  .msg-group .msg-bubble,
+  .msg-group .msg-meta {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
   .msg-actions {
     display: flex;
@@ -1156,11 +1128,8 @@
   }
 }
 
-/* Solo mouse vero: richiede pointer:fine, altrimenti tablet/phone con hover “finto” resterebbero senza ⋯ */
+/* PC con mouse: sfiori il messaggio → azioni appaiono; esci col puntatore → spariscono (no click obbligatorio) */
 @media (hover: hover) and (pointer: fine) and (min-width: 769px) {
-  .msg-mobile-more {
-    display: none !important;
-  }
   .msg-actions {
     display: flex;
     align-items: center;
