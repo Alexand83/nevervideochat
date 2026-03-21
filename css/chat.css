@@ -1085,15 +1085,44 @@
   color: var(--accent-h);
 }
 
-/* Message actions row (Reply, Add reaction) — sempre visibili */
+/* Message actions (reply, 😊, modifica…): nascoste finché non servono */
 .msg-actions {
-  /* Style 29: keep actions compact next to text */
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
   gap: 2px;
   flex-shrink: 0;
-  opacity: 1;
+  transition: opacity 0.12s ease, visibility 0.12s ease, max-height 0.2s ease;
+}
+/* Desktop / mouse: mostra al passaggio sul messaggio */
+@media (hover: hover) and (pointer: fine) {
+  .msg-actions {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .msg-group:hover .msg-actions,
+  .msg-group:focus-within .msg-actions {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+/* Smartphone / touch (no hover): mostra solo con tap sulla riga (.msg-row-actions-open da JS) */
+@media (hover: none) {
+  .msg-actions {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    max-height: 0;
+    overflow: hidden;
+  }
+  .msg-group.msg-row-actions-open .msg-actions {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    max-height: 56px;
+  }
 }
 .msg-action-btn {
   display: inline-flex;

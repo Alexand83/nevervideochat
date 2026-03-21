@@ -1023,6 +1023,42 @@ export function handleReactionUpdate(payload) {
 let searchQuery = '';
 let searchResults = [];
 
+/** Su touch (hover: none), tap sulla riga messaggio mostra Reply/😊/Modifica; tap fuori chiude. */
+export function initMessageRowActionsToggle() {
+  if (!dom.msgsContainer || dom.msgsContainer.dataset.msgRowActions === '1') return;
+  dom.msgsContainer.dataset.msgRowActions = '1';
+
+  const isTouchMessageUI = () => window.matchMedia('(hover: none)').matches;
+
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!isTouchMessageUI() || !dom.msgsContainer) return;
+      if (dom.msgsContainer.contains(e.target)) return;
+      dom.msgsContainer.querySelectorAll('.msg-group.msg-row-actions-open').forEach((g) => g.classList.remove('msg-row-actions-open'));
+    },
+    true
+  );
+
+  dom.msgsContainer.addEventListener('click', (e) => {
+    if (!isTouchMessageUI()) return;
+
+    if (e.target.closest('.msg-avatar')) return;
+    if (e.target.closest('a')) return;
+    if (e.target.closest('img')) return;
+    if (e.target.closest('button.msg-reaction')) return;
+    if (e.target.closest('.reaction-picker')) return;
+    if (e.target.closest('.msg-actions')) return;
+
+    const group = e.target.closest('.msg-group');
+    if (!group || !group.dataset.msgId) return;
+
+    const wasOpen = group.classList.contains('msg-row-actions-open');
+    dom.msgsContainer.querySelectorAll('.msg-group.msg-row-actions-open').forEach((g) => g.classList.remove('msg-row-actions-open'));
+    if (!wasOpen) group.classList.add('msg-row-actions-open');
+  });
+}
+
 export function initSearch() {
   if (!dom.headerSearchBtn || !dom.searchBar || !dom.searchInput) return;
   
