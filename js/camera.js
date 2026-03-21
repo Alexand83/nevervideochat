@@ -9,7 +9,7 @@ import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
 import { broadcast, broadcastAll } from './broadcast.js';
-import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences, checkIsKicked, checkIsBanned, checkIsMuted } from './users.js?v=20260453';
+import { findUser, ensureUser, renderUsers, updateOwnPresence, updateAllRoomPresences, checkIsKicked, checkIsBanned, checkIsMuted } from './users.js?v=20260462';
 import { addRejectedCam, removeRejectedCam, clearPendingCamRequest, setPendingCamRequest, getMediaConstraints, getVideoConstraintsForLevel, getVideoConstraintsForDevice, saveDeviceSettings } from './storage.js';
 import { loadPermissionsForUser } from './permissions.js';
 import { getAvailableRooms } from './rooms.js';

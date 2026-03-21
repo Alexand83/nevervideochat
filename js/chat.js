@@ -4,7 +4,7 @@
 import { state }          from './state.js';
 import { dom }            from './dom.js';
 import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml, safeAvatarUrl } from './utils.js';
-import { findUser, ensureUser, stopTyping } from './users.js?v=20260453';
+import { findUser, ensureUser, stopTyping } from './users.js?v=20260462';
 import { hasPermission } from './permissions.js';
 
 /* Forward refs — set by main.js to avoid circular deps */

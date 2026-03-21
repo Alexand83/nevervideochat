@@ -5,7 +5,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast, playChatNotificationSoundIfEnabled } from './utils.js';
-import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers } from './users.js?v=20260453';
+import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers, noteChatMessageFromUser } from './users.js?v=20260462';
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions } from './chat.js?v=20260461';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
@@ -289,7 +289,7 @@ export async function connectRoom(roomId) {
         console.log('[Supabase] Message ignored (user is in ignored list)');
         return;
       }
-      ensureUser(m.user_id, m.username);
+      noteChatMessageFromUser(roomId, m.user_id, m.username);
       const { html, quoteHtml, quoteName } = extractQuote(m.content);
       console.log('[Supabase] Adding message to room:', { roomId, userId: m.user_id, hasHtml: !!html });
       addMessage({ userId: m.user_id, username: m.username, html, quoteHtml, quoteName, ts: new Date(m.created_at).getTime(), reactions: m.reactions || {}, msgId: m.id }, roomId);

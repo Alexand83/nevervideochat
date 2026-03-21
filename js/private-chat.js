@@ -4,7 +4,7 @@
 import { state }       from './state.js';
 import { dom }         from './dom.js';
 import { escHtml, avatarColor, initials, fmtTime, showToast, playPMNotificationSoundIfEnabled, makeDraggable } from './utils.js';
-import { findUser, ensureUser, checkIsMuted } from './users.js?v=20260453';
+import { findUser, ensureUser, checkIsMuted } from './users.js?v=20260462';
 import { broadcast }   from './broadcast.js';
 import { setPendingCamRequest } from './storage.js';
 import { isRoomCameraActive } from './camera.js';

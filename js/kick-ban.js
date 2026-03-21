@@ -3,7 +3,7 @@
 ================================================================ */
 import { state } from './state.js';
 import { dom } from './dom.js';
-import { checkIsKicked, checkIsBanned } from './users.js?v=20260453';
+import { checkIsKicked, checkIsBanned } from './users.js?v=20260462';
 import { joinRoom, getAvailableRooms, loadRoomsFromDB } from './rooms.js';
 import { showToast } from './utils.js';
 

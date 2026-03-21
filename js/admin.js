@@ -7,7 +7,7 @@ import { showToast, escHtml, sanitiseHtml } from './utils.js';
 import { broadcast }      from './broadcast.js';
 import { clearBroadcastHistory } from './firebase-client.js';
 import { hasPermission, loadUserPermissions } from './permissions.js';
-import { renderUsers }    from './users.js?v=20260453';
+import { renderUsers }    from './users.js?v=20260462';
 import { addSystemMessage } from './chat.js?v=20260461';
 
 let currentUserRole = null;

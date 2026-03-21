@@ -66,6 +66,9 @@ export const state = {
   typingTimer: null,
   typingUsers: {},
 
+  /* Ultimo messaggio in stanza per uid — se la presenza fallisce (es. Chrome mobile) restiamo allineati alla chat */
+  roomUserLastMessageAt: {}, /* { 'roomId:uid': timestamp } */
+
   /* Presence leave debounce */
   presenceLeaveTimers: {},
   /* Quando abbiamo rimosso un utente dalla room (leave/sync timer): { 'roomId:uid': timestamp }. Usato per non mostrare toast "joined" al rientro dopo breve disconnect. */

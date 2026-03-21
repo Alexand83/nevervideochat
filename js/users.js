@@ -61,6 +61,51 @@ export function ensureUser(id, name, extra = {}) {
   return u;
 }
 
+/**
+ * Chi scrive in chat è in stanza: aggiorna `room.users` anche se la presenza Realtime
+ * non è ancora arrivata o su mobile/WebView è inconsistente (messaggi Firestore sì, lista no).
+ * `syncPresence` non rimuove questa entry finché non passano ~2 min dall’ultimo messaggio.
+ */
+export function noteChatMessageFromUser(roomId, userId, username) {
+  const rId = String(roomId);
+  const uid = String(userId);
+  if (!uid || uid === String(state.currentUser?.id)) return;
+  const bannedIds = state.bannedUserIds || new Set();
+  if (bannedIds.has(uid)) return;
+  const room = state.rooms[rId];
+  if (!room) return;
+
+  const actKey = `${rId}:${uid}`;
+  state.roomUserLastMessageAt[actKey] = Date.now();
+
+  const timerKey = `${rId}:${uid}`;
+  if (state.presenceLeaveTimers[timerKey]) {
+    clearTimeout(state.presenceLeaveTimers[timerKey]);
+    delete state.presenceLeaveTimers[timerKey];
+  }
+
+  const uname = (username != null && String(username).trim()) ? String(username).trim() : '';
+  ensureUser(uid, uname || 'User', { online: true });
+
+  const existing = room.users[uid];
+  const gu = state.users.find(u => String(u.id) === uid);
+  const displayName = uname || existing?.name || gu?.name || 'User';
+  room.users[uid] = {
+    id: uid,
+    name: displayName,
+    username: uname || existing?.username || gu?.username || null,
+    isGuest: existing?.isGuest ?? gu?.isGuest ?? true,
+    online: true,
+    hasCamera: existing?.hasCamera ?? gu?.hasCamera ?? false,
+    avatarUrl: existing?.avatarUrl ?? gu?.avatarUrl ?? null,
+    roleName: existing?.roleName ?? gu?.roleName ?? 'User',
+    roleColor: existing?.roleColor ?? gu?.roleColor ?? '#8b949e',
+    deviceType: existing?.deviceType ?? gu?.deviceType ?? 'desktop',
+  };
+
+  if (rId === String(state.activeRoom)) renderUsers();
+}
+
 /* ── Render user list for the active room ── */
 export function renderUsers() {
   const roomId   = state.activeRoom;
@@ -372,6 +417,9 @@ export function syncPresence(presenceState, roomId) {
   const presentUserIds = new Set(Object.keys(presenceState).map(String));
   Object.keys(room.users).forEach(uid => {
     if (uid === myId || presentUserIds.has(uid)) return;
+    /* Presenza assente ma messaggi recenti: non programmare rimozione (fix lista vuota su mobile) */
+    const lastMsgAt = state.roomUserLastMessageAt[`${rId}:${uid}`] || 0;
+    if (Date.now() - lastMsgAt < 120_000) return;
     const timerKey = rId + ':' + uid;
     if (state.presenceLeaveTimers[timerKey]) clearTimeout(state.presenceLeaveTimers[timerKey]);
     state.presenceLeaveTimers[timerKey] = setTimeout(async () => {
