@@ -797,7 +797,7 @@ export async function sendMessage() {
       user_id: state.currentUser.id,
       username: state.currentUser.name,
       content: fullContent,
-      room_id: state.activeRoom,
+      room_id: String(state.activeRoom),
       reactions: {},
       created_at: new Date(),
     }).then(async (ref) => {

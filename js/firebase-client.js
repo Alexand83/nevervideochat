@@ -366,10 +366,12 @@ export function subscribeMessages(roomId, onInsert) {
     messageUnsubscribes[roomId] = null;
   }
   const connectTime = Date.now();
+  /* NO orderBy('created_at') qui: la query composta richiede un indice Firestore; senza indice onSnapshot fallisce
+     e in chat non si vedono i messaggi degli altri (solo il proprio ottimistico). Filtraggio “solo nuovi” = connectTime. */
   const unsub = firestore.collection('messages')
     .where('room_id', '==', roomId)
-    .orderBy('created_at', 'asc')
-    .onSnapshot((snap) => {
+    .onSnapshot(
+      (snap) => {
       snap.docChanges().forEach(change => {
         const id = change.doc.id;
         const room = state.rooms[roomId];
@@ -419,7 +421,12 @@ export function subscribeMessages(roomId, onInsert) {
         const m = { id, ...mapTimestamp(d), created_at: d.created_at?.toDate?.()?.toISOString?.() || d.created_at };
         onInsert(m);
       });
-    });
+    },
+    (err) => {
+      console.error('[Firebase] messages onSnapshot failed:', roomId, err);
+      showToast('⚠️ Impossibile sincronizzare i messaggi della stanza. Controlla la connessione o le regole Firestore.', 8000);
+    }
+    );
   messageUnsubscribes[roomId] = unsub;
   return { unsubscribe: unsub };
 }
@@ -558,8 +565,9 @@ export async function connectRoom(roomId) {
     try {
       if (String(m.user_id) === String(state.currentUser.id)) {
         /* Correlazione per ordine: il primo INSERT ricevuto va al più vecchio messaggio temp (evita reazioni sul messaggio sbagliato) */
+        /* tempId = m + Date.now() + Math.random() → spesso > 30 caratteri: prima escludeva il temp e si ignorava l’echo server */
         const ourTempMessages = room.messages
-          .filter(msg => (msg.userId === 'me' || msg.userId === state.currentUser.id) && msg.id && String(msg.id).startsWith('m') && String(msg.id).length < 30)
+          .filter(msg => (msg.userId === 'me' || msg.userId === state.currentUser.id) && msg.id && String(msg.id).startsWith('m') && String(msg.id).length < 64)
           .sort((a, b) => (a.ts || 0) - (b.ts || 0));
         const tempMsg = ourTempMessages[0] || null;
         if (tempMsg) {
