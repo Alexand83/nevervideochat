@@ -33,10 +33,15 @@ export const AVATAR_COLORS = [
  */
 /**
  * Se true: il client usa solo STUN (scoperta NAT) e ignora tutti gli URL turn:/turns:.
- * Utile per provare solo P2P e non passare dal TURN. Dietro NAT/firewall stretti la cam può non connettersi.
- * Rimetti false quando vuoi di nuovo il relay.
+ * Per test P2P puri: true. Per produzione (5G/CGNAT): false + relay TURN.
  */
 export const ICE_P2P_ONLY = true;
+
+/**
+ * Solo se ICE_P2P_ONLY è true: su rete cellulare mantieni comunque i server TURN (sicurezza reale).
+ * Per test STUN-only ovunque lascia false.
+ */
+export const ICE_P2P_KEEP_TURN_ON_CELLULAR = false;
 
 export const ICE_SERVERS_FALLBACK = {
   iceServers: [
@@ -45,7 +50,7 @@ export const ICE_SERVERS_FALLBACK = {
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.relay.metered.ca:80' },
   ],
-  iceCandidatePoolSize: 4,
+  iceCandidatePoolSize: 6,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
 };

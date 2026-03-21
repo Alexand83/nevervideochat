@@ -2,9 +2,9 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260466 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260468 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
-import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL, ICE_P2P_ONLY } from './config.js';
+import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL, ICE_P2P_ONLY, ICE_P2P_KEEP_TURN_ON_CELLULAR } from './config.js';
 import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
@@ -28,6 +28,44 @@ let _iceConfigCache = null;
 let _iceConfigFetchedAt = 0;
 const ICE_CONFIG_TTL_MS = 3_600_000; // 1 ora
 let _loggedIceP2pOnly = false;
+let _loggedCellularTurnOverride = false;
+
+/** Rete cellulare / instabile (5G spesso dietro CGNAT): serve TURN e soglie ICE diverse. */
+function isLikelyCellularNetwork() {
+  try {
+    const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (!c) return false;
+    if (c.type === 'cellular') return true;
+    if (c.saveData === true) return true;
+    const et = c.effectiveType;
+    if (et === 'slow-2g' || et === '2g' || et === '3g') return true;
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+function enrichIceConfigForNetwork(cfg) {
+  if (!cfg || !Array.isArray(cfg.iceServers)) return cfg;
+  if (!isLikelyCellularNetwork()) return cfg;
+  const n = Number(cfg.iceCandidatePoolSize) || 4;
+  return {
+    ...cfg,
+    /* Più candidati pre-gatherati = handshake ICE più rapido quando il relay è necessario */
+    iceCandidatePoolSize: Math.max(n, 10),
+  };
+}
+
+if (typeof navigator !== 'undefined') {
+  const nc = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (nc?.addEventListener) {
+    nc.addEventListener('change', () => {
+      _iceConfigCache = null;
+      _iceConfigFetchedAt = 0;
+      console.log('[WebRTC] ICE config cache cleared (network change — WiFi↔cellulare, ecc.)');
+    });
+  }
+}
 
 /** Rimuove turn:/turns: da ogni entry (solo STUN → massimo sforzo P2P). */
 function stripTurnUrlsFromIceServers(iceServers) {
@@ -50,6 +88,13 @@ function stripTurnUrlsFromIceServers(iceServers) {
 
 function applyIceP2pOnly(cfg) {
   if (!ICE_P2P_ONLY || !cfg) return cfg;
+  if (ICE_P2P_KEEP_TURN_ON_CELLULAR && isLikelyCellularNetwork()) {
+    if (!_loggedCellularTurnOverride) {
+      _loggedCellularTurnOverride = true;
+      console.warn('[WebRTC] ICE_P2P_ONLY + KEEP_TURN_ON_CELLULAR: su cellulare si mantengono i server TURN.');
+    }
+    return cfg;
+  }
   if (!_loggedIceP2pOnly) {
     _loggedIceP2pOnly = true;
     console.warn('[WebRTC] ICE_P2P_ONLY=true — solo STUN, nessun TURN. Dietro NAT difficile la cam può non partire.');
@@ -141,6 +186,14 @@ function startNetModeMonitor(uid, pc) {
 /** Evita storm di restart su Firebase replay / jitter */
 const ICE_RESTART_COOLDOWN_MS = 42_000;
 
+function relayRecoveryThresholds() {
+  if (isLikelyCellularNetwork()) {
+    /* Latenza più alta su 5G/relay: evita ICE restart continui per RTT “normale” mobile */
+    return { badRtt: 0.92, badLoss: 0.09 };
+  }
+  return { badRtt: 0.55, badLoss: 0.06 };
+}
+
 async function _getRelayAndHealth(pc) {
   try {
     const stats = await pc.getStats();
@@ -170,7 +223,7 @@ async function _getRelayAndHealth(pc) {
 
 async function tryIceRestartOutgoingPublic(pc, toUid) {
   if (!pc || pc.signalingState !== 'stable') return;
-  if (!['connected', 'connecting', 'disconnected'].includes(pc.connectionState)) return;
+  if (!['connected', 'connecting', 'disconnected', 'failed'].includes(pc.connectionState)) return;
   const now = Date.now();
   if ((pc._lastPublicIceRestartMs || 0) + ICE_RESTART_COOLDOWN_MS > now) return;
   pc._lastPublicIceRestartMs = now;
@@ -192,7 +245,7 @@ async function tryIceRestartOutgoingPublic(pc, toUid) {
 
 async function tryIceRestartIncomingPublic(pc, broadcasterUid) {
   if (!pc || pc.signalingState !== 'stable') return;
-  if (!['connected', 'connecting', 'disconnected'].includes(pc.connectionState)) return;
+  if (!['connected', 'connecting', 'disconnected', 'failed'].includes(pc.connectionState)) return;
   const now = Date.now();
   if ((pc._lastViewerIceRestartMs || 0) + ICE_RESTART_COOLDOWN_MS > now) return;
   pc._lastViewerIceRestartMs = now;
@@ -221,8 +274,9 @@ function startPublicCamRelayRecoveryOutgoing(pc, toUid) {
     }
     const h = await _getRelayAndHealth(pc);
     if (!h.isRelay) return;
-    const badRtt = h.rttSec != null && h.rttSec > 0.55;
-    const badLoss = h.lossFrac != null && h.lossFrac > 0.06;
+    const { badRtt: br, badLoss: bl } = relayRecoveryThresholds();
+    const badRtt = h.rttSec != null && h.rttSec > br;
+    const badLoss = h.lossFrac != null && h.lossFrac > bl;
     const iceBad = pc.iceConnectionState === 'disconnected';
     if (badRtt || badLoss || iceBad) {
       console.log('[WebRTC] Relay instabile (out):', { toUid: String(toUid).slice(0, 8), ...h, ice: pc.iceConnectionState });
@@ -241,8 +295,9 @@ function startPublicCamRelayRecoveryIncoming(pc, broadcasterUid) {
     }
     const h = await _getRelayAndHealth(pc);
     if (!h.isRelay) return;
-    const badRtt = h.rttSec != null && h.rttSec > 0.55;
-    const badLoss = h.lossFrac != null && h.lossFrac > 0.06;
+    const { badRtt: br, badLoss: bl } = relayRecoveryThresholds();
+    const badRtt = h.rttSec != null && h.rttSec > br;
+    const badLoss = h.lossFrac != null && h.lossFrac > bl;
     const iceBad = pc.iceConnectionState === 'disconnected';
     if (badRtt || badLoss || iceBad) {
       console.log('[WebRTC] Relay instabile (in):', { from: String(broadcasterUid).slice(0, 8), ...h, ice: pc.iceConnectionState });
@@ -254,7 +309,7 @@ function startPublicCamRelayRecoveryIncoming(pc, broadcasterUid) {
 async function getIceConfig() {
   const now = Date.now();
   if (_iceConfigCache && (now - _iceConfigFetchedAt) < ICE_CONFIG_TTL_MS) {
-    return applyIceP2pOnly(_iceConfigCache);
+    return enrichIceConfigForNetwork(applyIceP2pOnly(_iceConfigCache));
   }
   try {
     /* 1) Prefer endpoint sicuro (/api/ice) che genera credenziali TURN via Metered API (server-side). */
@@ -272,7 +327,7 @@ async function getIceConfig() {
           rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
         };
         _iceConfigFetchedAt = now;
-        return applyIceP2pOnly(_iceConfigCache);
+        return enrichIceConfigForNetwork(applyIceP2pOnly(_iceConfigCache));
       };
 
       /* A) Se hosti su Firebase Hosting (o reverse-proxy), funziona il rewrite /api/ice */
@@ -306,11 +361,11 @@ async function getIceConfig() {
           rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
         };
         _iceConfigFetchedAt = now;
-        return applyIceP2pOnly(_iceConfigCache);
+        return enrichIceConfigForNetwork(applyIceP2pOnly(_iceConfigCache));
       }
     }
   } catch (_) {}
-  return applyIceP2pOnly(ICE_SERVERS_FALLBACK);
+  return enrichIceConfigForNetwork(applyIceP2pOnly(ICE_SERVERS_FALLBACK));
 }
 /** Per evitare XSS/breakout in id HTML: solo caratteri sicuri */
 function safeId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '') || 'u'; }
@@ -2232,11 +2287,12 @@ export async function sharePublicCameraTo(toUid) {
     /* Monitor outgoing connection — attempt ICE restart on disconnect before giving up */
     pc.addEventListener('connectionstatechange', () => {
       console.log('[WebRTC] Outgoing connection state changed:', pc.connectionState, 'for', toUid);
-      if (pc.connectionState === 'disconnected') {
-        console.log('[WebRTC] Outgoing disconnected for', toUid, '— ICE restart (cooldown condiviso)');
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        console.log('[WebRTC] Outgoing', pc.connectionState, 'for', toUid, '— ICE restart (cooldown condiviso)');
         tryIceRestartOutgoingPublic(pc, toUid);
       }
-      if (['disconnected','failed','closed'].includes(pc.connectionState)) {
+      /* Solo su closed: altrimenti disconnected/failed toglie il viewer prima che il restart ICE possa recuperare */
+      if (pc.connectionState === 'closed') {
         clearEncodingRampTimer(pc);
         delete state.camViewers[toUid]; refreshViewersPanel(state.currentUser?.id);
       }
@@ -2721,8 +2777,8 @@ export async function handleWebRTCSignal(payload) {
       let reconnectAttempts = 0;
       const MAX_RECONNECT = 3;
       let wasEverConnected = false; /* riduce retry se la connessione non si è mai stabilita */
-      /* Se resta "connecting" o "new" per 45s, togli dalla grid (prima 25s: troppo poco con replay Firebase / rete lenta) */
-      const CONNECTING_TIMEOUT_MS = 45000;
+      /* Cellular / TURN: handshake più lento — evita timeout prematuro su 5G */
+      const CONNECTING_TIMEOUT_MS = isLikelyCellularNetwork() ? 60_000 : 45_000;
       let connectingTimeout = setTimeout(() => {
         if (state.incomingPCs[from] !== pc) return;
         if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
@@ -2865,6 +2921,8 @@ export async function handleWebRTCSignal(payload) {
              se abbiamo visto candidati ma non relay, assumiamo P2P quando ICE è connesso. */
           const cw = state.cameraWindows?.[from];
           if (cw && cw._sawAnyIceCand && !cw._sawRelayIceCand) _setNetBadge(from, 'P2P');
+        } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+          tryIceRestartIncomingPublic(pc, from);
         }
       });
       
