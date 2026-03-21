@@ -352,7 +352,8 @@
   align-items: baseline;
   gap: var(--s2);
   flex-wrap: wrap;
-  touch-action: none;
+  /* manipulation: tap reattivo; none poteva interferire con il click su ⋯ su alcuni WebView */
+  touch-action: manipulation;
   flex-shrink: 0;
 }
 
@@ -1112,6 +1113,8 @@
   cursor: pointer;
   flex-shrink: 0;
   align-self: center;
+  position: relative;
+  z-index: 2;
   -webkit-tap-highlight-color: transparent;
 }
 .msg-mobile-more:hover,
@@ -1121,8 +1124,8 @@
   outline: none;
 }
 
-/* Touch o viewport stretta: nascondi azioni finché non si apre il menu ⋯ */
-@media (max-width: 768px), (hover: none) {
+/* Touch / dito: menu ⋯ (Chrome mobile spesso dichiara hover:hover + larghezza ≥769 in landscape) */
+@media (max-width: 768px), (pointer: coarse), (hover: none) {
   .msg-mobile-more {
     display: inline-flex;
   }
@@ -1153,8 +1156,8 @@
   }
 }
 
-/* PC con mouse: ⋯ nascosto, azioni visibili al passaggio sul messaggio (o focus tastiera) */
-@media (hover: hover) and (min-width: 769px) {
+/* Solo mouse vero: richiede pointer:fine, altrimenti tablet/phone con hover “finto” resterebbero senza ⋯ */
+@media (hover: hover) and (pointer: fine) and (min-width: 769px) {
   .msg-mobile-more {
     display: none !important;
   }
