@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260464 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260465 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL } from './config.js';
 import { state }         from './state.js';
@@ -103,6 +103,119 @@ function startNetModeMonitor(uid, pc) {
 
   tick();
   cw.netCheckInterval = setInterval(tick, 2000);
+}
+
+/** Evita storm di restart su Firebase replay / jitter */
+const ICE_RESTART_COOLDOWN_MS = 42_000;
+
+async function _getRelayAndHealth(pc) {
+  try {
+    const stats = await pc.getStats();
+    let selectedPair = null;
+    stats.forEach((r) => {
+      if (r.type === 'candidate-pair' && r.selected) selectedPair = r;
+    });
+    if (!selectedPair) return { isRelay: false, rttSec: null, lossFrac: null };
+    const loc = selectedPair.localCandidateId ? stats.get(selectedPair.localCandidateId) : null;
+    const rem = selectedPair.remoteCandidateId ? stats.get(selectedPair.remoteCandidateId) : null;
+    const isRelay = loc?.candidateType === 'relay' || rem?.candidateType === 'relay';
+    const rttSec = selectedPair.currentRoundTripTime != null ? Number(selectedPair.currentRoundTripTime) : null;
+    let lost = 0;
+    let sent = 0;
+    stats.forEach((r) => {
+      if (r.type === 'outbound-rtp' && r.kind === 'video') {
+        if (Number.isFinite(r.packetsLost)) lost += r.packetsLost;
+        if (Number.isFinite(r.packetsSent)) sent += r.packetsSent;
+      }
+    });
+    const lossFrac = sent > 60 ? lost / sent : null;
+    return { isRelay, rttSec, lossFrac };
+  } catch (_) {
+    return { isRelay: false, rttSec: null, lossFrac: null };
+  }
+}
+
+async function tryIceRestartOutgoingPublic(pc, toUid) {
+  if (!pc || pc.signalingState !== 'stable') return;
+  if (!['connected', 'connecting', 'disconnected'].includes(pc.connectionState)) return;
+  const now = Date.now();
+  if ((pc._lastPublicIceRestartMs || 0) + ICE_RESTART_COOLDOWN_MS > now) return;
+  pc._lastPublicIceRestartMs = now;
+  try {
+    const offer = await pc.createOffer({ iceRestart: true });
+    await pc.setLocalDescription(offer);
+    broadcast('webrtc', toUid, {
+      sigType: 'offer',
+      sdp: pc.localDescription.sdp,
+      ctx: 'public',
+      room_id: state.cameraRoom,
+      iceRestart: true,
+    });
+    console.log('[WebRTC] ICE restart inviato (broadcaster → viewer)', String(toUid).slice(0, 8) + '…');
+  } catch (e) {
+    console.warn('[WebRTC] ICE restart outgoing fallito', e?.message || e);
+  }
+}
+
+async function tryIceRestartIncomingPublic(pc, broadcasterUid) {
+  if (!pc || pc.signalingState !== 'stable') return;
+  if (!['connected', 'connecting', 'disconnected'].includes(pc.connectionState)) return;
+  const now = Date.now();
+  if ((pc._lastViewerIceRestartMs || 0) + ICE_RESTART_COOLDOWN_MS > now) return;
+  pc._lastViewerIceRestartMs = now;
+  try {
+    const offer = await pc.createOffer({ iceRestart: true });
+    await pc.setLocalDescription(offer);
+    broadcast('webrtc', broadcasterUid, {
+      sigType: 'viewer_ice_restart_offer',
+      sdp: pc.localDescription.sdp,
+      ctx: 'public',
+      room_id: state.activeRoom,
+    });
+    console.log('[WebRTC] ICE restart inviato (viewer → broadcaster)', String(broadcasterUid).slice(0, 8) + '…');
+  } catch (e) {
+    console.warn('[WebRTC] ICE restart viewer fallito', e?.message || e);
+  }
+}
+
+function startPublicCamRelayRecoveryOutgoing(pc, toUid) {
+  if (pc._relayRecoveryIv) clearInterval(pc._relayRecoveryIv);
+  pc._relayRecoveryIv = setInterval(async () => {
+    if (state.outgoingPCs[toUid] !== pc) {
+      clearInterval(pc._relayRecoveryIv);
+      pc._relayRecoveryIv = null;
+      return;
+    }
+    const h = await _getRelayAndHealth(pc);
+    if (!h.isRelay) return;
+    const badRtt = h.rttSec != null && h.rttSec > 0.55;
+    const badLoss = h.lossFrac != null && h.lossFrac > 0.06;
+    const iceBad = pc.iceConnectionState === 'disconnected';
+    if (badRtt || badLoss || iceBad) {
+      console.log('[WebRTC] Relay instabile (out):', { toUid: String(toUid).slice(0, 8), ...h, ice: pc.iceConnectionState });
+      await tryIceRestartOutgoingPublic(pc, toUid);
+    }
+  }, 6000);
+}
+
+function startPublicCamRelayRecoveryIncoming(pc, broadcasterUid) {
+  if (pc._relayRecoveryIv) clearInterval(pc._relayRecoveryIv);
+  pc._relayRecoveryIv = setInterval(async () => {
+    if (state.incomingPCs[broadcasterUid] !== pc) {
+      clearInterval(pc._relayRecoveryIv);
+      pc._relayRecoveryIv = null;
+      return;
+    }
+    const h = await _getRelayAndHealth(pc);
+    if (!h.isRelay) return;
+    const badRtt = h.rttSec != null && h.rttSec > 0.55;
+    const badLoss = h.lossFrac != null && h.lossFrac > 0.06;
+    const iceBad = pc.iceConnectionState === 'disconnected';
+    if (badRtt || badLoss || iceBad) {
+      console.log('[WebRTC] Relay instabile (in):', { from: String(broadcasterUid).slice(0, 8), ...h, ice: pc.iceConnectionState });
+      await tryIceRestartIncomingPublic(pc, broadcasterUid);
+    }
+  }, 6000);
 }
 
 async function getIceConfig() {
@@ -2085,12 +2198,8 @@ export async function sharePublicCameraTo(toUid) {
     pc.addEventListener('connectionstatechange', () => {
       console.log('[WebRTC] Outgoing connection state changed:', pc.connectionState, 'for', toUid);
       if (pc.connectionState === 'disconnected') {
-        /* Try ICE restart — creates new ICE candidates without changing media */
-        console.log('[WebRTC] Outgoing disconnected for', toUid, '— sending ICE restart offer');
-        pc.createOffer({ iceRestart: true })
-          .then(offer => pc.setLocalDescription(offer))
-          .then(() => broadcast('webrtc', toUid, { sigType: 'offer', sdp: pc.localDescription.sdp, ctx: 'public', room_id: state.cameraRoom }))
-          .catch(err => console.warn('[WebRTC] ICE restart offer failed:', err));
+        console.log('[WebRTC] Outgoing disconnected for', toUid, '— ICE restart (cooldown condiviso)');
+        tryIceRestartOutgoingPublic(pc, toUid);
       }
       if (['disconnected','failed','closed'].includes(pc.connectionState)) {
         clearEncodingRampTimer(pc);
@@ -2100,6 +2209,7 @@ export async function sharePublicCameraTo(toUid) {
     pc.addEventListener('iceconnectionstatechange', () => {
       console.log('[WebRTC] Outgoing ICE connection state changed:', pc.iceConnectionState, 'for', toUid);
     });
+    startPublicCamRelayRecoveryOutgoing(pc, toUid);
   } catch (err) { showToast('⚠️ Could not share camera: ' + err.message); }
 }
 
@@ -2373,6 +2483,23 @@ export async function handleWebRTCSignal(payload) {
      (stesso uid del peer) e la videochiamata privata resta senza ICE → video nero. */
   const handleAsPublic = isPublic || (sigType === 'ice' && from && candidate && payload?.ctx !== 'private');
   if (handleAsPublic) {
+      /* Viewer chiede rinegoziazione ICE (es. relay TURN pessimo → provare di nuovo host/srflx) */
+      if (sigType === 'viewer_ice_restart_offer' && isPublic && sdp) {
+        const viewerUid = from;
+        const pcOut = state.outgoingPCs[viewerUid];
+        if (!pcOut) return;
+        if (pcOut.signalingState !== 'stable') return;
+        try {
+          await pcOut.setRemoteDescription({ type: 'offer', sdp });
+          const ans = await pcOut.createAnswer();
+          await pcOut.setLocalDescription(ans);
+          broadcast('webrtc', viewerUid, { sigType: 'answer', sdp: ans.sdp, ctx: 'public' });
+          console.log('[WebRTC] viewer_ice_restart_offer ok → answer verso', String(viewerUid).slice(0, 8) + '…');
+        } catch (e) {
+          console.warn('[WebRTC] viewer_ice_restart_offer fallito', e?.message || e);
+        }
+        return;
+      }
       if (sigType === 'offer') {
         if (!isPublic) return; /* only process public offers */
         /* Ignora offerta propria: Firebase recapita il messaggio anche al mittente, non creare incoming PC per se stessi */
@@ -2418,7 +2545,26 @@ export async function handleWebRTCSignal(payload) {
         } catch (_) {}
         try {
           if (state.manuallyClosedCameras[from]) return;
-          if (state.incomingPCs[from]) return;
+          const existingInc = state.incomingPCs[from];
+          if (existingInc && sdp) {
+            const canRenego =
+              existingInc.signalingState === 'stable' &&
+              ['connected', 'connecting', 'disconnected'].includes(existingInc.connectionState);
+            if (canRenego) {
+              try {
+                console.log('[WebRTC] Nuova offerta su PC esistente (ICE restart broadcaster) da', String(from).slice(0, 8) + '…');
+                await existingInc.setRemoteDescription({ type: 'offer', sdp });
+                const answer = await existingInc.createAnswer();
+                await existingInc.setLocalDescription(answer);
+                broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
+                startPublicCamRelayRecoveryIncoming(existingInc, from);
+              } catch (err) {
+                console.warn('[WebRTC] Re-offer / ICE restart fallita:', err?.message || err);
+              }
+              return;
+            }
+            return;
+          }
 
       /* Guard: camera solo in stanza Eventi e noi non siamo in quella stanza → rifiuta */
       const availableRooms = getAvailableRooms();
@@ -2751,6 +2897,7 @@ export async function handleWebRTCSignal(payload) {
       /* Retry play senza reattach a 1.5s e 4s per connessioni che si stabiliscono in ritardo (NAT/firewall); evita multipli reattach = meno flicker */
       [1500, 4000].forEach(ms => setTimeout(() => retryPlay('delayed-' + ms + 'ms', false), ms));
       broadcast('webrtc', from, { sigType: 'answer', sdp: answer.sdp, ctx: 'public' });
+      startPublicCamRelayRecoveryIncoming(pc, from);
         } finally {
           if (typeof doneResolve === 'function') doneResolve();
         }
@@ -2791,7 +2938,24 @@ export async function handleWebRTCSignal(payload) {
           }
         }
       } else {
-        console.log('[WebRTC-FLOW] RX answer from', from, '→ no outgoing PC (ignored)');
+        /* Dopo ICE restart avviato dal viewer: answer sul nostro incoming PC */
+        const inc = state.incomingPCs[from];
+        if (inc && inc.signalingState === 'have-local-offer') {
+          try {
+            await inc.setRemoteDescription({ type: 'answer', sdp });
+            console.log('[WebRTC] Answer applicata su incoming PC (post ICE restart viewer)');
+            if (inc._pendingCandidates?.length) {
+              for (const c of inc._pendingCandidates) {
+                await inc.addIceCandidate(c).catch(() => {});
+              }
+              inc._pendingCandidates = [];
+            }
+          } catch (e) {
+            console.warn('[WebRTC] Answer su incoming PC fallita', e?.message || e);
+          }
+        } else {
+          console.log('[WebRTC-FLOW] RX answer from', from, '→ nessun outgoing/incoming in stato atteso (ignorata)');
+        }
       }
     } else if (sigType === 'ice') {
       /* Route ICE candidate to correct PC based on 'dir' field:
