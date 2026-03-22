@@ -34,6 +34,8 @@ export const AVATAR_COLORS = [
 /**
  * Se true: il client usa solo STUN (scoperta NAT) e ignora tutti gli URL turn:/turns:.
  * Per test P2P puri: true. Per produzione (5G/CGNAT): false + relay TURN.
+ * Con TURN attivo (false) il badge può mostrare RELAY anche se il P2P diretto esiste: ICE sceglie
+ * la coppia migliore; dietro NAT simmetrico spesso vince il relay — non è un bug.
  */
 export const ICE_P2P_ONLY = false;
 

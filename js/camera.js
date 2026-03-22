@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260470 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260471 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL, ICE_P2P_ONLY, ICE_P2P_KEEP_TURN_ON_CELLULAR } from './config.js';
 import { state }         from './state.js';
@@ -842,6 +842,18 @@ export function revokeViewer(viewerUid) {
   addRejectedCam(uid, name);  /* kick = block future requests */
 }
 
+/** Viewer ha chiuso la cam remota: il broadcaster rimuove dalla lista 👁 e chiude l’outgoing verso quel peer. */
+export function handleCamWatcherLeftFromSignal(watcherUid) {
+  const uid = String(watcherUid);
+  if (state.outgoingPCs[uid]) {
+    clearEncodingRampTimer(state.outgoingPCs[uid]);
+    try { state.outgoingPCs[uid].close(); } catch (_) {}
+    delete state.outgoingPCs[uid];
+  }
+  delete state.camViewers[uid];
+  refreshViewersPanel(state.currentUser?.id);
+}
+
 /* ── Close own camera (called when muted) ── */
 export async function closeOwnCamera() {
   if (!state.localStream) return;
@@ -902,7 +914,16 @@ export async function closeCameraWindow(uid) {
     const { updateEventsCamGrid } = await import('./rooms.js');
     updateEventsCamGrid();
     
-    if (uid === state.currentUser?.id || uid === 'me') await _teardownOwnStream();
+    if (uid === state.currentUser?.id || uid === 'me') {
+      await _teardownOwnStream();
+    } else {
+      state.manuallyClosedCameras[uid] = true;
+      if (state.incomingPCs[uid]) {
+        try { state.incomingPCs[uid].close(); } catch (_) {}
+        delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid];
+      }
+      broadcast('cam-watcher-left', uid, { room_id: state.activeRoom });
+    }
     return;
   }
   
@@ -924,6 +945,8 @@ export async function closeCameraWindow(uid) {
       state.incomingPCs[uid].close();
       delete state.incomingPCs[uid]; delete state.pendingIncomingICE[uid];
     }
+    /* Il broadcaster non riceve subito connectionState "closed" sull’outgoing → togli viewer dalla lista */
+    broadcast('cam-watcher-left', uid, { room_id: state.activeRoom });
   }
 }
 
@@ -940,6 +963,7 @@ async function _teardownOwnStream() {
   clearCaptureRamp();
   /* Lista viewer: non dipendere da connectionstatechange (chiusura manuale = finestra già rimossa). */
   state.camViewers = {};
+  refreshViewersPanel(state.currentUser?.id);
   for (const peerId of Object.keys(state.outgoingPCs)) {
     clearEncodingRampTimer(state.outgoingPCs[peerId]);
     state.outgoingPCs[peerId]?.close();

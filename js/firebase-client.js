@@ -11,7 +11,7 @@ import { ensureUser, syncPresence, updateOwnPresence, handleTyping, renderUsers,
 import { addMessage, extractQuote, renderMessage, handleReactionUpdate, updateMessageReactions, CHAT_MESSAGES_WINDOW } from './chat.js?v=20260463';
 import { handleIncomingPM } from './private-chat.js';
 import { handleCamRequest, handleCamAccepted, handleWebRTCSignal, handleCamClosed,
-         closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260466';
+         closeCameraWindow, endCall, setRemoteSenderVideoOff } from './camera.js?v=20260471';
 import { clearPendingCamRequest } from './storage.js';
 
 const firebase = typeof window !== 'undefined' ? window.firebase : null;
@@ -216,7 +216,7 @@ export function createBroadcastChannel() {
     /* child_added ridà TUTTA la history: scarta broadcast scritti prima di questa connessione (refresh / reconnect).
        Evita PM, videochiamata privata (cam-accepted), richieste cam, ecc. che "tornano" dopo F5. */
     if (ts && state.broadcastConnectedAt > 0 && ts < state.broadcastConnectedAt - BROADCAST_SESSION_SKEW_MS) {
-      const skipSessionReplay = ['pm', 'cam-accepted', 'cam-req', 'cam-opened', 'cam-closed', 'cam-rejected', 'cam-revoked', 'call-ended', 'typing'];
+      const skipSessionReplay = ['pm', 'cam-accepted', 'cam-req', 'cam-opened', 'cam-closed', 'cam-rejected', 'cam-revoked', 'cam-watcher-left', 'call-ended', 'typing'];
       if (skipSessionReplay.includes(event)) return;
     }
     if (event === 'cam-req' || event === 'cam-opened') {
@@ -475,7 +475,7 @@ export async function showDisconnectedOverlay(forceShow) {
   });
   messageUnsubscribes = {};
   try {
-    const { resetCameraStateOnDisconnect } = await import('./camera.js?v=20260466');
+    const { resetCameraStateOnDisconnect } = await import('./camera.js?v=20260471');
     resetCameraStateOnDisconnect();
   } catch (_) {}
   const appMain = document.querySelector('.app-main');
@@ -669,6 +669,11 @@ export async function connectFirebase() {
         if (state.cameraWindows[payload.from]) closeCameraWindow(payload.from);
         showToast('📵 Camera access revoked.');
       })
+      .on('broadcast', { event: 'cam-watcher-left' }, ({ payload }) => {
+        if (String(payload.to) !== String(state.currentUser?.id)) return;
+        import('./camera.js?v=20260471').then(({ handleCamWatcherLeftFromSignal }) =>
+          handleCamWatcherLeftFromSignal(payload.from));
+      })
       .on('broadcast', { event: 'cam-opened' }, async ({ payload }) => {
         if (String(payload.from) === String(state.currentUser?.id)) return;
         const fromId = String(payload.from);
@@ -710,7 +715,7 @@ export async function connectFirebase() {
             setTimeout(() => {
               if (state.activeRoom !== camRoom) return;
               if (state.cameraWindows[fromId] || state.incomingPCs?.[fromId]) return;
-              import('./camera.js?v=20260466').then(({ requestPublicCamera }) => requestPublicCamera(fromId, { skipCooldown: true, forceRetry: true, pendingTtlMs: 5000, silentPendingExpiry: true }));
+              import('./camera.js?v=20260471').then(({ requestPublicCamera }) => requestPublicCamera(fromId, { skipCooldown: true, forceRetry: true, pendingTtlMs: 5000, silentPendingExpiry: true }));
             }, 500);
           }
         }
@@ -729,7 +734,7 @@ export async function connectFirebase() {
       .on('broadcast', { event: 'user-kicked' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
-        const { closeAllCamerasForUser } = await import('./camera.js?v=20260466');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260471');
         if (isCurrentUser || state.cameraWindows[targetId]) await closeAllCamerasForUser(targetId);
         /* Cache last-known name + suppress "leave" system message (kick). */
         try {
@@ -782,7 +787,7 @@ export async function connectFirebase() {
       .on('broadcast', { event: 'user-banned' }, async ({ payload }) => {
         const targetId = payload.to || payload.user_id;
         const isCurrentUser = String(targetId) === String(state.currentUser?.id);
-        const { closeAllCamerasForUser } = await import('./camera.js?v=20260466');
+        const { closeAllCamerasForUser } = await import('./camera.js?v=20260471');
         if (isCurrentUser || state.cameraWindows[targetId]) await closeAllCamerasForUser(targetId);
         /* Cache last-known name + suppress "leave" system message (ban). */
         try {
@@ -848,7 +853,7 @@ export async function connectFirebase() {
           });
           if (!hasValidMute) return; /* Unmuted or expired — ignore replay */
         } catch (_) { return; }
-        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260466');
+        const { closeAllCamerasForUser, closeCameraWindow } = await import('./camera.js?v=20260471');
         if (String(targetId) === String(state.currentUser?.id)) await closeAllCamerasForUser(targetId);
         else if (state.cameraWindows[targetId]) await closeCameraWindow(targetId);
         state.mutedUsers[targetId] = { room_id: roomId, expires_at: payload.expires_at };
@@ -900,7 +905,7 @@ export async function connectFirebase() {
         if (!state.currentUser || !targetId) return;
         const isCurrentUser = String(targetId) === String(state.currentUser.id);
         try {
-          const { closeAllCamerasForUser } = await import('./camera.js?v=20260466');
+          const { closeAllCamerasForUser } = await import('./camera.js?v=20260471');
           if (isCurrentUser || state.cameraWindows[targetId]) {
             await closeAllCamerasForUser(targetId);
           }
