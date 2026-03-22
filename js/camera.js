@@ -2,7 +2,7 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260469 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260470 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
 import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL, ICE_P2P_ONLY, ICE_P2P_KEEP_TURN_ON_CELLULAR } from './config.js';
 import { state }         from './state.js';
@@ -938,6 +938,8 @@ async function _teardownOwnStream() {
       state.cameraClosedAt = Date.now();
       state.cameraRoom = null;
   clearCaptureRamp();
+  /* Lista viewer: non dipendere da connectionstatechange (chiusura manuale = finestra già rimossa). */
+  state.camViewers = {};
   for (const peerId of Object.keys(state.outgoingPCs)) {
     clearEncodingRampTimer(state.outgoingPCs[peerId]);
     state.outgoingPCs[peerId]?.close();
@@ -969,6 +971,7 @@ export function resetCameraStateOnDisconnect() {
   state.cameraRoom = null;
   state.cameraClosedAt = 0;
   clearCaptureRamp();
+  state.camViewers = {};
   for (const uid of Object.keys(state.outgoingPCs)) {
     clearEncodingRampTimer(state.outgoingPCs[uid]);
     try { state.outgoingPCs[uid].close(); } catch (_) {}
