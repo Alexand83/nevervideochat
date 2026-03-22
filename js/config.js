@@ -32,10 +32,8 @@ export const AVATAR_COLORS = [
  * mai esposte nel bundle JS. Vedi supabase/functions/get-ice-config/README.md.
  */
 /**
- * Se true: il client usa solo STUN (scoperta NAT) e ignora tutti gli URL turn:/turns:.
- * Per test P2P puri: true. Per produzione (5G/CGNAT): false + relay TURN.
- * Con TURN attivo (false) il badge può mostrare RELAY anche se il P2P diretto esiste: ICE sceglie
- * la coppia migliore; dietro NAT simmetrico spesso vince il relay — non è un bug.
+ * false = STUN + TURN (relay solo se il P2P non basta): meno traffico TURN se la lista STUN sotto è ampia.
+ * true = solo STUN (test / risparmio totale relay; molti cellulari non connettono).
  */
 export const ICE_P2P_ONLY = false;
 
@@ -45,14 +43,26 @@ export const ICE_P2P_ONLY = false;
  */
 export const ICE_P2P_KEEP_TURN_ON_CELLULAR = false;
 
+/**
+ * STUN pubblici aggiuntivi (gratuiti) fusi nella config ICE: più candidati srflx/host → più P2P, meno uso del relay.
+ * Dedup automatico in camera.js. TURN a pagamento resta fallback quando il NAT è troppo stretto.
+ */
+export const ICE_EXTRA_STUN_URLS = [
+  'stun:stun2.l.google.com:19302',
+  'stun:stun3.l.google.com:19302',
+  'stun:stun4.l.google.com:19302',
+  'stun:global.stun.twilio.com:3478',
+];
+
 export const ICE_SERVERS_FALLBACK = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302'  },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.relay.metered.ca:80' },
+    ...ICE_EXTRA_STUN_URLS.map((urls) => ({ urls })),
   ],
-  iceCandidatePoolSize: 6,
+  iceCandidatePoolSize: 8,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
 };

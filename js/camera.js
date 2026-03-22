@@ -2,9 +2,9 @@
    camera.js  — camera windows, WebRTC, public cam share, private call
 ================================================================ */
 /* VERSION MARKER — if you see this in logs, new code is running */
-console.log('%c[NVC] camera.js v20260471 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
+console.log('%c[NVC] camera.js v20260473 loaded', 'color:#0f0;background:#000;font-weight:bold;padding:2px 6px;border-radius:3px');
 
-import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL, ICE_P2P_ONLY, ICE_P2P_KEEP_TURN_ON_CELLULAR } from './config.js';
+import { ICE_SERVERS_FALLBACK, ICE_ENDPOINT_URL, ICE_P2P_ONLY, ICE_P2P_KEEP_TURN_ON_CELLULAR, ICE_EXTRA_STUN_URLS } from './config.js';
 import { state }         from './state.js';
 import { dom }           from './dom.js';
 import { $, avatarColor, initials, escHtml, showToast, makeDraggable, makeResizable } from './utils.js';
@@ -47,13 +47,40 @@ function isLikelyCellularNetwork() {
 
 function enrichIceConfigForNetwork(cfg) {
   if (!cfg || !Array.isArray(cfg.iceServers)) return cfg;
-  if (!isLikelyCellularNetwork()) return cfg;
-  const n = Number(cfg.iceCandidatePoolSize) || 4;
-  return {
+  const base = {
     ...cfg,
+    /* Esplicito: prova host/srflx prima del relay (default browser, utile su build vecchie) */
+    iceTransportPolicy: cfg.iceTransportPolicy ?? 'all',
+  };
+  if (!isLikelyCellularNetwork()) return base;
+  const n = Number(base.iceCandidatePoolSize) || 4;
+  return {
+    ...base,
     /* Più candidati pre-gatherati = handshake ICE più rapido quando il relay è necessario */
     iceCandidatePoolSize: Math.max(n, 10),
   };
+}
+
+/** Aggiunge STUN pubblici extra (gratis) alla config Metered/Firestore: più probabilità di P2P, meno traffico TURN. */
+function mergeExtraStunServers(cfg) {
+  if (!cfg || !Array.isArray(cfg.iceServers) || !Array.isArray(ICE_EXTRA_STUN_URLS) || ICE_EXTRA_STUN_URLS.length === 0) return cfg;
+  const seen = new Set();
+  const norm = (u) => String(u).trim().toLowerCase();
+  for (const s of cfg.iceServers) {
+    if (!s?.urls) continue;
+    const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+    for (const u of urls) seen.add(norm(u));
+  }
+  const extra = [];
+  for (const url of ICE_EXTRA_STUN_URLS) {
+    const n = norm(url);
+    if (!n.startsWith('stun:') && !n.startsWith('stuns:')) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    extra.push({ urls: url });
+  }
+  if (!extra.length) return cfg;
+  return { ...cfg, iceServers: [...cfg.iceServers, ...extra] };
 }
 
 if (typeof navigator !== 'undefined') {
@@ -309,7 +336,7 @@ function startPublicCamRelayRecoveryIncoming(pc, broadcasterUid) {
 async function getIceConfig() {
   const now = Date.now();
   if (_iceConfigCache && (now - _iceConfigFetchedAt) < ICE_CONFIG_TTL_MS) {
-    return enrichIceConfigForNetwork(applyIceP2pOnly(_iceConfigCache));
+    return enrichIceConfigForNetwork(applyIceP2pOnly(mergeExtraStunServers(_iceConfigCache)));
   }
   try {
     /* 1) Prefer endpoint sicuro (/api/ice) che genera credenziali TURN via Metered API (server-side). */
@@ -327,7 +354,7 @@ async function getIceConfig() {
           rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
         };
         _iceConfigFetchedAt = now;
-        return enrichIceConfigForNetwork(applyIceP2pOnly(_iceConfigCache));
+        return enrichIceConfigForNetwork(applyIceP2pOnly(mergeExtraStunServers(_iceConfigCache)));
       };
 
       /* A) Se hosti su Firebase Hosting (o reverse-proxy), funziona il rewrite /api/ice */
@@ -361,11 +388,11 @@ async function getIceConfig() {
           rtcpMuxPolicy:        data.rtcpMuxPolicy        ?? 'require',
         };
         _iceConfigFetchedAt = now;
-        return enrichIceConfigForNetwork(applyIceP2pOnly(_iceConfigCache));
+        return enrichIceConfigForNetwork(applyIceP2pOnly(mergeExtraStunServers(_iceConfigCache)));
       }
     }
   } catch (_) {}
-  return enrichIceConfigForNetwork(applyIceP2pOnly(ICE_SERVERS_FALLBACK));
+  return enrichIceConfigForNetwork(applyIceP2pOnly(mergeExtraStunServers(ICE_SERVERS_FALLBACK)));
 }
 /** Per evitare XSS/breakout in id HTML: solo caratteri sicuri */
 function safeId(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, '') || 'u'; }

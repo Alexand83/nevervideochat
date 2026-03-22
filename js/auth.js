@@ -7,7 +7,7 @@ import { dom }     from './dom.js';
 import { avatarColor, initials, showToast, setAvatarDisplay } from './utils.js';
 import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnoredUser } from './storage.js';
 import { renderUsers, updateOwnPresence } from './users.js?v=20260462';
-import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260471';
+import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260473';
 import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
 
 /* Forward refs set by main.js */
