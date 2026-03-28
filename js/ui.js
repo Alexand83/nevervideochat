@@ -255,11 +255,18 @@ function persistRichTextToLocalStorage() {
 /** Mappa valore toolbar (1–5) a px per l’input: così il testo digitato eredita colore/dimensione/grassetto. */
 const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
 
-/** Applica colore, grandezza e grassetto allo stile dell’area messaggio così ciò che si scrive corrisponde alla toolbar. */
-function syncMsgInputRichTextStyle() {
+/** Applica colore, grandezza e grassetto allo stile dell’area messaggio così ciò che si scrive corrisponde alla toolbar.
+ *  Con accessibilità chat attiva (chatFontScale maggiore di 1) la dimensione è gestita dal CSS che ignora la toolbar. */
+export function syncMsgInputRichTextStyle() {
   if (!dom.msgInput) return;
   dom.msgInput.style.color = state.currentColor || '';
-  dom.msgInput.style.fontSize = FONT_SIZE_PX[state.fontSize] || '14px';
+  const scale = Number(state.settings?.chatFontScale) || 1;
+  const a11y = scale > 1.001;
+  if (a11y) {
+    dom.msgInput.style.fontSize = '';
+  } else {
+    dom.msgInput.style.fontSize = FONT_SIZE_PX[state.fontSize] || '14px';
+  }
   dom.msgInput.style.fontWeight = state.isBold ? 'bold' : 'normal';
 }
 

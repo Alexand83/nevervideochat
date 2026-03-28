@@ -143,4 +143,9 @@
   transition: background var(--tf);
 }
 .pchat-send-btn:hover { background: var(--accent-h); }
+
+/* Stessa scala accessibilità della chat pubblica (variabile su :root da applyChatFontScale) */
+html.chat-font-scale-active .pchat-popup {
+  zoom: var(--chat-font-scale);
+}
 .pchat-send-btn svg { width: 13px; height: 13px; }

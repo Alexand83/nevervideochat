@@ -9,6 +9,7 @@ import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnore
 import { renderUsers, updateOwnPresence } from './users.js?v=20260462';
 import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260473';
 import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
+import { syncMsgInputRichTextStyle } from './ui.js?v=20260459';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
@@ -28,14 +29,20 @@ async function pushProfileSettingsPatchToFirestore(patch) {
 
 /** Scala la colonna chat (tab stanze, messaggi, input). `scale` 1 = 100%, salvato come `chatFontScale` su profilo. */
 export function applyChatFontScale(scale) {
-  const el = document.querySelector('.chat-section');
-  if (!el) return;
   let s = Number(scale);
   if (!Number.isFinite(s) || s < 1) s = 1;
   if (s > 1.75) s = 1.75;
-  el.style.setProperty('--chat-font-scale', String(s));
-  if (s <= 1.001) el.classList.remove('chat-font-scaled');
-  else el.classList.add('chat-font-scaled');
+  document.documentElement.style.setProperty('--chat-font-scale', String(s));
+  document.documentElement.classList.toggle('chat-font-scale-active', s > 1.001);
+  const el = document.querySelector('.chat-section');
+  if (el) {
+    el.style.setProperty('--chat-font-scale', String(s));
+    if (s <= 1.001) el.classList.remove('chat-font-scaled');
+    else el.classList.add('chat-font-scaled');
+  }
+  try {
+    syncMsgInputRichTextStyle();
+  } catch (_) {}
 }
 
 /** Sincronizza cameraId + micId correnti su Firestore (es. dopo cambio da footer cam). Import dinamico da camera.js per evitare cicli. */
