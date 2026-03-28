@@ -1501,3 +1501,12 @@
     max-width: 200px;
   }
 }
+
+/* ─── Accessibilità: scala colonna chat (impostazioni → Accessibilità) ─── */
+.chat-section {
+  --chat-font-scale: 1;
+}
+/* zoom: ingrandisce testo e controlli della sola colonna chat */
+.chat-section.chat-font-scaled {
+  zoom: var(--chat-font-scale);
+}

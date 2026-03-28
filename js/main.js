@@ -9,7 +9,7 @@ import { loadRejectedCams, loadIgnoredUsers, loadDeviceSettings } from './storag
 import { initFirebaseClient, connectFirebase, connectRoom } from './firebase-client.js';
 import { applyAuthIdentity, getOrCreateGuestIdentity,
          initAuthModal, initProfileModal, initSettingsModal, updateHeaderUser, loadUserSettingsFromProfile,
-         subscribeOwnProfileSettingsListener } from './auth.js';
+         applyChatFontScale, subscribeOwnProfileSettingsListener } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
 import { renderUsers, setOpenContextMenu } from './users.js?v=20260462';
 import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js?v=20260463';
@@ -239,6 +239,7 @@ export async function finishInit() {
     initI18n();
   }
   applyRichTextSettings(state.settings);
+  applyChatFontScale(state.settings?.chatFontScale ?? 1);
 
   /* Reset variabili CSS */
   document.documentElement.style.setProperty('--games-panel-width', '0px');

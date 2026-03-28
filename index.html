@@ -698,6 +698,7 @@
       <button type="button" class="settings-tab active" id="settingsTabGeneral" role="tab" aria-selected="true" data-tab="general">Generale</button>
       <button type="button" class="settings-tab" id="settingsTabNotifications" role="tab" aria-selected="false" data-tab="notifications">Notifiche</button>
       <button type="button" class="settings-tab" id="settingsTabWebcam" role="tab" aria-selected="false" data-tab="webcam">Webcam / Audio</button>
+      <button type="button" class="settings-tab" id="settingsTabAccessibility" role="tab" aria-selected="false" data-tab="accessibility">Accessibilità</button>
       <button type="button" class="settings-tab" id="settingsTabBlocked" role="tab" aria-selected="false" data-tab="blocked">Ignorati o bloccati</button>
     </div>
 
@@ -764,6 +765,26 @@
           Click "Detect Devices" to list your cameras and microphones.<br>
           Browser permission for camera/mic is required.
         </p>
+      </div>
+    </div>
+
+    <!-- Tab: Accessibilità -->
+    <div class="settings-tab-panel hidden" id="settingsPanelAccessibility" role="tabpanel" aria-labelledby="settingsTabAccessibility">
+      <div class="settings-section">
+        <h3 class="settings-section-title">🔤 Testo della chat</h3>
+        <p class="settings-hint">
+          Ingrandisce la colonna chat (tab stanze, messaggi, barra di scrittura) per leggere meglio. Utile per ipovedenti o schermi piccoli.
+          La preferenza è salvata sull’account e si sincronizza tra i dispositivi.
+        </p>
+        <label class="settings-label" for="settingsChatFontScale">Dimensione interfaccia chat</label>
+        <select class="settings-select" id="settingsChatFontScale" aria-describedby="settingsChatFontScaleHint">
+          <option value="1">Normale (100%)</option>
+          <option value="1.12">Grande (112%)</option>
+          <option value="1.25">Molto grande (125%)</option>
+          <option value="1.4">Extra grande (140%)</option>
+          <option value="1.55">Massimo (155%)</option>
+        </select>
+        <p class="settings-hint" id="settingsChatFontScaleHint">Suggerimento: dopo il cambio puoi chiudere le impostazioni; il salvataggio è automatico.</p>
       </div>
     </div>
 

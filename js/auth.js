@@ -26,6 +26,18 @@ async function pushProfileSettingsPatchToFirestore(patch) {
   }
 }
 
+/** Scala la colonna chat (tab stanze, messaggi, input). `scale` 1 = 100%, salvato come `chatFontScale` su profilo. */
+export function applyChatFontScale(scale) {
+  const el = document.querySelector('.chat-section');
+  if (!el) return;
+  let s = Number(scale);
+  if (!Number.isFinite(s) || s < 1) s = 1;
+  if (s > 1.75) s = 1.75;
+  el.style.setProperty('--chat-font-scale', String(s));
+  if (s <= 1.001) el.classList.remove('chat-font-scaled');
+  else el.classList.add('chat-font-scaled');
+}
+
 /** Sincronizza cameraId + micId correnti su Firestore (es. dopo cambio da footer cam). Import dinamico da camera.js per evitare cicli. */
 export function syncProfileMediaDevicesFromState() {
   const cam = state.settings?.cameraId || '';
@@ -64,12 +76,16 @@ function handleProfileSettingsRemoteUpdate(data) {
   if (soundChatDb !== undefined) nextSoundChat = soundChatDb !== false;
   if (soundPMDb !== undefined) nextSoundPM = soundPMDb !== false;
 
+  const prevChatFont = Number(state.settings?.chatFontScale ?? 1);
+  const nextChatFont = data.chatFontScale != null ? Number(data.chatFontScale) : prevChatFont;
+  const chatFontChanged = Number.isFinite(nextChatFont) && Math.abs(nextChatFont - prevChatFont) > 0.001;
+
   const camChanged = nextCam !== curCam;
   const micChanged = nextMic !== curMic;
   const soundChatChanged = nextSoundChat !== prevSoundChat;
   const soundPMChanged = nextSoundPM !== prevSoundPM;
 
-  if (!camChanged && !micChanged && !soundChatChanged && !soundPMChanged) return;
+  if (!camChanged && !micChanged && !soundChatChanged && !soundPMChanged && !chatFontChanged) return;
 
   const merged = {
     ...loadDeviceSettings(),
@@ -78,6 +94,7 @@ function handleProfileSettingsRemoteUpdate(data) {
     micId: nextMic,
     soundChat: nextSoundChat,
     soundPM: nextSoundPM,
+    chatFontScale: Number.isFinite(nextChatFont) ? nextChatFont : 1,
   };
   state.settings = merged;
   saveDeviceSettings(merged);
@@ -88,6 +105,16 @@ function handleProfileSettingsRemoteUpdate(data) {
   const soundPMEl = document.getElementById('settingsSoundPM');
   if (soundChatChanged && soundChatEl) soundChatEl.checked = nextSoundChat;
   if (soundPMChanged && soundPMEl) soundPMEl.checked = nextSoundPM;
+
+  if (chatFontChanged) {
+    applyChatFontScale(merged.chatFontScale);
+    const cfs = document.getElementById('settingsChatFontScale');
+    if (cfs) {
+      const v = merged.chatFontScale;
+      const opt = ['1', '1.12', '1.25', '1.4', '1.55'].find((x) => Math.abs(parseFloat(x) - v) < 0.02);
+      cfs.value = opt || '1';
+    }
+  }
 
   if (camChanged || micChanged) {
     void applyLiveDeviceSettingsIfStreaming({ cameraId: curCam, micId: curMic });
@@ -635,6 +662,16 @@ export function initSettingsModal() {
   document.getElementById('settingsSoundChat')?.addEventListener('change', persistSoundPrefsLocally);
   document.getElementById('settingsSoundPM')?.addEventListener('change', persistSoundPrefsLocally);
 
+  document.getElementById('settingsChatFontScale')?.addEventListener('change', () => {
+    const sel = document.getElementById('settingsChatFontScale');
+    const v = parseFloat(sel?.value || '1') || 1;
+    const merged = { ...loadDeviceSettings(), ...(state.settings || {}), chatFontScale: v };
+    state.settings = merged;
+    saveDeviceSettings(merged);
+    applyChatFontScale(v);
+    void pushProfileSettingsPatchToFirestore({ chatFontScale: v });
+  });
+
   /* Camera / microfono: applica subito allo stream attivo (anche stanza Eventi), senza premere Salva */
   let deviceApplyDebounce = null;
   const scheduleApplyDeviceSettingsFromSelects = () => {
@@ -703,6 +740,7 @@ export function initSettingsModal() {
       autoLoadImages: document.getElementById('settingsAutoLoadImages')?.checked !== false,
       soundChat: document.getElementById('settingsSoundChat')?.checked !== false,
       soundPM: document.getElementById('settingsSoundPM')?.checked !== false,
+      chatFontScale: parseFloat(document.getElementById('settingsChatFontScale')?.value || '1') || 1,
       isBold: state.isBold,
       currentColor: state.currentColor,
       fontSize: state.fontSize,
@@ -718,6 +756,7 @@ export function initSettingsModal() {
           autoLoadImages: s.autoLoadImages !== false,
           soundChat: s.soundChat !== false,
           soundPM: s.soundPM !== false,
+          chatFontScale: typeof s.chatFontScale === 'number' && Number.isFinite(s.chatFontScale) ? s.chatFontScale : 1,
           isBold: s.isBold,
           currentColor: s.currentColor || null,
           fontSize: s.fontSize || null,
@@ -733,7 +772,7 @@ export function initSettingsModal() {
 }
 
 function openSettingsModal() {
-  const s = loadDeviceSettings();
+  const s = { ...loadDeviceSettings(), ...(state.settings || {}) };
   dom.cameraDeviceSelect.value = s.cameraId || '';
   dom.micDeviceSelect.value    = s.micId    || '';
   const autoLoadEl = document.getElementById('settingsAutoLoadImages');
@@ -742,6 +781,12 @@ function openSettingsModal() {
   if (autoLoadEl) autoLoadEl.checked = s.autoLoadImages !== false;
   if (soundChatEl) soundChatEl.checked = s.soundChat !== false;
   if (soundPMEl) soundPMEl.checked = s.soundPM !== false;
+  const cfs = document.getElementById('settingsChatFontScale');
+  if (cfs) {
+    const v = Number(s.chatFontScale ?? 1);
+    const opt = ['1', '1.12', '1.25', '1.4', '1.55'].find((x) => Math.abs(parseFloat(x) - v) < 0.02);
+    cfs.value = opt || '1';
+  }
   dom.detectDevicesHint.textContent = 'Click "Detect Devices" to list your cameras and microphones.';
   
   /* Set current language and theme */
@@ -778,6 +823,7 @@ export async function loadUserSettingsFromProfile() {
       ...(data.isBold !== undefined && { isBold: data.isBold }),
       ...(data.currentColor != null && { currentColor: data.currentColor }),
       ...(data.fontSize != null && { fontSize: data.fontSize }),
+      ...(data.chatFontScale != null && Number.isFinite(Number(data.chatFontScale)) && { chatFontScale: Number(data.chatFontScale) }),
     };
     state.settings = merged;
     saveDeviceSettings(merged);
