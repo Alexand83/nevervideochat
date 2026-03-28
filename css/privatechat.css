@@ -144,8 +144,17 @@
 }
 .pchat-send-btn:hover { background: var(--accent-h); }
 
-/* Stessa scala accessibilità della chat pubblica (variabile su :root da applyChatFontScale) */
-html.chat-font-scale-active .pchat-popup {
+/* Stessa scala accessibilità: calc sul testo (zoom sul popup spesso non ingrandisce il testo in modo affidabile) */
+html.chat-font-scale-active .pchat-bubble {
+  font-size: calc(13px * var(--chat-font-scale)) !important;
+}
+html.chat-font-scale-active .pchat-time {
+  font-size: calc(10px * var(--chat-font-scale));
+}
+html.chat-font-scale-active .pchat-input {
+  font-size: calc(14px * var(--chat-font-scale)) !important;
+}
+html.chat-font-scale-active .pchat-popup .pchat-hdr {
   zoom: var(--chat-font-scale);
 }
 .pchat-send-btn svg { width: 13px; height: 13px; }

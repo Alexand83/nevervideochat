@@ -1509,21 +1509,55 @@
 .chat-section {
   --chat-font-scale: 1;
 }
-/* zoom: ingrandisce testo e controlli della sola colonna chat */
-.chat-section.chat-font-scaled {
+/*
+ * Non usiamo zoom sulla section intera: in molti browser il testo non scala come previsto.
+ * Il testo usa calc(... * --chat-font-scale) così la grandezza segue davvero il selettore.
+ * zoom solo su barre/UI (non su msgs-container né sulla riga input) per non raddoppiare l’input.
+ */
+.chat-section.chat-font-scaled > .room-tabs-bar,
+.chat-section.chat-font-scaled > .room-picker-panel,
+.chat-section.chat-font-scaled > .events-cam-grid,
+.chat-section.chat-font-scaled > .search-bar,
+.chat-section.chat-font-scaled > .typing-row {
   zoom: var(--chat-font-scale);
 }
-/* Messaggi: ignora font-size inline salvati nel DB (toolbar) così tutto scala uguale con lo zoom */
+.chat-section.chat-font-scaled .fmt-toolbar,
+.chat-section.chat-font-scaled .img-preview-strip,
+.chat-section.chat-font-scaled .voice-rec-strip,
+.chat-section.chat-font-scaled .reply-preview-bar,
+.chat-section.chat-font-scaled .emoji-panel {
+  zoom: var(--chat-font-scale);
+}
+html.chat-font-scale-active .chat-section.chat-font-scaled .welcome-banner {
+  zoom: var(--chat-font-scale);
+}
+/* Messaggi: ignora font-size inline nel DB; dimensione = base × scala accessibilità */
+html.chat-font-scale-active .chat-section.chat-font-scaled .msg-bubble {
+  font-size: calc(13px * var(--chat-font-scale));
+}
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-text,
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-text * {
-  font-size: 13px !important;
+  font-size: calc(13px * var(--chat-font-scale)) !important;
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-quote,
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-quote * {
-  font-size: 11px !important;
+  font-size: calc(11px * var(--chat-font-scale)) !important;
 }
-/* Input: dimensione fissa “normale” rispetto allo zoom, ignora Tiny/X-Large toolbar */
+html.chat-font-scale-active .chat-section.chat-font-scaled .msg-sender {
+  font-size: calc(11px * var(--chat-font-scale));
+}
+html.chat-font-scale-active .chat-section.chat-font-scaled .msg-time {
+  font-size: calc(10px * var(--chat-font-scale));
+}
+html.chat-font-scale-active .chat-section.chat-font-scaled .msg-system {
+  font-size: calc(11.5px * var(--chat-font-scale));
+}
+/* Input: “normale” × scala; ignora Tiny/X-Large toolbar (sopra non c’è zoom sulla input-row) */
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input,
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input * {
-  font-size: 14px !important;
+  font-size: calc(14px * var(--chat-font-scale)) !important;
+}
+html.chat-font-scale-active .chat-section.chat-font-scaled .dictate-btn,
+html.chat-font-scale-active .chat-section.chat-font-scaled .send-btn {
+  zoom: var(--chat-font-scale);
 }
