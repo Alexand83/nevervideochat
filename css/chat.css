@@ -1510,9 +1510,8 @@
   --chat-font-scale: 1;
 }
 /*
- * Non usiamo zoom sulla section intera: in molti browser il testo non scala come previsto.
- * Il testo usa calc(... * --chat-font-scale) così la grandezza segue davvero il selettore.
- * zoom solo su barre/UI (non su msgs-container né sulla riga input) per non raddoppiare l’input.
+ * Messaggi: calc(... * --chat-font-scale) nel thread (vedi sotto).
+ * Area di scrittura: zoom su .chat-input-area così Tiny/X-Large toolbar × % accessibilità (no calc forzato sul testo).
  */
 .chat-section.chat-font-scaled > .room-tabs-bar,
 .chat-section.chat-font-scaled > .room-picker-panel,
@@ -1521,11 +1520,7 @@
 .chat-section.chat-font-scaled > .typing-row {
   zoom: var(--chat-font-scale);
 }
-.chat-section.chat-font-scaled .fmt-toolbar,
-.chat-section.chat-font-scaled .img-preview-strip,
-.chat-section.chat-font-scaled .voice-rec-strip,
-.chat-section.chat-font-scaled .reply-preview-bar,
-.chat-section.chat-font-scaled .emoji-panel {
+.chat-section.chat-font-scaled .chat-input-area {
   zoom: var(--chat-font-scale);
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .welcome-banner {
@@ -1551,13 +1546,4 @@ html.chat-font-scale-active .chat-section.chat-font-scaled .msg-time {
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-system {
   font-size: calc(11.5px * var(--chat-font-scale));
-}
-/* Input: “normale” × scala; ignora Tiny/X-Large toolbar (sopra non c’è zoom sulla input-row) */
-html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input,
-html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input * {
-  font-size: calc(14px * var(--chat-font-scale)) !important;
-}
-html.chat-font-scale-active .chat-section.chat-font-scaled .dictate-btn,
-html.chat-font-scale-active .chat-section.chat-font-scaled .send-btn {
-  zoom: var(--chat-font-scale);
 }
