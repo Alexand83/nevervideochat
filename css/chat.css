@@ -1510,6 +1510,8 @@
 .chat-section {
   --chat-font-scale: 1;
   --chat-a11y-mul: 1;
+  /* Base px toolbar (10–24) per textarea con accessibilità; aggiornata da syncMsgInputRichTextStyle */
+  --msg-input-a11y-base-px: 14;
 }
 /*
  * --chat-a11y-mul: messaggi = calc nel thread.
@@ -1537,10 +1539,10 @@
 html.chat-font-scale-active .chat-section.chat-font-scaled .welcome-banner {
   zoom: var(--chat-a11y-mul);
 }
-/* Textarea: dimensione reale (px) legata alla % accessibilità, non al solo zoom */
+/* Textarea: (px dalla toolbar) × % accessibilità — il rullo Tiny…X-Large resta distinto */
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input,
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input * {
-  font-size: calc(14px * var(--chat-a11y-mul)) !important;
+  font-size: calc(1px * var(--msg-input-a11y-base-px, 14) * var(--chat-a11y-mul)) !important;
 }
 /* Messaggi: ignora font-size inline nel DB; dimensione = base × moltiplicatore accessibilità */
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-bubble {

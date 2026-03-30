@@ -259,16 +259,20 @@ function persistRichTextToLocalStorage() {
 const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
 
 /** Applica colore, grandezza e grassetto allo stile dell’area messaggio così ciò che si scrive corrisponde alla toolbar.
- *  Con accessibilità attiva la dimensione px è gestita dal CSS (calc × --chat-a11y-mul), non dall’inline qui. */
+ *  Con accessibilità: --msg-input-a11y-base-px sulla .chat-section (10–24 dal rullo) × --chat-a11y-mul nel CSS. */
 export function syncMsgInputRichTextStyle() {
   if (!dom.msgInput) return;
   dom.msgInput.style.color = state.currentColor || '';
   const scale = Number(state.settings?.chatFontScale) || 1;
   const a11y = scale > 1.001;
+  const chatSection = document.querySelector('.chat-section');
+  const basePx = parseFloat(FONT_SIZE_PX[state.fontSize]) || 14;
   if (a11y) {
     dom.msgInput.style.fontSize = '';
+    chatSection?.style.setProperty('--msg-input-a11y-base-px', String(basePx));
   } else {
     dom.msgInput.style.fontSize = FONT_SIZE_PX[state.fontSize] || '14px';
+    chatSection?.style.removeProperty('--msg-input-a11y-base-px');
   }
   dom.msgInput.style.fontWeight = state.isBold ? 'bold' : 'normal';
 }
