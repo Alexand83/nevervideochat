@@ -1512,8 +1512,9 @@
   --chat-a11y-mul: 1;
 }
 /*
- * --chat-a11y-mul amplifica la differenza percepita (es. 112% → moltiplicatore ~1.17).
- * Messaggi: calc nel thread. Area scrittura: zoom così toolbar Tiny/X-Large resta coerente.
+ * --chat-a11y-mul: messaggi = calc nel thread.
+ * Textarea: font-size in px × mul (non solo zoom: così il testo cresce davvero).
+ * Toolbar/anteprime: zoom; campo messaggio: calc sotto (no zoom su tutta .chat-input-area).
  */
 .chat-section.chat-font-scaled > .room-tabs-bar,
 .chat-section.chat-font-scaled > .room-picker-panel,
@@ -1522,11 +1523,24 @@
 .chat-section.chat-font-scaled > .typing-row {
   zoom: var(--chat-a11y-mul);
 }
-.chat-section.chat-font-scaled .chat-input-area {
+.chat-section.chat-font-scaled .fmt-toolbar,
+.chat-section.chat-font-scaled .img-preview-strip,
+.chat-section.chat-font-scaled .voice-rec-strip,
+.chat-section.chat-font-scaled .reply-preview-bar,
+.chat-section.chat-font-scaled .emoji-panel {
+  zoom: var(--chat-a11y-mul);
+}
+.chat-section.chat-font-scaled .input-row .dictate-btn,
+.chat-section.chat-font-scaled .input-row .send-btn {
   zoom: var(--chat-a11y-mul);
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .welcome-banner {
   zoom: var(--chat-a11y-mul);
+}
+/* Textarea: dimensione reale (px) legata alla % accessibilità, non al solo zoom */
+html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input,
+html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input * {
+  font-size: calc(14px * var(--chat-a11y-mul)) !important;
 }
 /* Messaggi: ignora font-size inline nel DB; dimensione = base × moltiplicatore accessibilità */
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-bubble {
