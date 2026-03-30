@@ -1510,13 +1510,10 @@
 .chat-section {
   --chat-font-scale: 1;
   --chat-a11y-mul: 1;
-  /* Base px toolbar (10–24) per textarea con accessibilità; aggiornata da syncMsgInputRichTextStyle */
-  --msg-input-a11y-base-px: 14;
 }
 /*
- * --chat-a11y-mul: messaggi = calc nel thread.
- * Textarea: font-size in px × mul (non solo zoom: così il testo cresce davvero).
- * Toolbar/anteprime: zoom; campo messaggio: calc sotto (no zoom su tutta .chat-input-area).
+ * Accessibilità >100%: zoom su bolla messaggi e su textarea — mantiene le proporzioni Tiny/Large (HTML inline)
+ * senza !important su * che le schiacciava tutte uguali.
  */
 .chat-section.chat-font-scaled > .room-tabs-bar,
 .chat-section.chat-font-scaled > .room-picker-panel,
@@ -1539,22 +1536,13 @@
 html.chat-font-scale-active .chat-section.chat-font-scaled .welcome-banner {
   zoom: var(--chat-a11y-mul);
 }
-/* Textarea: (px dalla toolbar) × % accessibilità — il rullo Tiny…X-Large resta distinto */
-html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input,
-html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input * {
-  font-size: calc(1px * var(--msg-input-a11y-base-px, 14) * var(--chat-a11y-mul)) !important;
+/* Textarea: zoom come la bolla — rullo + execCommand restano visibili, scala tutta l’area */
+html.chat-font-scale-active .chat-section.chat-font-scaled .msg-input {
+  zoom: var(--chat-a11y-mul);
 }
-/* Messaggi: ignora font-size inline nel DB; dimensione = base × moltiplicatore accessibilità */
+/* Bolle messaggio: stessi font-size inline del DB; zoom applica la % accessibilità senza appiattire */
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-bubble {
-  font-size: calc(13px * var(--chat-a11y-mul));
-}
-html.chat-font-scale-active .chat-section.chat-font-scaled .msg-text,
-html.chat-font-scale-active .chat-section.chat-font-scaled .msg-text * {
-  font-size: calc(13px * var(--chat-a11y-mul)) !important;
-}
-html.chat-font-scale-active .chat-section.chat-font-scaled .msg-quote,
-html.chat-font-scale-active .chat-section.chat-font-scaled .msg-quote * {
-  font-size: calc(11px * var(--chat-a11y-mul)) !important;
+  zoom: var(--chat-a11y-mul);
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-sender {
   font-size: calc(11px * var(--chat-a11y-mul));
