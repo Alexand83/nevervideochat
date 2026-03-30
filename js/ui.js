@@ -249,7 +249,10 @@ export function applyRichTextSettings(settings) {
 }
 
 function persistRichTextToLocalStorage() {
-  saveDeviceSettings({ ...loadDeviceSettings(), isBold: state.isBold, currentColor: state.currentColor, fontSize: state.fontSize });
+  const merged = { ...loadDeviceSettings(), isBold: state.isBold, currentColor: state.currentColor, fontSize: state.fontSize };
+  state.settings = { ...(state.settings || {}), isBold: merged.isBold, currentColor: merged.currentColor, fontSize: merged.fontSize };
+  saveDeviceSettings(merged);
+  void import('./auth.js').then(({ pushRichTextPrefsToProfile }) => pushRichTextPrefsToProfile?.()).catch(() => {});
 }
 
 /** Mappa valore toolbar (1–5) a px per l’input: così il testo digitato eredita colore/dimensione/grassetto. */

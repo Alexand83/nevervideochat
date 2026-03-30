@@ -9,7 +9,7 @@ import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnore
 import { renderUsers, updateOwnPresence } from './users.js?v=20260462';
 import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260473';
 import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
-import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff } from './ui.js?v=20260461';
+import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff, applyRichTextSettings } from './ui.js?v=20260462';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
@@ -25,6 +25,16 @@ async function pushProfileSettingsPatchToFirestore(patch) {
   } catch (err) {
     console.warn('[Auth] Profile settings sync failed:', err);
   }
+}
+
+/** Toolbar testo (font size, colore, grassetto): sync Firestore come le altre preferenze account. */
+export function pushRichTextPrefsToProfile() {
+  if (!state.currentUser?.id || state.currentUser.isGuest || !state.fb?.firestore) return;
+  void pushProfileSettingsPatchToFirestore({
+    isBold: state.isBold,
+    currentColor: state.currentColor || null,
+    fontSize: state.fontSize != null ? String(state.fontSize) : null,
+  });
 }
 
 /** Ultimo stato “accessibilità attiva” per ripristinare l’input al tornare a 100%. */
@@ -103,12 +113,22 @@ function handleProfileSettingsRemoteUpdate(data) {
   const nextChatFont = data.chatFontScale != null ? Number(data.chatFontScale) : prevChatFont;
   const chatFontChanged = Number.isFinite(nextChatFont) && Math.abs(nextChatFont - prevChatFont) > 0.001;
 
+  const prevBold = !!state.isBold;
+  const prevColor = state.currentColor ?? '';
+  const prevFont = String(state.fontSize ?? '3');
+  const nextBold = data.isBold !== undefined ? !!data.isBold : prevBold;
+  const nextColor = data.currentColor != null ? data.currentColor : prevColor;
+  const nextFont = data.fontSize != null ? String(data.fontSize) : prevFont;
+  const boldChanged = nextBold !== prevBold;
+  const colorChanged = nextColor !== prevColor;
+  const fontChanged = nextFont !== prevFont;
+
   const camChanged = nextCam !== curCam;
   const micChanged = nextMic !== curMic;
   const soundChatChanged = nextSoundChat !== prevSoundChat;
   const soundPMChanged = nextSoundPM !== prevSoundPM;
 
-  if (!camChanged && !micChanged && !soundChatChanged && !soundPMChanged && !chatFontChanged) return;
+  if (!camChanged && !micChanged && !soundChatChanged && !soundPMChanged && !chatFontChanged && !boldChanged && !colorChanged && !fontChanged) return;
 
   const merged = {
     ...loadDeviceSettings(),
@@ -118,6 +138,9 @@ function handleProfileSettingsRemoteUpdate(data) {
     soundChat: nextSoundChat,
     soundPM: nextSoundPM,
     chatFontScale: Number.isFinite(nextChatFont) ? nextChatFont : 1,
+    isBold: nextBold,
+    currentColor: nextColor,
+    fontSize: nextFont,
   };
   state.settings = merged;
   saveDeviceSettings(merged);
@@ -128,6 +151,10 @@ function handleProfileSettingsRemoteUpdate(data) {
   const soundPMEl = document.getElementById('settingsSoundPM');
   if (soundChatChanged && soundChatEl) soundChatEl.checked = nextSoundChat;
   if (soundPMChanged && soundPMEl) soundPMEl.checked = nextSoundPM;
+
+  if (boldChanged || colorChanged || fontChanged) {
+    applyRichTextSettings(state.settings);
+  }
 
   if (chatFontChanged) {
     applyChatFontScale(merged.chatFontScale);
