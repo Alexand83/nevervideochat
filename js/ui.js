@@ -275,6 +275,39 @@ function applyColorAndBoldToRichNodes() {
   });
 }
 
+/** Stesso flusso del select “Font size”: sync + execCommand fontSize sui nodi del contenteditable. */
+export function applyFontSizeToolbarToInput() {
+  if (!dom.msgInput) return;
+  syncMsgInputRichTextStyle();
+  dom.msgInput.focus();
+  document.execCommand('styleWithCSS', false, true);
+  const execValue = state.fontSize === '5' ? '7' : state.fontSize;
+  document.execCommand('fontSize', false, execValue);
+  applyColorAndBoldToRichNodes();
+  requestAnimationFrame(() => {
+    if (state.fontSize === '5') {
+      const fontTags = dom.msgInput.querySelectorAll('font[size="7"]');
+      fontTags.forEach(font => {
+        if (!font.style.fontSize) {
+          const span = document.createElement('span');
+          span.style.fontSize = '24px';
+          span.style.color = state.currentColor || '';
+          span.style.fontWeight = state.isBold ? 'bold' : 'normal';
+          span.innerHTML = font.innerHTML;
+          font.parentNode.replaceChild(span, font);
+        }
+      });
+    }
+    applyColorAndBoldToRichNodes();
+  });
+  setTimeout(applyColorAndBoldToRichNodes, 0);
+}
+
+/** Dopo accessibilità → 100%: riapplica la grandezza toolbar al testo nell’input (altrimenti serve cambiare il select a mano). */
+export function refreshInputAfterA11yOff() {
+  applyFontSizeToolbarToInput();
+}
+
 export function initToolbar() {
   dom.boldBtn.addEventListener('click', () => {
     state.isBold = !state.isBold;
@@ -293,36 +326,7 @@ export function initToolbar() {
   dom.fontSizeSelect.addEventListener('change', e => {
     state.fontSize = e.target.value;
     persistRichTextToLocalStorage();
-    syncMsgInputRichTextStyle();
-    dom.msgInput.focus();
-    
-    /* Enable CSS styling */
-    document.execCommand('styleWithCSS', false, true);
-    
-    /* For X-Large (5), use fontSize 7 (max) and then override with CSS */
-    /* For other sizes, use the value directly */
-    const execValue = state.fontSize === '5' ? '7' : state.fontSize;
-    document.execCommand('fontSize', false, execValue);
-    
-    /* execCommand crea span/font senza colore: riapplica colore e grassetto subito e dopo un tick (il browser può creare lo span in ritardo) */
-    applyColorAndBoldToRichNodes();
-    requestAnimationFrame(() => {
-      if (state.fontSize === '5') {
-        const fontTags = dom.msgInput.querySelectorAll('font[size="7"]');
-        fontTags.forEach(font => {
-          if (!font.style.fontSize) {
-            const span = document.createElement('span');
-            span.style.fontSize = '24px';
-            span.style.color = state.currentColor || '';
-            span.style.fontWeight = state.isBold ? 'bold' : 'normal';
-            span.innerHTML = font.innerHTML;
-            font.parentNode.replaceChild(span, font);
-          }
-        });
-      }
-      applyColorAndBoldToRichNodes();
-    });
-    setTimeout(applyColorAndBoldToRichNodes, 0);
+    applyFontSizeToolbarToInput();
   });
   dom.msgInput.addEventListener('input', () => {
     /* Ogni battuta può creare nuovi span senza colore: riapplica così non appare mai in bianco */

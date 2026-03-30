@@ -9,7 +9,7 @@ import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnore
 import { renderUsers, updateOwnPresence } from './users.js?v=20260462';
 import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260473';
 import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
-import { syncMsgInputRichTextStyle } from './ui.js?v=20260460';
+import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff } from './ui.js?v=20260461';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
@@ -27,14 +27,21 @@ async function pushProfileSettingsPatchToFirestore(patch) {
   }
 }
 
+/** Ultimo stato “accessibilità attiva” per ripristinare l’input al tornare a 100%. */
+let _lastChatFontScaleWasAbove = false;
+
 /** Scala la colonna chat (tab stanze, messaggi, input). `scale` 1 = 100%, salvato come `chatFontScale` su profilo. */
 export function applyChatFontScale(scale) {
   let s = Number(scale);
   if (!Number.isFinite(s) || s < 1) s = 1;
   if (s > 1.75) s = 1.75;
-  /* Moltiplicatore UI più evidente della sola % (112% → ~+17% visivo); cap come s */
-  const k = 1.45;
-  const mul = s <= 1.001 ? 1 : Math.min(1.75, 1 + (s - 1) * k);
+  /* Effetto visivo più forte della % salvata (es. 112% → ~+28%); tetto 2.0 */
+  const k = 2.35;
+  const mul = s <= 1.001 ? 1 : Math.min(2, 1 + (s - 1) * k);
+  const wasAbove = _lastChatFontScaleWasAbove;
+  const nowAbove = s > 1.001;
+  _lastChatFontScaleWasAbove = nowAbove;
+
   document.documentElement.style.setProperty('--chat-font-scale', String(s));
   document.documentElement.style.setProperty('--chat-a11y-mul', String(mul));
   document.documentElement.classList.toggle('chat-font-scale-active', s > 1.001);
@@ -46,7 +53,11 @@ export function applyChatFontScale(scale) {
     else el.classList.add('chat-font-scaled');
   }
   try {
-    syncMsgInputRichTextStyle();
+    if (wasAbove && !nowAbove) {
+      refreshInputAfterA11yOff();
+    } else {
+      syncMsgInputRichTextStyle();
+    }
   } catch (_) {}
 }
 
