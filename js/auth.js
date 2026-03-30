@@ -32,11 +32,16 @@ export function applyChatFontScale(scale) {
   let s = Number(scale);
   if (!Number.isFinite(s) || s < 1) s = 1;
   if (s > 1.75) s = 1.75;
+  /* Moltiplicatore UI più evidente della sola % (112% → ~+17% visivo); cap come s */
+  const k = 1.45;
+  const mul = s <= 1.001 ? 1 : Math.min(1.75, 1 + (s - 1) * k);
   document.documentElement.style.setProperty('--chat-font-scale', String(s));
+  document.documentElement.style.setProperty('--chat-a11y-mul', String(mul));
   document.documentElement.classList.toggle('chat-font-scale-active', s > 1.001);
   const el = document.querySelector('.chat-section');
   if (el) {
     el.style.setProperty('--chat-font-scale', String(s));
+    el.style.setProperty('--chat-a11y-mul', String(mul));
     if (s <= 1.001) el.classList.remove('chat-font-scaled');
     else el.classList.add('chat-font-scaled');
   }

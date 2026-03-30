@@ -1505,45 +1505,47 @@
 /* ─── Accessibilità: scala colonna chat (impostazioni → Accessibilità) ─── */
 :root {
   --chat-font-scale: 1;
+  --chat-a11y-mul: 1; /* da JS: effetto più evidente della sola % (vedi applyChatFontScale) */
 }
 .chat-section {
   --chat-font-scale: 1;
+  --chat-a11y-mul: 1;
 }
 /*
- * Messaggi: calc(... * --chat-font-scale) nel thread (vedi sotto).
- * Area di scrittura: zoom su .chat-input-area così Tiny/X-Large toolbar × % accessibilità (no calc forzato sul testo).
+ * --chat-a11y-mul amplifica la differenza percepita (es. 112% → moltiplicatore ~1.17).
+ * Messaggi: calc nel thread. Area scrittura: zoom così toolbar Tiny/X-Large resta coerente.
  */
 .chat-section.chat-font-scaled > .room-tabs-bar,
 .chat-section.chat-font-scaled > .room-picker-panel,
 .chat-section.chat-font-scaled > .events-cam-grid,
 .chat-section.chat-font-scaled > .search-bar,
 .chat-section.chat-font-scaled > .typing-row {
-  zoom: var(--chat-font-scale);
+  zoom: var(--chat-a11y-mul);
 }
 .chat-section.chat-font-scaled .chat-input-area {
-  zoom: var(--chat-font-scale);
+  zoom: var(--chat-a11y-mul);
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .welcome-banner {
-  zoom: var(--chat-font-scale);
+  zoom: var(--chat-a11y-mul);
 }
-/* Messaggi: ignora font-size inline nel DB; dimensione = base × scala accessibilità */
+/* Messaggi: ignora font-size inline nel DB; dimensione = base × moltiplicatore accessibilità */
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-bubble {
-  font-size: calc(13px * var(--chat-font-scale));
+  font-size: calc(13px * var(--chat-a11y-mul));
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-text,
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-text * {
-  font-size: calc(13px * var(--chat-font-scale)) !important;
+  font-size: calc(13px * var(--chat-a11y-mul)) !important;
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-quote,
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-quote * {
-  font-size: calc(11px * var(--chat-font-scale)) !important;
+  font-size: calc(11px * var(--chat-a11y-mul)) !important;
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-sender {
-  font-size: calc(11px * var(--chat-font-scale));
+  font-size: calc(11px * var(--chat-a11y-mul));
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-time {
-  font-size: calc(10px * var(--chat-font-scale));
+  font-size: calc(10px * var(--chat-a11y-mul));
 }
 html.chat-font-scale-active .chat-section.chat-font-scaled .msg-system {
-  font-size: calc(11.5px * var(--chat-font-scale));
+  font-size: calc(11.5px * var(--chat-a11y-mul));
 }

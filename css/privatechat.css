@@ -144,17 +144,39 @@
 }
 .pchat-send-btn:hover { background: var(--accent-h); }
 
-/* Stessa scala accessibilità: calc sul testo (zoom sul popup spesso non ingrandisce il testo in modo affidabile) */
+/* Accessibilità: finestra più grande + testo (usa --chat-a11y-mul da applyChatFontScale) */
+html.chat-font-scale-active .pchat-popup {
+  width: calc(310px * var(--chat-a11y-mul));
+  height: min(85vh, calc(400px * var(--chat-a11y-mul)));
+}
 html.chat-font-scale-active .pchat-bubble {
-  font-size: calc(13px * var(--chat-font-scale)) !important;
+  font-size: calc(13px * var(--chat-a11y-mul)) !important;
 }
 html.chat-font-scale-active .pchat-time {
-  font-size: calc(10px * var(--chat-font-scale));
+  font-size: calc(10px * var(--chat-a11y-mul));
 }
 html.chat-font-scale-active .pchat-input {
-  font-size: calc(14px * var(--chat-font-scale)) !important;
+  font-size: calc(14px * var(--chat-a11y-mul)) !important;
 }
-html.chat-font-scale-active .pchat-popup .pchat-hdr {
-  zoom: var(--chat-font-scale);
+html.chat-font-scale-active .pchat-uname {
+  font-size: calc(14px * var(--chat-a11y-mul));
+}
+html.chat-font-scale-active .pchat-avatar {
+  width: calc(26px * var(--chat-a11y-mul));
+  height: calc(26px * var(--chat-a11y-mul));
+  font-size: calc(10px * var(--chat-a11y-mul));
+}
+html.chat-font-scale-active .pchat-ctrl-btn {
+  width: calc(24px * var(--chat-a11y-mul));
+  height: calc(24px * var(--chat-a11y-mul));
+  font-size: calc(15px * var(--chat-a11y-mul));
+}
+html.chat-font-scale-active .pchat-send-btn {
+  width: calc(30px * var(--chat-a11y-mul));
+  height: calc(30px * var(--chat-a11y-mul));
+}
+html.chat-font-scale-active .pchat-send-btn svg {
+  width: calc(13px * var(--chat-a11y-mul));
+  height: calc(13px * var(--chat-a11y-mul));
 }
 .pchat-send-btn svg { width: 13px; height: 13px; }
