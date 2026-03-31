@@ -344,6 +344,19 @@ export function refreshInputAfterA11yOff() {
 }
 
 export function initToolbar() {
+  /** Come il grassetto: focus → foreColor → sync → applyFontSizeToolbarToInput. Doppio rAF perché il color picker nativo tiene il focus un frame e altrimenti foreColor/applyFontSize possono girare senza selezione corretta (testo torna a ~14px). */
+  const applyToolbarForeColorFromState = () => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        dom.msgInput.focus();
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand('foreColor', false, state.currentColor);
+        syncMsgInputRichTextStyle();
+        applyFontSizeToolbarToInput();
+      });
+    });
+  };
+
   dom.boldBtn.addEventListener('click', (e) => {
     e.preventDefault();
     dom.msgInput.focus();
@@ -357,14 +370,18 @@ export function initToolbar() {
     syncMsgInputRichTextStyle();
     applyFontSizeToolbarToInput();
   });
+  const onColorPickerValue = () => {
+    persistRichTextToLocalStorage();
+    applyToolbarForeColorFromState();
+  };
   dom.colorPicker.addEventListener('input', e => {
     state.currentColor = e.target.value;
-    persistRichTextToLocalStorage();
-    syncMsgInputRichTextStyle();
-    dom.msgInput.focus();
-    document.execCommand('styleWithCSS', false, true);
-    document.execCommand('foreColor', false, state.currentColor);
-    applyFontSizeToolbarToInput();
+    onColorPickerValue();
+  });
+  /* Dopo chiusura del picker nativo alcuni browser non rifiniscono l’ultimo input; ripetiamo come sul grassetto (click = un commit). */
+  dom.colorPicker.addEventListener('change', e => {
+    state.currentColor = e.target.value;
+    onColorPickerValue();
   });
   dom.fontSizeSelect.addEventListener('change', e => {
     state.fontSize = e.target.value;
