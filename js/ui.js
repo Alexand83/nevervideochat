@@ -233,6 +233,12 @@ export function initAvatarLightbox() {
 }
 
 /* ── Rich-text toolbar ─────────────────────────────────────────── */
+function isMsgInputEffectivelyEmpty() {
+  if (!dom.msgInput) return false;
+  const t = (dom.msgInput.textContent || '').replace(/\u200b/g, '').trim();
+  return t === '';
+}
+
 /** Applica colore/grandezza/grassetto da settings a state e alla toolbar (chiamata da main/auth dopo load settings). */
 export function applyRichTextSettings(settings) {
   if (!settings) return;
@@ -246,6 +252,17 @@ export function applyRichTextSettings(settings) {
   if (dom.colorPicker) dom.colorPicker.value = state.currentColor;
   if (dom.fontSizeSelect) dom.fontSizeSelect.value = state.fontSize;
   syncMsgInputRichTextStyle();
+  /*
+   * Solo style sul contenteditable non basta: il browser mette il testo in nodi con size “editor default”
+   * (spesso 14px come in .msg-input { font-size }) finché non si usa execCommand come sul change del select.
+   * Input vuoto: riallinea subito dopo load / sync profilo.
+   */
+  if (isMsgInputEffectivelyEmpty()) {
+    requestAnimationFrame(() => {
+      if (!isMsgInputEffectivelyEmpty()) return;
+      applyFontSizeToolbarToInput();
+    });
+  }
 }
 
 function persistRichTextToLocalStorage() {
