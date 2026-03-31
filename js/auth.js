@@ -10,7 +10,7 @@ import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnore
 import { renderUsers, updateOwnPresence } from './users.js?v=20260462';
 import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260473';
 import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
-import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff, applyRichTextSettings, queueApplyFontSizeToolbarIfInputEmpty } from './ui.js?v=20260468';
+import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff, applyRichTextSettings, scheduleApplyFontSizeToolbarAfterLayout } from './ui.js?v=20260469';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
@@ -39,6 +39,13 @@ function readProfileRichText(data) {
   return { isBold, currentColor, fontSize };
 }
 
+/** Firestore: chatFontScale o chat_font_scale */
+function readChatFontScaleFromProfile(data) {
+  if (!data || typeof data !== 'object') return undefined;
+  if (data.chatFontScale !== undefined) return data.chatFontScale;
+  return data.chat_font_scale;
+}
+
 /** Toolbar testo (font size, colore, grassetto): sync Firestore come le altre preferenze account. */
 export function pushRichTextPrefsToProfile() {
   if (!state.currentUser?.id || state.currentUser.isGuest || !state.fb?.firestore) return;
@@ -63,18 +70,25 @@ export function applyChatFontScale(scale) {
 
   document.documentElement.style.setProperty('--chat-font-scale', String(s));
   document.documentElement.classList.toggle('chat-font-scale-active', s > 1.001);
-  const el = document.querySelector('.chat-section');
-  if (el) {
-    el.style.setProperty('--chat-font-scale', String(s));
-    if (s <= 1.001) el.classList.remove('chat-font-scaled');
-    else el.classList.add('chat-font-scaled');
+
+  const applySectionZoom = (sectionEl) => {
+    if (!sectionEl) return;
+    sectionEl.style.setProperty('--chat-font-scale', String(s));
+    if (s <= 1.001) sectionEl.classList.remove('chat-font-scaled');
+    else sectionEl.classList.add('chat-font-scaled');
+  };
+  let section = document.querySelector('.chat-section');
+  applySectionZoom(section);
+  if (!section) {
+    requestAnimationFrame(() => applySectionZoom(document.querySelector('.chat-section')));
   }
+
   try {
     if (wasAbove && !nowAbove) {
       refreshInputAfterA11yOff();
     } else {
       syncMsgInputRichTextStyle();
-      queueApplyFontSizeToolbarIfInputEmpty();
+      scheduleApplyFontSizeToolbarAfterLayout();
     }
   } catch (_) {}
 }
@@ -118,7 +132,12 @@ function handleProfileSettingsRemoteUpdate(data) {
   if (soundPMDb !== undefined) nextSoundPM = soundPMDb !== false;
 
   const prevChatFont = Number(state.settings?.chatFontScale ?? 1);
-  const nextChatFont = data.chatFontScale != null ? Number(data.chatFontScale) : prevChatFont;
+  const cfsRemote = readChatFontScaleFromProfile(data);
+  let nextChatFont = prevChatFont;
+  if (cfsRemote != null && cfsRemote !== '') {
+    const n = Number(cfsRemote);
+    if (Number.isFinite(n)) nextChatFont = Math.min(1.75, Math.max(1, n));
+  }
   const chatFontChanged = Number.isFinite(nextChatFont) && Math.abs(nextChatFont - prevChatFont) > 0.001;
 
   const rt = readProfileRichText(data);
@@ -882,6 +901,7 @@ export async function loadUserSettingsFromProfile() {
     if (!data) return;
     const soundChatDb = data.soundChat !== undefined ? data.soundChat : data.sound_chat;
     const soundPMDb = data.soundPM !== undefined ? data.soundPM : data.sound_pm;
+    const cfsRaw = readChatFontScaleFromProfile(data);
     const merged = {
       ...loadDeviceSettings(),
       ...(data.cameraId != null && { cameraId: data.cameraId }),
@@ -889,8 +909,13 @@ export async function loadUserSettingsFromProfile() {
       ...(data.autoLoadImages !== undefined && { autoLoadImages: data.autoLoadImages }),
       ...(soundChatDb !== undefined && { soundChat: soundChatDb }),
       ...(soundPMDb !== undefined && { soundPM: soundPMDb }),
-      ...(data.chatFontScale != null && Number.isFinite(Number(data.chatFontScale)) && { chatFontScale: Number(data.chatFontScale) }),
     };
+    if (cfsRaw != null && cfsRaw !== '') {
+      const n = Number(cfsRaw);
+      if (Number.isFinite(n)) {
+        merged.chatFontScale = n < 1 ? 1 : (n > 1.75 ? 1.75 : n);
+      }
+    }
     const rt = readProfileRichText(data);
     if (rt.isBold !== undefined) merged.isBold = !!rt.isBold;
     if (rt.currentColor !== undefined) {

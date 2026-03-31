@@ -17,7 +17,7 @@ import { setPChatDeps, closeAllPrivateChats } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js?v=20260473';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initDictation, initAvatarLightbox, initContextMenu, openContextMenu,
-         initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js?v=20260468';
+         initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js?v=20260469';
 import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
 import { initGames, handleGameCommand } from './games.js';
@@ -238,8 +238,8 @@ export async function finishInit() {
     setLanguage('it');
     initI18n();
   }
-  applyRichTextSettings(state.settings);
-  applyChatFontScale(state.settings?.chatFontScale ?? 1);
+  applyRichTextSettings(state.settings, { deferToolbarSync: true });
+  applyChatFontScale(Number(state.settings?.chatFontScale ?? 1));
 
   /* Reset variabili CSS */
   document.documentElement.style.setProperty('--games-panel-width', '0px');

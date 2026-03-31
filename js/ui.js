@@ -240,8 +240,7 @@ function isMsgInputEffectivelyEmpty() {
 }
 
 /**
- * Dopo zoom accessibilità o restore impostazioni: il solo style sul div non aggiorna i nodi interni del contenteditable.
- * Stesso motivo di applyRichTextSettings: serve execCommand come sul change del select (input vuoto per non pasticciare bozze).
+ * Dopo load/sync profilo (senza passare da applyChatFontScale): execCommand solo se input vuoto.
  */
 export function queueApplyFontSizeToolbarIfInputEmpty() {
   if (!isMsgInputEffectivelyEmpty()) return;
@@ -251,8 +250,20 @@ export function queueApplyFontSizeToolbarIfInputEmpty() {
   });
 }
 
+/**
+ * Dopo zoom accessibilità sul .chat-section: il browser applica `zoom` un frame dopo;
+ * doppio rAF + execCommand allinea la grandezza toolbar al reale (anche con bozza nel campo).
+ */
+export function scheduleApplyFontSizeToolbarAfterLayout() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      applyFontSizeToolbarToInput();
+    });
+  });
+}
+
 /** Applica colore/grandezza/grassetto da settings a state e alla toolbar (chiamata da main/auth dopo load settings). */
-export function applyRichTextSettings(settings) {
+export function applyRichTextSettings(settings, opts = {}) {
   if (!settings) return;
   if (settings.isBold !== undefined) state.isBold = !!settings.isBold;
   if (settings.currentColor !== undefined) state.currentColor = normalizeHexColorForInput(settings.currentColor);
@@ -264,7 +275,9 @@ export function applyRichTextSettings(settings) {
   if (dom.colorPicker) dom.colorPicker.value = state.currentColor;
   if (dom.fontSizeSelect) dom.fontSizeSelect.value = state.fontSize;
   syncMsgInputRichTextStyle();
-  queueApplyFontSizeToolbarIfInputEmpty();
+  if (!opts.deferToolbarSync) {
+    queueApplyFontSizeToolbarIfInputEmpty();
+  }
 }
 
 function persistRichTextToLocalStorage() {
