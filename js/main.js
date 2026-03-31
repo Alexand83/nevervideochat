@@ -12,7 +12,7 @@ import { applyAuthIdentity, getOrCreateGuestIdentity,
          applyChatFontScale, subscribeOwnProfileSettingsListener } from './auth.js';
 import { initRooms, joinRoom, setLoadRoomMessages, setRenderMessage, renderRoomTabs, closeRoomPicker } from './rooms.js';
 import { renderUsers, setOpenContextMenu } from './users.js?v=20260462';
-import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js?v=20260464';
+import { addMessage, renderMessage, sendMessage, clearReplyTo, setChatDeps, initSearch, handleReactionUpdate, initMentionDropdown } from './chat.js?v=20260465';
 import { setPChatDeps, closeAllPrivateChats } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js?v=20260473';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,

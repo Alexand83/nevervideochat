@@ -712,22 +712,6 @@ export async function sendMessage() {
   /* Converti @nick in <span class="mention"> per evidenziare le mention */
   html = convertMentionsInHtml(html);
 
-  /* Se il messaggio è solo testo (nessun span/font/b/strong), avvolgi con lo stile rich-text corrente così nel feed si vede colore/dimensione/grassetto */
-  const hasRichTags = /<(span|font)[\s>]|<b[\s>]|<\/b>|<strong[\s>]|<\/strong>/i.test(html);
-  if (hasText && html && !hasRichTags) {
-    const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
-    const px = FONT_SIZE_PX[normalizeFontSizeKey(state.fontSize)] || '14px';
-    const style = `color:${state.currentColor || 'inherit'};font-size:${px};font-weight:${state.isBold ? 'bold' : 'normal'};`;
-    html = `<span style="${style}">${html}</span>`;
-  }
-  
-  /* Security: Validate message length to prevent DoS */
-  const { MAX_MESSAGE_LENGTH } = await import('./config.js');
-  if (html.length > MAX_MESSAGE_LENGTH) {
-    showToast(`⚠️ Message too long (max ${MAX_MESSAGE_LENGTH} characters).`);
-    return;
-  }
-  
   /* Security: Sanitize HTML before saving to DB */
   html = sanitiseHtml(html);
 
@@ -748,6 +732,25 @@ export async function sendMessage() {
       html = sanitiseHtml(filtered.text);
     }
 
+  }
+
+  /*
+   * Sempre wrapper esterno con font-size/colore/grassetto da state: se l’utente ha solo cambiato colore,
+   * execCommand mette <span style="color:..."> senza font-size e prima non wrappavamo (!hasRichTags), quindi in chat il testo usciva piccolo.
+   * I span interni continuano a poter sovrascrivere il colore; font-size eredita dal wrapper se non è impostato sui figli.
+   */
+  if (hasText && html && html.trim()) {
+    const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
+    const px = FONT_SIZE_PX[normalizeFontSizeKey(state.fontSize)] || '14px';
+    const style = `color:${state.currentColor || 'inherit'};font-size:${px};font-weight:${state.isBold ? 'bold' : 'normal'};`;
+    html = `<span style="${style}">${html}</span>`;
+  }
+
+  /* Security: Validate message length to prevent DoS (dopo wrapper) */
+  const { MAX_MESSAGE_LENGTH } = await import('./config.js');
+  if (html.length > MAX_MESSAGE_LENGTH) {
+    showToast(`⚠️ Message too long (max ${MAX_MESSAGE_LENGTH} characters).`);
+    return;
   }
 
   if (hasImage) {

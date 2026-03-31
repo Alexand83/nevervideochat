@@ -10,7 +10,7 @@ import { addIgnoredUser, removeIgnoredUser, loadDeviceSettings, saveDeviceSettin
 import { broadcast }         from './broadcast.js';
 import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260473';
 import { openPrivateChat, closePChat } from './private-chat.js';
-import { sendMessage, clearReplyTo, addSystemMessage }  from './chat.js?v=20260464';
+import { sendMessage, clearReplyTo, addSystemMessage }  from './chat.js?v=20260465';
 import { sendTypingEvent } from './users.js?v=20260462';
 import { joinRoom, getAvailableRooms } from './rooms.js';
 import { hasPermission } from './permissions.js';

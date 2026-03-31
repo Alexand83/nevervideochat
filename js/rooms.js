@@ -5,7 +5,7 @@ import { DEFAULT_ROOM_ID } from './config.js';
 import { state }           from './state.js';
 import { dom }             from './dom.js';
 import { showToast, escHtml } from './utils.js';
-import { addSystemMessage } from './chat.js?v=20260464';
+import { addSystemMessage } from './chat.js?v=20260465';
 import { syncPresence, updateOwnPresence, renderUsers, findUser } from './users.js?v=20260462';
 import { createPresenceChannel } from './firebase-client.js';
 import { setPollRoomId } from './polls.js';
