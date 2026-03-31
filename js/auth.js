@@ -10,7 +10,7 @@ import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnore
 import { renderUsers, updateOwnPresence } from './users.js?v=20260462';
 import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260473';
 import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
-import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff, applyRichTextSettings } from './ui.js?v=20260467';
+import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff, applyRichTextSettings, queueApplyFontSizeToolbarIfInputEmpty } from './ui.js?v=20260468';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
@@ -74,6 +74,7 @@ export function applyChatFontScale(scale) {
       refreshInputAfterA11yOff();
     } else {
       syncMsgInputRichTextStyle();
+      queueApplyFontSizeToolbarIfInputEmpty();
     }
   } catch (_) {}
 }
