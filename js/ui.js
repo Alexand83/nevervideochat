@@ -295,14 +295,17 @@ export function syncMsgInputRichTextStyle() {
   dom.msgInput.style.fontWeight = state.isBold ? 'bold' : 'normal';
 }
 
-/** Riapplica colore e grassetto solo agli span/font che non li hanno (creati da fontSize senza colore). Non sovrascrive formattazione mista. */
+/** Riapplica colore, grassetto e font-size agli span/font creati da execCommand (foreColor/bold) senza size → altrimenti ereditano 14px da .msg-input. */
 function applyColorAndBoldToRichNodes() {
   if (!dom.msgInput) return;
   const color = state.currentColor || '';
   const weight = state.isBold ? 'bold' : 'normal';
+  const fs = normalizeFontSizeKey(state.fontSize);
+  const px = FONT_SIZE_PX[fs] || '14px';
   dom.msgInput.querySelectorAll('span, font').forEach(el => {
     if (!el.style.color || String(el.style.color).trim() === '') el.style.color = color;
     if (!el.style.fontWeight || String(el.style.fontWeight).trim() === '') el.style.fontWeight = weight;
+    if (!el.style.fontSize || String(el.style.fontSize).trim() === '') el.style.fontSize = px;
   });
 }
 
@@ -352,12 +355,16 @@ export function initToolbar() {
     dom.boldBtn.classList.toggle('active', state.isBold);
     persistRichTextToLocalStorage();
     syncMsgInputRichTextStyle();
+    applyFontSizeToolbarToInput();
   });
   dom.colorPicker.addEventListener('input', e => {
     state.currentColor = e.target.value;
     persistRichTextToLocalStorage();
     syncMsgInputRichTextStyle();
-    dom.msgInput.focus(); document.execCommand('foreColor', false, state.currentColor);
+    dom.msgInput.focus();
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('foreColor', false, state.currentColor);
+    applyFontSizeToolbarToInput();
   });
   dom.fontSizeSelect.addEventListener('change', e => {
     state.fontSize = e.target.value;
