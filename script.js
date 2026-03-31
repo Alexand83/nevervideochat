@@ -1271,11 +1271,14 @@ function renderUsers() {
    11. RICH-TEXT TOOLBAR
 ================================================================ */
 function initToolbar() {
-  dom.boldBtn.addEventListener('click', () => {
-    state.isBold = !state.isBold;
+  dom.boldBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    dom.msgInput.focus();
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('bold', false);
+    state.isBold = document.queryCommandState('bold');
     dom.boldBtn.setAttribute('aria-pressed', String(state.isBold));
     dom.boldBtn.classList.toggle('active', state.isBold);
-    dom.msgInput.focus(); document.execCommand('bold');
   });
   dom.colorPicker.addEventListener('input', e => {
     state.currentColor = e.target.value;

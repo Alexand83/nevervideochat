@@ -341,13 +341,17 @@ export function refreshInputAfterA11yOff() {
 }
 
 export function initToolbar() {
-  dom.boldBtn.addEventListener('click', () => {
-    state.isBold = !state.isBold;
+  dom.boldBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    dom.msgInput.focus();
+    document.execCommand('styleWithCSS', false, true);
+    /* execCommand('bold') è un toggle sul browser: non va dopo aver già invertito state.isBold o il primo carattere resta nel contesto sbagliato */
+    document.execCommand('bold', false);
+    state.isBold = document.queryCommandState('bold');
     dom.boldBtn.setAttribute('aria-pressed', String(state.isBold));
     dom.boldBtn.classList.toggle('active', state.isBold);
     persistRichTextToLocalStorage();
     syncMsgInputRichTextStyle();
-    dom.msgInput.focus(); document.execCommand('bold');
   });
   dom.colorPicker.addEventListener('input', e => {
     state.currentColor = e.target.value;
