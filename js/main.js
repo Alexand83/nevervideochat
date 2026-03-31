@@ -17,7 +17,7 @@ import { setPChatDeps, closeAllPrivateChats } from './private-chat.js';
 import { initCameraSystem, initCallControls } from './camera.js?v=20260473';
 import { initToolbar, initImageAttach, uploadToStorage, initEmojiPicker,
          initVoiceRecording, initDictation, initAvatarLightbox, initContextMenu, openContextMenu,
-         initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js?v=20260469';
+         initPanelResize, initMobilePanel, setUIDeps, applyRichTextSettings } from './ui.js?v=20260470';
 import { initAdminPanel, updateAdminButton } from './admin.js';
 import { broadcast } from './broadcast.js';
 import { initGames, handleGameCommand } from './games.js';

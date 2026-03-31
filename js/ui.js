@@ -233,23 +233,6 @@ export function initAvatarLightbox() {
 }
 
 /* ── Rich-text toolbar ─────────────────────────────────────────── */
-function isMsgInputEffectivelyEmpty() {
-  if (!dom.msgInput) return false;
-  const t = (dom.msgInput.textContent || '').replace(/\u200b/g, '').trim();
-  return t === '';
-}
-
-/**
- * Dopo load/sync profilo (senza passare da applyChatFontScale): execCommand solo se input vuoto.
- */
-export function queueApplyFontSizeToolbarIfInputEmpty() {
-  if (!isMsgInputEffectivelyEmpty()) return;
-  requestAnimationFrame(() => {
-    if (!isMsgInputEffectivelyEmpty()) return;
-    applyFontSizeToolbarToInput();
-  });
-}
-
 /**
  * Dopo zoom accessibilità sul .chat-section: il browser applica `zoom` un frame dopo;
  * doppio rAF + execCommand allinea la grandezza toolbar al reale (anche con bozza nel campo).
@@ -275,8 +258,9 @@ export function applyRichTextSettings(settings, opts = {}) {
   if (dom.colorPicker) dom.colorPicker.value = state.currentColor;
   if (dom.fontSizeSelect) dom.fontSizeSelect.value = state.fontSize;
   syncMsgInputRichTextStyle();
+  /* Sempre execCommand (non solo input vuoto): altrimenti il contenteditable resta su nodi vecchi / 14px CSS. */
   if (!opts.deferToolbarSync) {
-    queueApplyFontSizeToolbarIfInputEmpty();
+    scheduleApplyFontSizeToolbarAfterLayout();
   }
 }
 
