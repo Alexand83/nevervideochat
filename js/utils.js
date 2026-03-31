@@ -308,3 +308,34 @@ export function makeResizable(el, handle, opts = {}) {
   handle.addEventListener('mousedown',  onStart);
   handle.addEventListener('touchstart', onStart, { passive: false });
 }
+
+/* ── Toolbar chat (colore / grandezza) — normalizzazione per Firestore e <input type="color"> ── */
+export const DEFAULT_CHAT_RICH_COLOR = '#e6edf3';
+
+/** Valore sicuro per `input[type=color]` (#rrggbb). Accetta hex corto, 8 cifre, rgb(). */
+export function normalizeHexColorForInput(color) {
+  if (color == null || color === '') return DEFAULT_CHAT_RICH_COLOR;
+  const s = String(color).trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+    const r = s[1]; const g = s[2]; const b = s[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  if (/^#[0-9a-fA-F]{8}$/.test(s)) return s.slice(0, 7).toLowerCase();
+  const rgb = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (rgb) {
+    const h = (n) => Math.min(255, Math.max(0, parseInt(n, 10))).toString(16).padStart(2, '0');
+    return `#${h(rgb[1])}${h(rgb[2])}${h(rgb[3])}`;
+  }
+  return DEFAULT_CHAT_RICH_COLOR;
+}
+
+/** Mappa sempre a '1'…'5' come nel <select> (Firestore può restituire numeri). */
+export function normalizeFontSizeKey(v) {
+  if (v === '' || v == null) return '3';
+  const n = String(v).trim();
+  if (/^[1-5]$/.test(n)) return n;
+  const num = Number(n);
+  if (Number.isFinite(num) && num >= 1 && num <= 5) return String(Math.round(num));
+  return '3';
+}

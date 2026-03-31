@@ -3,7 +3,7 @@
 ================================================================ */
 import { state }          from './state.js';
 import { dom }            from './dom.js';
-import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml, safeAvatarUrl } from './utils.js';
+import { escHtml, avatarColor, initials, fmtTime, processHtml, scrollToBottom, showToast, sanitiseHtml, safeAvatarUrl, normalizeFontSizeKey } from './utils.js';
 import { findUser, ensureUser, stopTyping } from './users.js?v=20260462';
 import { hasPermission } from './permissions.js';
 
@@ -330,7 +330,7 @@ async function startEditMessage(msgId) {
     }
     const newHtml = sanitiseHtml(newText);
     const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
-    const px = FONT_SIZE_PX[state.fontSize] || '14px';
+    const px = FONT_SIZE_PX[normalizeFontSizeKey(state.fontSize)] || '14px';
     const style = `color:${state.currentColor || 'inherit'};font-size:${px};font-weight:${state.isBold ? 'bold' : 'normal'};`;
     const wrappedHtml = `<span style="${style}">${newHtml}</span>`;
     try {
@@ -716,7 +716,7 @@ export async function sendMessage() {
   const hasRichTags = /<(span|font)[\s>]|<b[\s>]|<\/b>|<strong[\s>]|<\/strong>/i.test(html);
   if (hasText && html && !hasRichTags) {
     const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': '24px' };
-    const px = FONT_SIZE_PX[state.fontSize] || '14px';
+    const px = FONT_SIZE_PX[normalizeFontSizeKey(state.fontSize)] || '14px';
     const style = `color:${state.currentColor || 'inherit'};font-size:${px};font-weight:${state.isBold ? 'bold' : 'normal'};`;
     html = `<span style="${style}">${html}</span>`;
   }

@@ -4,12 +4,13 @@
 import { AUTH_EMAIL_DOMAIN } from './config.js';
 import { state }   from './state.js';
 import { dom }     from './dom.js';
-import { avatarColor, initials, showToast, setAvatarDisplay } from './utils.js';
+import { avatarColor, initials, showToast, setAvatarDisplay,
+         normalizeHexColorForInput, normalizeFontSizeKey, DEFAULT_CHAT_RICH_COLOR } from './utils.js';
 import { loadDeviceSettings, saveDeviceSettings, removeRejectedCam, removeIgnoredUser } from './storage.js';
 import { renderUsers, updateOwnPresence } from './users.js?v=20260462';
 import { applyLiveDeviceSettingsIfStreaming } from './camera.js?v=20260473';
 import { isSessionValid, upsertActiveSession, showDisconnectedOverlay, resetDisconnectOverlayFlag, restoreChatInputAfterLogin } from './firebase-client.js';
-import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff, applyRichTextSettings } from './ui.js?v=20260465';
+import { syncMsgInputRichTextStyle, refreshInputAfterA11yOff, applyRichTextSettings } from './ui.js?v=20260466';
 
 /* Forward refs set by main.js */
 let _finishInit = null;
@@ -27,13 +28,24 @@ async function pushProfileSettingsPatchToFirestore(patch) {
   }
 }
 
+/** Campi toolbar testo dal documento profilo (camelCase o snake_case). */
+function readProfileRichText(data) {
+  if (!data || typeof data !== 'object') {
+    return { isBold: undefined, currentColor: undefined, fontSize: undefined };
+  }
+  const isBold = data.isBold !== undefined ? data.isBold : data.is_bold;
+  const currentColor = data.currentColor !== undefined ? data.currentColor : data.current_color;
+  const fontSize = data.fontSize !== undefined ? data.fontSize : data.font_size;
+  return { isBold, currentColor, fontSize };
+}
+
 /** Toolbar testo (font size, colore, grassetto): sync Firestore come le altre preferenze account. */
 export function pushRichTextPrefsToProfile() {
   if (!state.currentUser?.id || state.currentUser.isGuest || !state.fb?.firestore) return;
   void pushProfileSettingsPatchToFirestore({
     isBold: state.isBold,
-    currentColor: state.currentColor || null,
-    fontSize: state.fontSize != null ? String(state.fontSize) : null,
+    currentColor: normalizeHexColorForInput(state.currentColor),
+    fontSize: normalizeFontSizeKey(state.fontSize),
   });
 }
 
@@ -108,12 +120,23 @@ function handleProfileSettingsRemoteUpdate(data) {
   const nextChatFont = data.chatFontScale != null ? Number(data.chatFontScale) : prevChatFont;
   const chatFontChanged = Number.isFinite(nextChatFont) && Math.abs(nextChatFont - prevChatFont) > 0.001;
 
+  const rt = readProfileRichText(data);
   const prevBold = !!state.isBold;
-  const prevColor = state.currentColor ?? '';
-  const prevFont = String(state.fontSize ?? '3');
-  const nextBold = data.isBold !== undefined ? !!data.isBold : prevBold;
-  const nextColor = data.currentColor != null ? data.currentColor : prevColor;
-  const nextFont = data.fontSize != null ? String(data.fontSize) : prevFont;
+  const prevColor = normalizeHexColorForInput(state.currentColor);
+  const prevFont = normalizeFontSizeKey(state.fontSize);
+  const nextBold = rt.isBold !== undefined ? !!rt.isBold : prevBold;
+  let nextColor = prevColor;
+  if (rt.currentColor !== undefined) {
+    nextColor = rt.currentColor === null || rt.currentColor === ''
+      ? DEFAULT_CHAT_RICH_COLOR
+      : normalizeHexColorForInput(String(rt.currentColor));
+  }
+  let nextFont = prevFont;
+  if (rt.fontSize !== undefined && rt.fontSize !== null) {
+    nextFont = normalizeFontSizeKey(rt.fontSize);
+  } else if (rt.fontSize === null) {
+    nextFont = '3';
+  }
   const boldChanged = nextBold !== prevBold;
   const colorChanged = nextColor !== prevColor;
   const fontChanged = nextFont !== prevFont;
@@ -787,8 +810,8 @@ export function initSettingsModal() {
       soundPM: document.getElementById('settingsSoundPM')?.checked !== false,
       chatFontScale: parseFloat(document.getElementById('settingsChatFontScale')?.value || '1') || 1,
       isBold: state.isBold,
-      currentColor: state.currentColor,
-      fontSize: state.fontSize,
+      currentColor: normalizeHexColorForInput(state.currentColor),
+      fontSize: normalizeFontSizeKey(state.fontSize),
     };
     saveDeviceSettings(s);
     state.settings = s;
@@ -803,8 +826,8 @@ export function initSettingsModal() {
           soundPM: s.soundPM !== false,
           chatFontScale: typeof s.chatFontScale === 'number' && Number.isFinite(s.chatFontScale) ? s.chatFontScale : 1,
           isBold: s.isBold,
-          currentColor: s.currentColor || null,
-          fontSize: s.fontSize || null,
+          currentColor: normalizeHexColorForInput(s.currentColor),
+          fontSize: normalizeFontSizeKey(s.fontSize),
         });
       } catch (err) {
         console.error('[Auth] Save settings to profile failed:', err);
@@ -865,11 +888,20 @@ export async function loadUserSettingsFromProfile() {
       ...(data.autoLoadImages !== undefined && { autoLoadImages: data.autoLoadImages }),
       ...(soundChatDb !== undefined && { soundChat: soundChatDb }),
       ...(soundPMDb !== undefined && { soundPM: soundPMDb }),
-      ...(data.isBold !== undefined && { isBold: data.isBold }),
-      ...(data.currentColor != null && { currentColor: data.currentColor }),
-      ...(data.fontSize != null && { fontSize: data.fontSize }),
       ...(data.chatFontScale != null && Number.isFinite(Number(data.chatFontScale)) && { chatFontScale: Number(data.chatFontScale) }),
     };
+    const rt = readProfileRichText(data);
+    if (rt.isBold !== undefined) merged.isBold = !!rt.isBold;
+    if (rt.currentColor !== undefined) {
+      merged.currentColor = rt.currentColor === null || rt.currentColor === ''
+        ? DEFAULT_CHAT_RICH_COLOR
+        : normalizeHexColorForInput(String(rt.currentColor));
+    }
+    if (rt.fontSize !== undefined && rt.fontSize !== null) {
+      merged.fontSize = normalizeFontSizeKey(rt.fontSize);
+    } else if (rt.fontSize === null) {
+      merged.fontSize = '3';
+    }
     state.settings = merged;
     saveDeviceSettings(merged);
   } catch (err) {

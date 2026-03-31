@@ -4,13 +4,13 @@
 import { EMOJI_CATEGORIES }  from './config.js';
 import { state }             from './state.js';
 import { dom }               from './dom.js';
-import { $, escHtml, avatarColor, initials, clamp, showToast } from './utils.js';
+import { $, escHtml, avatarColor, initials, clamp, showToast, normalizeHexColorForInput, normalizeFontSizeKey } from './utils.js';
 import { findUser, checkIsMuted, renderUsers } from './users.js?v=20260462';
 import { addIgnoredUser, removeIgnoredUser, loadDeviceSettings, saveDeviceSettings } from './storage.js';
 import { broadcast }         from './broadcast.js';
 import { closeCameraWindow, closeAllCamerasForUser, revokeViewer, refreshViewersPanel, requestPublicCamera } from './camera.js?v=20260473';
 import { openPrivateChat, closePChat } from './private-chat.js';
-import { sendMessage, clearReplyTo, addSystemMessage }  from './chat.js?v=20260463';
+import { sendMessage, clearReplyTo, addSystemMessage }  from './chat.js?v=20260464';
 import { sendTypingEvent } from './users.js?v=20260462';
 import { joinRoom, getAvailableRooms } from './rooms.js';
 import { hasPermission } from './permissions.js';
@@ -237,8 +237,8 @@ export function initAvatarLightbox() {
 export function applyRichTextSettings(settings) {
   if (!settings) return;
   if (settings.isBold !== undefined) state.isBold = !!settings.isBold;
-  if (settings.currentColor !== undefined) state.currentColor = settings.currentColor;
-  if (settings.fontSize !== undefined) state.fontSize = settings.fontSize;
+  if (settings.currentColor !== undefined) state.currentColor = normalizeHexColorForInput(settings.currentColor);
+  if (settings.fontSize !== undefined) state.fontSize = normalizeFontSizeKey(settings.fontSize);
   if (dom.boldBtn) {
     dom.boldBtn.setAttribute('aria-pressed', String(state.isBold));
     dom.boldBtn.classList.toggle('active', state.isBold);
@@ -249,7 +249,12 @@ export function applyRichTextSettings(settings) {
 }
 
 function persistRichTextToLocalStorage() {
-  const merged = { ...loadDeviceSettings(), isBold: state.isBold, currentColor: state.currentColor, fontSize: state.fontSize };
+  const merged = {
+    ...loadDeviceSettings(),
+    isBold: state.isBold,
+    currentColor: normalizeHexColorForInput(state.currentColor),
+    fontSize: normalizeFontSizeKey(state.fontSize),
+  };
   state.settings = { ...(state.settings || {}), isBold: merged.isBold, currentColor: merged.currentColor, fontSize: merged.fontSize };
   saveDeviceSettings(merged);
   void import('./auth.js').then(({ pushRichTextPrefsToProfile }) => pushRichTextPrefsToProfile?.()).catch(() => {});
@@ -263,7 +268,8 @@ const FONT_SIZE_PX = { '1': '10px', '2': '12px', '3': '14px', '4': '18px', '5': 
 export function syncMsgInputRichTextStyle() {
   if (!dom.msgInput) return;
   dom.msgInput.style.color = state.currentColor || '';
-  dom.msgInput.style.fontSize = FONT_SIZE_PX[state.fontSize] || '14px';
+  const fs = normalizeFontSizeKey(state.fontSize);
+  dom.msgInput.style.fontSize = FONT_SIZE_PX[fs] || '14px';
   dom.msgInput.style.fontWeight = state.isBold ? 'bold' : 'normal';
 }
 
@@ -284,11 +290,12 @@ export function applyFontSizeToolbarToInput() {
   syncMsgInputRichTextStyle();
   dom.msgInput.focus();
   document.execCommand('styleWithCSS', false, true);
-  const execValue = state.fontSize === '5' ? '7' : state.fontSize;
+  const fs = normalizeFontSizeKey(state.fontSize);
+  const execValue = fs === '5' ? '7' : fs;
   document.execCommand('fontSize', false, execValue);
   applyColorAndBoldToRichNodes();
   requestAnimationFrame(() => {
-    if (state.fontSize === '5') {
+    if (fs === '5') {
       const fontTags = dom.msgInput.querySelectorAll('font[size="7"]');
       fontTags.forEach(font => {
         if (!font.style.fontSize) {
