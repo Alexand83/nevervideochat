@@ -248,9 +248,12 @@ export function scheduleApplyFontSizeToolbarAfterLayout() {
 /** Applica colore/grandezza/grassetto da settings a state e alla toolbar (chiamata da main/auth dopo load settings). */
 export function applyRichTextSettings(settings, opts = {}) {
   if (!settings) return;
+  const prevFontKey = normalizeFontSizeKey(state.fontSize);
   if (settings.isBold !== undefined) state.isBold = !!settings.isBold;
   if (settings.currentColor !== undefined) state.currentColor = normalizeHexColorForInput(settings.currentColor);
   if (settings.fontSize !== undefined) state.fontSize = normalizeFontSizeKey(settings.fontSize);
+  const fontSizeChangedFromProfile =
+    settings.fontSize !== undefined && normalizeFontSizeKey(state.fontSize) !== prevFontKey;
   if (dom.boldBtn) {
     dom.boldBtn.setAttribute('aria-pressed', String(state.isBold));
     dom.boldBtn.classList.toggle('active', state.isBold);
@@ -258,8 +261,11 @@ export function applyRichTextSettings(settings, opts = {}) {
   if (dom.colorPicker) dom.colorPicker.value = state.currentColor;
   if (dom.fontSizeSelect) dom.fontSizeSelect.value = state.fontSize;
   syncMsgInputRichTextStyle();
-  /* Sempre execCommand (non solo input vuoto): altrimenti il contenteditable resta su nodi vecchi / 14px CSS. */
-  if (!opts.deferToolbarSync) {
+  /*
+   * execCommand('fontSize') ricalcola tutta la formattazione: va chiamato solo se la grandezza nel profilo è davvero cambiata.
+   * Altrimenti (solo colore/grassetto) rovinava il font size nel contenteditable.
+   */
+  if (!opts.deferToolbarSync && fontSizeChangedFromProfile) {
     scheduleApplyFontSizeToolbarAfterLayout();
   }
 }
